@@ -1,0 +1,1056 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+//////////////////////////
+// ENUMS
+//////////////////////////
+
+enum UserRole {
+  OWNER
+  ADMIN
+  LEGAL
+  COACH
+  MEDICAL
+  TRAINING_MANAGER
+  SCOUT
+  PLAYER
+}
+
+enum ContractStatus {
+  DRAFT
+  IN_REVIEW
+  APPROVED
+  SIGNED
+  EXPIRED
+  TERMINATED
+  REJECTED
+}
+
+enum ContractType {
+  PROFESSIONAL
+  AMATEUR
+  LOAN
+  SPONSORSHIP
+  COACHING
+  OTHER
+}
+
+enum EnrollmentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  WAITLISTED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  PARTIAL
+  REFUNDED
+  WAIVED
+}
+
+enum MessageType {
+  TEXT
+  FILE
+  IMAGE
+  SYSTEM
+}
+
+enum ConversationMemberRole {
+  MEMBER
+  ADMIN
+}
+
+enum LegalTicketStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING_REVIEW
+  RESOLVED
+  CLOSED
+}
+
+enum LegalTicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum PlayerPosition {
+  GK
+  CB
+  LB
+  RB
+  CDM
+  CM
+  CAM
+  LW
+  RW
+  ST
+}
+
+enum PlayerStatus {
+  ACTIVE
+  INJURED
+  SUSPENDED
+  LOANED_OUT
+  RETIRED
+  FREE_AGENT
+}
+
+enum NotificationType {
+  CONTRACT_APPROVED
+  CONTRACT_REJECTED
+  CONTRACT_EXPIRING
+  NEW_MESSAGE
+  TRAINING_REMINDER
+  ENROLLMENT_APPROVED
+  ENROLLMENT_REJECTED
+  LEGAL_TICKET_CREATED
+  LEGAL_TICKET_UPDATED
+  MEDICAL_RECORD_ADDED
+  SYSTEM_ALERT
+}
+
+enum DocumentEntityType {
+  PLAYER
+  CONTRACT
+  TRAINING
+  LEGAL_TICKET
+  MEDICAL_RECORD
+  USER
+  MESSAGE
+  CONTRACT_VERSION
+  TRAINING_SESSION
+  ENROLLMENT
+  LEGAL_NOTE
+  PLAYER_MEDIA
+  SEASON
+  PERFORMANCE_RECORD
+  RATING
+}
+
+enum FootPreference {
+  LEFT
+  RIGHT
+  BOTH
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum Currency {
+  USD
+  EUR
+  GBP
+  JOD
+}
+
+enum SalaryPeriod {
+  WEEKLY
+  MONTHLY
+  ANNUAL
+}
+
+//////////////////////////
+// CORE
+//////////////////////////
+
+model Tenant {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String  @db.VarChar(255)
+  slug        String  @unique @db.VarChar(100)
+  domain      String? @unique @db.VarChar(255)
+  logoUrl     String? @db.VarChar(500)
+  isActive    Boolean @default(true)
+
+  /// Flexible per-tenant configuration (timezone, currency, feature flags, etc.)
+  settings    Json?
+
+  users                User[]
+  players              Player[]
+  seasons              Season[]
+  trainings            Training[]
+  trainingSessions     TrainingSession[]
+  contracts            Contract[]
+  tickets              LegalTicket[]
+  conversations        Conversation[]
+  conversationMembers  ConversationMember[]
+  messages             Message[]
+  notifications        Notification[]
+  auditLogs            AuditLog[]
+  documents            Document[]
+  playerMedia          PlayerMedia[]
+  medicalRecords       MedicalRecord[]
+  performanceRecords   PerformanceRecord[]
+  ratings              Rating[]
+  contractVersions     ContractVersion[]
+  contractApprovals    ContractApproval[]
+  enrollments          Enrollment[]
+  attendance           Attendance[]
+  legalNotes           LegalNote[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("tenants")
+  @@index([isActive])
+  @@index([slug])
+}
+
+model User {
+  id                    String    @id @default(uuid()) @db.Uuid
+  tenantId              String    @db.Uuid
+
+  email                 String    @db.VarChar(255)
+  /// Argon2id / bcrypt hash only — never store plaintext.
+  /// Enforce hashing in the application layer before Prisma operations.
+  passwordHash          String    @db.VarChar(255)
+
+  role                  UserRole
+
+  firstName             String?   @db.VarChar(100)
+  lastName              String?   @db.VarChar(100)
+  avatarUrl             String?   @db.VarChar(500)
+  phone                 String?   @db.VarChar(20)
+
+  lastLoginAt           DateTime?
+  passwordChangedAt     DateTime?
+  emailVerifiedAt       DateTime?
+
+  failedLoginAttempts   Int       @default(0)
+  lockedUntil           DateTime?
+
+  isActive              Boolean   @default(true)
+  is2FAEnabled          Boolean   @default(false)
+  twoFASecret           String?   @db.VarChar(255)
+
+  /// Extra per-user preferences (UI theme, language, notification prefs, etc.)
+  preferences           Json?
+
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  messages              Message[]
+  conversationMembers   ConversationMember[]
+  auditLogs             AuditLog[]
+
+  createdTickets        LegalTicket[]   @relation("TicketCreator")
+  assignedTickets       LegalTicket[]   @relation("TicketAssignee")
+  legalNotesCreated     LegalNote[]
+
+  contractsCreated      Contract[]
+  contractVersions      ContractVersion[]
+  contractApprovals     ContractApproval[]
+
+  medicalRecordsCreated MedicalRecord[]
+  ratingsCreated        Rating[]
+  notifications         Notification[]
+
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  deletedAt             DateTime?
+
+  @@unique([tenantId, email])
+  @@unique([id, tenantId])
+
+  @@map("users")
+  @@index([tenantId])
+  @@index([email])
+  @@index([tenantId, role])
+  @@index([tenantId, isActive])
+}
+
+//////////////////////////
+// SEASON
+//////////////////////////
+
+model Season {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+
+  name        String   @db.VarChar(255)
+  startDate   DateTime
+  endDate     DateTime
+  isCurrent   Boolean  @default(false)
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  contracts   Contract[]
+  trainings   Training[]
+  performances PerformanceRecord[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("seasons")
+  @@index([tenantId])
+  @@index([tenantId, isCurrent])
+}
+
+//////////////////////////
+// DOCUMENT (centralized file storage)
+//////////////////////////
+
+model Document {
+  id          String             @id @default(uuid()) @db.Uuid
+  tenantId    String             @db.Uuid
+
+  entityType  DocumentEntityType
+  entityId    String             @db.Uuid
+
+  fileUrl     String             @db.VarChar(500)
+  fileName    String             @db.VarChar(255)
+  fileSize    Int?
+  mimeType    String?            @db.VarChar(100)
+  description String?            @db.VarChar(500)
+
+  /// Uploaded by (nullable in case user is deleted)
+  uploadedById String?           @db.Uuid
+
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("documents")
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([tenantId, entityType])
+}
+
+//////////////////////////
+// PLAYER DOMAIN
+//////////////////////////
+
+model Player {
+  id                String          @id @default(uuid()) @db.Uuid
+  tenantId          String          @db.Uuid
+
+  fullName          String          @db.VarChar(255)
+  dateOfBirth       DateTime?
+  nationality       String?         @db.VarChar(100)
+  secondNationality String?         @db.VarChar(100)
+  position          PlayerPosition?
+  secondaryPosition PlayerPosition?
+  footPreference    FootPreference?
+  status            PlayerStatus    @default(ACTIVE)
+  currentClub       String?         @db.VarChar(150)
+  jerseyNumber      Int?
+
+  height            Float?
+  weight            Float?
+
+  passportNumber    String?         @db.VarChar(20)
+  passportExpiry    DateTime?
+
+  agentName         String?         @db.VarChar(150)
+  agentEmail        String?         @db.VarChar(255)
+  agentPhone        String?         @db.VarChar(20)
+
+  emergencyContact  String?         @db.VarChar(150)
+  emergencyPhone    String?         @db.VarChar(20)
+
+  bio               String?         @db.Text
+
+  metadata          Json?
+
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  media             PlayerMedia[]
+  contracts         Contract[]
+  performances      PerformanceRecord[]
+  ratings           Rating[]
+  medicals          MedicalRecord[]
+  enrollments       Enrollment[]
+  tickets           LegalTicket[]
+
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("players")
+  @@index([tenantId])
+  @@index([tenantId, fullName])
+  @@index([position])
+  @@index([tenantId, status])
+}
+
+model PlayerMedia {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  playerId    String   @db.Uuid
+
+  fileUrl     String   @db.VarChar(500)
+  fileName    String?  @db.VarChar(255)
+  fileSize    Int?
+  mimeType    String?  @db.VarChar(100)
+  caption     String?  @db.VarChar(255)
+  isFeatured  Boolean  @default(false)
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deletedAt   DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("player_media")
+  @@index([tenantId])
+  @@index([playerId])
+}
+
+model MedicalRecord {
+  id               String    @id @default(uuid()) @db.Uuid
+  tenantId         String    @db.Uuid
+  playerId         String    @db.Uuid
+  createdById      String    @db.Uuid
+
+  injuryType       String    @db.VarChar(255)
+  bodyPart         String?   @db.VarChar(100)
+  severity         String?   @db.VarChar(50)
+  description      String?   @db.Text
+  treatment        String?   @db.Text
+  injuryDate       DateTime?
+  recoveryDate     DateTime?
+  returnToPlayDate DateTime?
+
+  isConfidential   Boolean   @default(true)
+
+  /// Attachments (scans, reports) are stored in the Document model
+  metadata         Json?
+
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player           Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  createdBy        User      @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("medical_records")
+  @@index([tenantId])
+  @@index([tenantId, playerId])
+  @@index([createdById])
+}
+
+//////////////////////////
+// CONTRACTS
+//////////////////////////
+
+model Contract {
+  id                String         @id @default(uuid()) @db.Uuid
+  tenantId          String         @db.Uuid
+  playerId          String         @db.Uuid
+  createdById       String         @db.Uuid
+  seasonId          String?        @db.Uuid
+
+  title             String         @db.VarChar(255)
+  type              ContractType   @default(PROFESSIONAL)
+  status            ContractStatus @default(DRAFT)
+
+  startDate         DateTime
+  endDate           DateTime
+
+  /// Gross salary per pay period. Stored as Decimal(16,2).
+  /// For high-precision arithmetic (e.g., bonus calculations), consider minor-unit integer storage in application layer.
+  salaryAmount      Decimal?       @db.Decimal(16, 2)
+  salaryCurrency    Currency       @default(USD)
+  salaryPeriod      SalaryPeriod?
+
+  bonusDetails      Json?
+  signingFee        Decimal?       @db.Decimal(14, 2)
+
+  /// Primary file stored in Document model; this field is kept for quick access to latest version
+  fileUrl           String?        @db.VarChar(500)
+
+  signedAt          DateTime?
+  approvedAt        DateTime?
+  expiresNotifiedAt DateTime?
+
+  terminationDate   DateTime?
+  terminationReason String?        @db.VarChar(500)
+
+  metadata          Json?
+
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player            Player         @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  createdBy         User           @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  season            Season?        @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+
+  versions          ContractVersion[]
+  approvals         ContractApproval[]
+
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("contracts")
+  @@index([tenantId])
+  @@index([tenantId, playerId])
+  @@index([tenantId, status])
+  @@index([tenantId, startDate])
+  @@index([tenantId, endDate])
+  @@index([tenantId, createdAt])
+  @@index([seasonId])
+  @@index([tenantId, status, createdAt])
+  @@index([tenantId, playerId, status])
+}
+
+model ContractVersion {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  contractId   String   @db.Uuid
+  createdById  String   @db.Uuid
+
+  version      Int
+  changeNote   String?  @db.VarChar(500)
+
+  fileUrl      String   @db.VarChar(500)
+  fileName     String?  @db.VarChar(255)
+  fileSize     Int?
+  mimeType     String?  @db.VarChar(100)
+
+  contract     Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  createdBy    User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([contractId, version])
+  @@unique([id, tenantId])
+
+  @@map("contract_versions")
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([createdById])
+}
+
+model ContractApproval {
+  id            String         @id @default(uuid()) @db.Uuid
+  tenantId      String         @db.Uuid
+  contractId    String         @db.Uuid
+  approvedById  String         @db.Uuid
+
+  status        ApprovalStatus @default(PENDING)
+  comment       String?        @db.VarChar(1000)
+
+  /// For ordered approval workflows (step 1 = legal, step 2 = owner, etc.)
+  stepOrder     Int            @default(1)
+
+  respondedAt   DateTime?
+
+  contract      Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  approvedBy    User     @relation(fields: [approvedById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@unique([contractId, approvedById])
+  @@unique([id, tenantId])
+
+  @@map("contract_approvals")
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([approvedById])
+}
+
+//////////////////////////
+// PERFORMANCE
+//////////////////////////
+
+model PerformanceRecord {
+  id              String    @id @default(uuid()) @db.Uuid
+  tenantId        String    @db.Uuid
+  playerId        String    @db.Uuid
+  seasonId        String?   @db.Uuid
+
+  matchDate       DateTime
+  opponent        String?   @db.VarChar(150)
+  venue           String?   @db.VarChar(200)
+  competition     String?   @db.VarChar(200)
+
+  /// Starting XI or substitute
+  isStarting      Boolean?
+
+  goals           Int       @default(0)
+  assists         Int       @default(0)
+  minutesPlayed   Int       @default(0)
+  yellowCards     Int       @default(0)
+  redCards        Int       @default(0)
+  shots           Int       @default(0)
+  shotsOnTarget   Int       @default(0)
+  passAccuracy    Decimal?  @db.Decimal(5, 2)
+  rating          Decimal?  @db.Decimal(3, 1)
+
+  /// Catch-all for position-specific or future stats (e.g. saves for GK)
+  extraStats      Json?
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player          Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  season          Season?   @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("performance_records")
+  @@index([tenantId])
+  @@index([tenantId, playerId])
+  @@index([tenantId, matchDate])
+  @@index([seasonId])
+  @@index([tenantId, playerId, matchDate])
+}
+
+model Rating {
+  id              String   @id @default(uuid()) @db.Uuid
+  tenantId        String   @db.Uuid
+  playerId        String   @db.Uuid
+  createdById     String   @db.Uuid
+
+  technicalScore  Decimal  @db.Decimal(5, 2)
+  physicalScore   Decimal  @db.Decimal(5, 2)
+  mentalScore     Decimal  @db.Decimal(5, 2)
+
+  /// totalScore is derived from the three scores; kept for query performance.
+  /// Application layer must ensure: totalScore = (technical + physical + mental) / 3
+  totalScore      Decimal  @db.Decimal(5, 2)
+
+  notes           String?  @db.Text
+
+  /// Extra scoring dimensions (e.g. tactical, leadership) for future flexibility
+  extraScores     Json?
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player          Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  createdBy       User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("ratings")
+  @@index([tenantId])
+  @@index([tenantId, playerId])
+  @@index([createdById])
+}
+
+//////////////////////////
+// TRAINING
+//////////////////////////
+
+model Training {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  seasonId     String?  @db.Uuid
+
+  title        String   @db.VarChar(255)
+  description  String?  @db.Text
+
+  startDate    DateTime
+  endDate      DateTime
+
+  location     String?  @db.VarChar(255)
+  capacity     Int?
+
+  price        Decimal? @db.Decimal(10, 2)
+  currency     Currency @default(USD)
+
+  isRecurring  Boolean  @default(false)
+
+  /// Flexible: store recurrence rules, target positions, etc.
+  metadata     Json?
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  season       Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+
+  sessions     TrainingSession[]
+  enrollments  Enrollment[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("trainings")
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@index([seasonId])
+  @@index([tenantId, startDate, endDate])
+  @@index([tenantId, isRecurring])
+}
+
+/// Individual sessions within a training program (supports recurring / multi-session trainings)
+model TrainingSession {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @db.Uuid
+  trainingId   String   @db.Uuid
+
+  title        String?  @db.VarChar(255)
+  date         DateTime
+  startTime    DateTime?
+  endTime      DateTime?
+  location     String?  @db.VarChar(255)
+
+  isCancelled  Boolean  @default(false)
+  cancelNote   String?  @db.VarChar(500)
+
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  training     Training @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  attendance   Attendance[]
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("training_sessions")
+  @@index([tenantId])
+  @@index([trainingId])
+  @@index([tenantId, date])
+}
+
+model Enrollment {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @db.Uuid
+  trainingId      String           @db.Uuid
+  playerId        String           @db.Uuid
+
+  status          EnrollmentStatus @default(PENDING)
+  paymentStatus   PaymentStatus    @default(UNPAID)
+
+  rejectionReason String?          @db.VarChar(500)
+  notes           String?          @db.Text
+
+  paidAt          DateTime?
+  paidAmount      Decimal?         @db.Decimal(10, 2)
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  training        Training         @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  player          Player           @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  attendance      Attendance[]
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([trainingId, playerId])
+  @@unique([id, tenantId])
+
+  @@map("enrollments")
+  @@index([tenantId])
+  @@index([trainingId])
+  @@index([playerId])
+}
+
+model Attendance {
+  id                String           @id @default(uuid()) @db.Uuid
+  tenantId          String           @db.Uuid
+  enrollmentId      String           @db.Uuid
+  trainingSessionId String           @db.Uuid
+
+  /// Denormalized from TrainingSession for query convenience
+  date              DateTime
+  status            AttendanceStatus @default(ABSENT)
+  note              String?          @db.VarChar(500)
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  enrollment        Enrollment       @relation(fields: [enrollmentId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  trainingSession   TrainingSession  @relation(fields: [trainingSessionId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+  deletedAt         DateTime?
+
+  @@unique([enrollmentId, trainingSessionId])
+  @@unique([id, tenantId])
+
+  @@map("attendance")
+  @@index([tenantId])
+  @@index([date])
+  @@index([trainingSessionId])
+  @@index([tenantId, enrollmentId, status])
+}
+
+//////////////////////////
+// LEGAL
+//////////////////////////
+
+model LegalTicket {
+  id            String              @id @default(uuid()) @db.Uuid
+  tenantId      String              @db.Uuid
+  playerId      String              @db.Uuid
+  createdById   String              @db.Uuid
+  assignedToId  String?             @db.Uuid
+
+  subject       String              @db.VarChar(255)
+  description   String              @db.Text
+
+  status        LegalTicketStatus   @default(OPEN)
+  priority      LegalTicketPriority @default(MEDIUM)
+
+  resolvedAt    DateTime?
+  closedAt      DateTime?
+  dueDate       DateTime?
+
+  /// For linking to external legal case IDs, contract refs, etc.
+  metadata      Json?
+
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player        Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  createdBy     User     @relation("TicketCreator", fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  assignedTo    User?    @relation("TicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  notes         LegalNote[]
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("legal_tickets")
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, priority])
+  @@index([tenantId, createdAt])
+  @@index([assignedToId])
+  @@index([tenantId, status, createdAt])
+}
+
+model LegalNote {
+  id            String      @id @default(uuid()) @db.Uuid
+  tenantId      String      @db.Uuid
+  ticketId      String      @db.Uuid
+  createdById   String      @db.Uuid
+
+  note          String      @db.Text
+  isInternal    Boolean     @default(false)
+
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  ticket        LegalTicket @relation(fields: [ticketId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  createdBy     User        @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  deletedAt     DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("legal_notes")
+  @@index([tenantId])
+  @@index([ticketId])
+  @@index([createdById])
+}
+
+//////////////////////////
+// CHAT
+//////////////////////////
+
+model Conversation {
+  id             String   @id @default(uuid()) @db.Uuid
+  tenantId       String   @db.Uuid
+
+  isGroup        Boolean  @default(false)
+  name           String?  @db.VarChar(255)
+  imageUrl       String?  @db.VarChar(500)
+  description    String?  @db.VarChar(500)
+
+  lastMessageAt  DateTime?
+
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  messages       Message[]
+  members        ConversationMember[]
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  deletedAt      DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("conversations")
+  @@index([tenantId])
+  @@index([tenantId, lastMessageAt])
+}
+
+model ConversationMember {
+  id             String                 @id @default(uuid()) @db.Uuid
+  tenantId       String                 @db.Uuid
+  conversationId String                 @db.Uuid
+  userId         String                 @db.Uuid
+
+  role           ConversationMemberRole @default(MEMBER)
+
+  /// For unread message count / read receipts
+  lastReadAt     DateTime?
+
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  user           User         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt      DateTime     @default(now())
+  deletedAt      DateTime?
+
+  @@unique([conversationId, userId])
+
+  @@map("conversation_members")
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model Message {
+  id             String      @id @default(uuid()) @db.Uuid
+  tenantId       String      @db.Uuid
+  conversationId String      @db.Uuid
+
+  /// Nullable: sender may be deleted or a system message
+  senderId       String?     @db.Uuid
+
+  content        String?     @db.Text
+
+  /// File details kept on Message for quick rendering; full doc stored in Document model
+  fileUrl        String?     @db.VarChar(500)
+  fileName       String?     @db.VarChar(255)
+  fileSize       Int?
+  mimeType       String?     @db.VarChar(100)
+
+  type           MessageType
+
+  isEdited       Boolean     @default(false)
+  editedAt       DateTime?
+
+  /// Soft delete (message recalled)
+  deletedAt      DateTime?
+
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  /// Single-field FK due to Prisma limitation with nullable composite keys
+  sender         User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([id, tenantId])
+
+  @@map("messages")
+  @@index([tenantId])
+  @@index([tenantId, conversationId])
+  @@index([conversationId, createdAt])
+  @@index([tenantId, senderId])
+}
+
+//////////////////////////
+// NOTIFICATIONS
+//////////////////////////
+
+model Notification {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @db.Uuid
+  userId          String           @db.Uuid
+
+  type            NotificationType
+  title           String?          @db.VarChar(255)
+  content         String           @db.Text
+
+  /// Deep-link target: the entity this notification is about
+  referenceType   String?          @db.VarChar(100)
+  referenceId     String?          @db.Uuid
+
+  isRead          Boolean          @default(false)
+  readAt          DateTime?
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user            User             @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  deletedAt       DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("notifications")
+  @@index([tenantId])
+  @@index([tenantId, userId, isRead])
+  @@index([referenceType, referenceId])
+}
+
+//////////////////////////
+// AUDIT LOG
+//////////////////////////
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+
+  /// Nullable separately — single-field FK to avoid Prisma limitation with nullable composite keys
+  userId      String?  @db.Uuid
+
+  action      String   @db.VarChar(100)
+  entityType  String   @db.VarChar(100)
+  entityId    String   @db.Uuid
+
+  oldValues   Json?
+  newValues   Json?
+
+  ipAddress   String?  @db.VarChar(45)
+  userAgent   String?  @db.VarChar(500)
+
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  createdAt   DateTime @default(now())
+  deletedAt   DateTime?
+
+  @@unique([id, tenantId])
+
+  @@map("audit_logs")
+  @@index([tenantId])
+  @@index([entityType, entityId])
+  @@index([tenantId, createdAt])
+  @@index([userId])
+}
