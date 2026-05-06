@@ -1,0 +1,11 @@
+
+> backend@0.0.1 build
+> nest build
+
+[96msrc/infrastructure/prisma/prisma.service.ts[0m:[93m17[0m:[93m10[0m - [91merror[0m[90m TS2339: [0mProperty '$use' does not exist on type 'PrismaService'.
+
+[7m17[0m     this.$use(async (params, next) => {
+[7m  [0m [91m         ~~~~[0m
+
+Found 1 error(s).
+

@@ -1,6 +1,6 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
+  // Output to default location so @prisma/client package works correctly
 }
 
 datasource db {
