@@ -17,6 +17,8 @@ import { TrainingModule } from './modules/training/training.module';
 import { LegalModule } from './modules/legal/legal.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ScoutingModule } from './modules/scouting/scouting.module';
+import { MedicalModule } from './modules/medical/medical.module';
 import { HealthController } from './health/health.controller';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -42,6 +44,8 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
     LegalModule,
     ChatModule,
     NotificationsModule,
+    ScoutingModule,
+    MedicalModule,
   ],
   controllers: [HealthController],
   providers: [

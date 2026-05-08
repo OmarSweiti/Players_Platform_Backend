@@ -1,4 +1,8 @@
 import { Module } from '@nestjs/common';
+import { PermissionService } from './application/services/permission.service';
 
-@Module({})
+@Module({
+  providers: [PermissionService],
+  exports: [PermissionService],
+})
 export class UsersModule {}

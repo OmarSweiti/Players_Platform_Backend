@@ -12,14 +12,24 @@ datasource db {
 //////////////////////////
 
 enum UserRole {
-  OWNER
-  ADMIN
-  LEGAL
-  COACH
-  MEDICAL
-  TRAINING_MANAGER
-  SCOUT
-  PLAYER
+  SUPER_ADMIN        // Platform-level admin (multi-tenant SaaS)
+  OWNER              // Club/academy owner
+  ADMIN              // Operational administrator
+  SPORTING_DIRECTOR  // Oversees squad planning, transfers, recruitment
+  SCOUT              // Talent discovery and reporting
+  COACH              // Head coach
+  ASSISTANT_COACH    // Assistant coaching staff
+  GOALKEEPER_COACH   // Specialized GK coach
+  FITNESS_COACH      // Physical conditioning
+  MEDICAL            // Medical staff
+  PHYSIOTHERAPIST    // Rehabilitation specialist
+  LEGAL              // Legal department
+  FINANCE_MANAGER    // Salary, payroll, transfers
+  PERFORMANCE_ANALYST // Match/stats analysis
+  VIDEO_ANALYST      // Video tagging and review
+  TRAINING_MANAGER   // Training coordination
+  PLAYER             // Athlete
+  GUARDIAN           // Parent/guardian (academy)
 }
 
 enum ContractStatus {
@@ -171,6 +181,93 @@ enum SalaryPeriod {
 }
 
 //////////////////////////
+// PERMISSION SYSTEM
+//////////////////////////
+
+enum PermissionCategory {
+  PLAYER
+  CONTRACT
+  TRAINING
+  MEDICAL
+  SCOUTING
+  MATCH
+  FINANCE
+  LEGAL
+  CHAT
+  USER
+  TENANT
+  REPORT
+  DOCUMENT
+  NOTIFICATION
+}
+
+enum PermissionAction {
+  CREATE
+  READ
+  UPDATE
+  DELETE
+  APPROVE
+  EXPORT
+  IMPORT
+  ASSIGN
+  VIEW_CONFIDENTIAL
+  MANAGE
+}
+
+//////////////////////////
+// SCOUTING
+//////////////////////////
+
+enum ScoutReportStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum RecommendationLevel {
+  STRONG_SIGN
+  SIGN
+  MONITOR
+  NOT_SUITABLE
+}
+
+// Medical Module Enums
+enum InjuryType {
+  MUSCLE
+  LIGAMENT
+  TENDON
+  BONE
+  JOINT
+  HEAD_CONCUSSION
+  OTHER
+}
+
+enum InjurySeverity {
+  MINOR
+  MODERATE
+  SEVERE
+  CRITICAL
+}
+
+enum TreatmentStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum MedicalRecordType {
+  INJURY
+  ILLNESS
+  TREATMENT
+  VACCINATION
+  MEDICAL_EXAM
+  REHABILITATION
+}
+
+//////////////////////////
 // CORE
 //////////////////////////
 
@@ -207,6 +304,10 @@ model Tenant {
   enrollments          Enrollment[]
   attendance           Attendance[]
   legalNotes           LegalNote[]
+  scoutingReports     ScoutingReport[]
+  playerWatchlists    PlayerWatchlist[]
+  scoutingAssignments ScoutingAssignment[]
+  treatmentSessions   TreatmentSession[]
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -246,6 +347,16 @@ model User {
   /// Extra per-user preferences (UI theme, language, notification prefs, etc.)
   preferences           Json?
 
+  /// Staff profile enhancements
+  department            String?   @db.VarChar(100) // e.g., "Coaching", "Medical", "Legal"
+  position              String?   @db.VarChar(150) // Job title
+  certifications        Json?     // Array of certifications/licenses
+  employmentStartDate   DateTime?
+  employmentEndDate     DateTime?
+  bio                   String?   @db.Text
+  emergencyContact      String?   @db.VarChar(150)
+  emergencyPhone        String?   @db.VarChar(20)
+
   tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   messages              Message[]
@@ -263,6 +374,12 @@ model User {
   medicalRecordsCreated MedicalRecord[]
   ratingsCreated        Rating[]
   notifications         Notification[]
+
+  scoutingReports       ScoutingReport[]
+  playerWatchlists      PlayerWatchlist[]
+  scoutingAssignmentsTo ScoutingAssignment[] @relation("ScoutingAssignmentTo")
+  scoutingAssignmentsBy ScoutingAssignment[] @relation("ScoutingAssignmentBy")
+  treatmentSessions     TreatmentSession[]   @relation("TreatmentSessionConductor")
 
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
@@ -387,6 +504,9 @@ model Player {
   medicals          MedicalRecord[]
   enrollments       Enrollment[]
   tickets           LegalTicket[]
+  scoutingReports    ScoutingReport[]
+  watchlists         PlayerWatchlist[]
+  treatmentSessions  TreatmentSession[]
 
   createdAt         DateTime        @default(now())
   updatedAt         DateTime        @updatedAt
@@ -450,6 +570,7 @@ model MedicalRecord {
   tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   player           Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
   createdBy        User      @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  treatmentSessions TreatmentSession[]
 
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
@@ -940,6 +1061,190 @@ model ConversationMember {
   @@map("conversation_members")
   @@index([tenantId])
   @@index([userId])
+}
+
+//////////////////////////
+// SCOUTING MODULE
+//////////////////////////
+
+model ScoutingReport {
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  scoutId         String             @db.Uuid
+  playerId        String?            @db.Uuid  // Null for external prospects
+  
+  // Player being scouted (if not in system yet)
+  prospectName    String?            @db.VarChar(255)
+  prospectAge     Int?
+  prospectClub    String?            @db.VarChar(255)
+  prospectPosition PlayerPosition?
+  prospectNationality String?        @db.VarChar(100)
+  
+  status          ScoutReportStatus  @default(DRAFT)
+  recommendation  RecommendationLevel?
+  
+  // Evaluation scores (1-10)
+  technicalScore  Decimal?           @db.Decimal(3, 1)
+  physicalScore   Decimal?           @db.Decimal(3, 1)
+  tacticalScore   Decimal?           @db.Decimal(3, 1)
+  mentalScore     Decimal?           @db.Decimal(3, 1)
+  
+  strengths       String?            @db.Text
+  weaknesses      String?            @db.Text
+  personalityNotes String?           @db.Text
+  tacticalFit     String?            @db.Text
+  
+  overallRating   Decimal?           @db.Decimal(3, 1)
+  potentialRating Decimal?           @db.Decimal(3, 1)
+  
+  reportDate      DateTime
+  matchObserved   String?            @db.VarChar(255)
+  
+  metadata        Json?
+  
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  scout           User               @relation(fields: [scoutId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  player          Player?            @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: SetNull)
+  
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  deletedAt       DateTime?
+  
+  @@unique([id, tenantId])
+  @@map("scouting_reports")
+  @@index([tenantId])
+  @@index([scoutId])
+  @@index([playerId])
+  @@index([status])
+  @@index([recommendation])
+}
+
+model PlayerWatchlist {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String   @db.Uuid
+  userId      String   @db.Uuid  // Scout or Sporting Director
+  playerId    String   @db.Uuid
+  
+  priority    String?  @db.VarChar(50) // HIGH, MEDIUM, LOW
+  notes       String?  @db.Text
+  
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user        User     @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([userId, playerId])
+  @@unique([id, tenantId])
+  @@map("player_watchlists")
+  @@index([tenantId])
+  @@index([userId])
+}
+
+model ScoutingAssignment {
+  id            String   @id @default(uuid()) @db.Uuid
+  tenantId      String   @db.Uuid
+  assignedToId  String   @db.Uuid  // Scout
+  assignedById  String   @db.Uuid  // Sporting Director
+  
+  region        String?  @db.VarChar(100)
+  competition   String?  @db.VarChar(150)
+  targetPosition PlayerPosition?
+  minAge        Int?
+  maxAge        Int?
+  
+  dueDate       DateTime?
+  status        String   @db.VarChar(50) @default("OPEN")
+  
+  notes         String?  @db.Text
+  
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  assignedTo    User     @relation("ScoutingAssignmentTo", fields: [assignedToId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  assignedBy    User     @relation("ScoutingAssignmentBy", fields: [assignedById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([id, tenantId])
+  @@map("scouting_assignments")
+  @@index([tenantId])
+  @@index([assignedToId])
+  @@index([status])
+}
+
+//////////////////////////
+// MEDICAL MODULE (Additional Models)
+//////////////////////////
+
+model TreatmentSession {
+  id              String             @id @default(uuid()) @db.Uuid
+  tenantId        String             @db.Uuid
+  playerId        String             @db.Uuid
+  medicalRecordId String?            @db.Uuid  // Link to injury/treatment record
+  
+  sessionDate     DateTime
+  duration        Int?               // Duration in minutes
+  status          TreatmentStatus    @default(SCHEDULED)
+  
+  treatmentType   String             @db.VarChar(100) // e.g., "Physiotherapy", "Ice Therapy", "Massage"
+  description     String?            @db.Text
+  exercises       String?            @db.Text  // Prescribed exercises
+  progressNotes   String?            @db.Text
+  
+  conductedBy     String             @db.Uuid  // Medical staff ID
+  
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  player          Player             @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  medicalRecord   MedicalRecord?     @relation(fields: [medicalRecordId, tenantId], references: [id, tenantId], onDelete: SetNull)
+  conductor       User               @relation("TreatmentSessionConductor", fields: [conductedBy, tenantId], references: [id, tenantId], onDelete: Restrict)
+  
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  
+  @@unique([id, tenantId])
+  @@map("treatment_sessions")
+  @@index([tenantId])
+  @@index([playerId])
+  @@index([medicalRecordId])
+  @@index([sessionDate])
+  @@index([status])
+}
+
+//////////////////////////
+// PERMISSION SYSTEM
+//////////////////////////
+
+model Permission {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String            @unique @db.VarChar(100) // e.g., "player.create"
+  category    PermissionCategory
+  action      PermissionAction
+  description String?           @db.VarChar(255)
+  
+  roles       RolePermission[]
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  @@map("permissions")
+  @@index([category])
+  @@index([action])
+}
+
+model RolePermission {
+  id             String     @id @default(uuid()) @db.Uuid
+  roleId         UserRole
+  permissionId   String     @db.Uuid
+  
+  permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  createdAt      DateTime   @default(now())
+  
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+  @@index([roleId])
+  @@index([permissionId])
 }
 
 model Message {
