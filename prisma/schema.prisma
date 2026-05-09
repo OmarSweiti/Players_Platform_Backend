@@ -1,6 +1,7 @@
 generator client {
   provider = "prisma-client-js"
   // Output to default location so @prisma/client package works correctly
+  engineType = "library"
 }
 
 datasource db {
@@ -339,6 +340,14 @@ model User {
 
   failedLoginAttempts   Int       @default(0)
   lockedUntil           DateTime?
+
+  // Password reset fields
+  passwordResetToken    String?   @db.VarChar(255)
+  passwordResetExpiry   DateTime?
+
+  // Email verification fields
+  emailVerificationToken     String?   @db.VarChar(255)
+  emailVerificationExpiry    DateTime?
 
   isActive              Boolean   @default(true)
   is2FAEnabled          Boolean   @default(false)

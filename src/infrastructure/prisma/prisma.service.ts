@@ -1,5 +1,8 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
+import { ConfigService } from '@nestjs/config';
 import { AsyncLocalStorage } from 'async_hooks';
 
 export interface TenantContext {
@@ -8,71 +11,89 @@ export interface TenantContext {
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PrismaService.name);
   private readonly asyncLocalStorage = new AsyncLocalStorage<TenantContext>();
+  private pool: Pool;
 
-  constructor() {
-    super({});
-  }
-
-  async onModuleInit() {
-    await this.$connect();
+  constructor(private configService: ConfigService) {
+    const databaseUrl = configService.get<string>('DATABASE_URL');
     
-    // Add middleware for automatic tenant isolation
-    // Note: $use is available on PrismaClient but TypeScript may not recognize it in extended classes
-    (this as any).$use(async (params: any, next: any) => {
-      const context = this.asyncLocalStorage.getStore();
-      
-      // Only apply tenant filtering if we have a tenant context
-      // and the model has a tenantId field
-      if (context?.tenantId && params.model) {
-        const modelHasTenantId = await this.hasTenantIdField(params.model);
-        
-        if (modelHasTenantId) {
-          // Inject tenantId into where clause
-          if (params.action === 'findUnique' || params.action === 'findFirst') {
-            params.args.where = {
-              ...params.args.where,
-              tenantId: context.tenantId,
-            };
-          } else if (params.action === 'findMany') {
-            params.args.where = {
-              ...params.args.where,
-              tenantId: context.tenantId,
-            };
-          } else if (params.action === 'create') {
-            params.args.data = {
-              ...params.args.data,
-              tenantId: context.tenantId,
-            };
-          } else if (params.action === 'update') {
-            params.args.where = {
-              ...params.args.where,
-              tenantId: context.tenantId,
-            };
-          } else if (params.action === 'delete') {
-            params.args.where = {
-              ...params.args.where,
-              tenantId: context.tenantId,
-            };
-          } else if (params.action === 'count') {
-            params.args.where = {
-              ...params.args.where,
-              tenantId: context.tenantId,
-            };
-          }
-        }
-      }
-      
-      return next(params);
+    if (!databaseUrl) {
+      throw new Error('DATABASE_URL environment variable is not set');
+    }
+
+    // Create a connection pool for the adapter
+    const pool = new Pool({
+      connectionString: databaseUrl,
+      max: 10, // Maximum number of connections in the pool
+      idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
+      connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+    });
+
+    // Create the PostgreSQL adapter
+    const adapter = new PrismaPg(pool);
+
+    // Initialize PrismaClient with the adapter - super() must be called first
+    super({
+      adapter,
+      log: [
+        {
+          emit: 'event',
+          level: 'query',
+        },
+        {
+          emit: 'stdout',
+          level: 'error',
+        },
+        {
+          emit: 'stdout',
+          level: 'info',
+        },
+        {
+          emit: 'stdout',
+          level: 'warn',
+        },
+      ],
+    });
+
+    // Store pool reference for cleanup after super() call
+    this.pool = pool;
+
+    // Set up event listeners for query logging
+    // Note: $on type casting is necessary due to Prisma's internal type definitions
+    (this as any).$on('query', (e: any) => {
+      this.logger.debug(`Query: ${e.query}`);
+      this.logger.debug(`Duration: ${e.duration}ms`);
     });
   }
 
+  async onModuleInit() {
+    try {
+      await this.$connect();
+      this.logger.log('Successfully connected to database');
+      
+      // Note: Prisma 7.x with adapter does not support $use middleware
+      // Tenant isolation should be handled at the application/service layer
+      // using the runWithTenant method and explicit tenantId filtering
+    } catch (error) {
+      this.logger.error('Failed to connect to database', error);
+      throw error;
+    }
+  }
+
   async onModuleDestroy() {
-    await this.$disconnect();
+    try {
+      await this.$disconnect();
+      await this.pool.end();
+      this.logger.log('Successfully disconnected from database');
+    } catch (error) {
+      this.logger.error('Error during database disconnection', error);
+    }
   }
 
   /**
    * Run a database operation with tenant context
+   * This method should be used to wrap service-layer operations that require tenant isolation
    */
   async runWithTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
     return this.asyncLocalStorage.run({ tenantId }, fn);
@@ -86,34 +107,14 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   /**
-   * Check if a model has a tenantId field
+   * Helper method to ensure tenant isolation in queries
+   * Service layer should use this to append tenantId to where clauses
    */
-  private async hasTenantIdField(model: string): Promise<boolean> {
-    const modelsWithTenantId = [
-      'User',
-      'Player',
-      'Season',
-      'Training',
-      'TrainingSession',
-      'Contract',
-      'ContractVersion',
-      'ContractApproval',
-      'LegalTicket',
-      'LegalNote',
-      'Conversation',
-      'ConversationMember',
-      'Message',
-      'Notification',
-      'AuditLog',
-      'Document',
-      'PlayerMedia',
-      'MedicalRecord',
-      'PerformanceRecord',
-      'Rating',
-      'Enrollment',
-      'Attendance',
-    ];
-    
-    return modelsWithTenantId.includes(model);
+  getTenantFilter(tenantId?: string): { tenantId: string } {
+    const tid = tenantId || this.getCurrentTenantId();
+    if (!tid) {
+      throw new Error('Tenant ID is required for this operation');
+    }
+    return { tenantId: tid };
   }
 }

@@ -36,6 +36,8 @@ export class UserRepository {
     lastName?: string;
     phone?: string;
     tenantId: string;
+    emailVerificationToken?: string;
+    emailVerificationExpiry?: Date;
   }): Promise<User> {
     return this.prisma.user.create({
       data,
@@ -66,6 +68,44 @@ export class UserRepository {
       where: { id: userId },
       data: {
         lockedUntil,
+      },
+    });
+  }
+
+  async update(userId: string, data: {
+    passwordHash?: string;
+    passwordResetToken?: string | null;
+    passwordResetExpiry?: Date | null;
+    passwordChangedAt?: Date;
+    lastLoginAt?: Date;
+    failedLoginAttempts?: number;
+    lockedUntil?: Date | null;
+    emailVerifiedAt?: Date;
+    emailVerificationToken?: string | null;
+    emailVerificationExpiry?: Date | null;
+    twoFASecret?: string | null;
+    is2FAEnabled?: boolean;
+  }): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+  }
+
+  async findByResetToken(token: string, tenantId: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: {
+        passwordResetToken: token,
+        tenantId,
+      },
+    });
+  }
+
+  async findByVerificationToken(token: string, tenantId: string): Promise<User | null> {
+    return this.prisma.user.findFirst({
+      where: {
+        emailVerificationToken: token,
+        tenantId,
       },
     });
   }
