@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
 import type { RequestWithUser } from '../../../../common/interfaces/request-with-user.interface';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -6,6 +6,8 @@ import { ChangePasswordDto } from '../../presentation/dto/change-password.dto';
 
 @Injectable()
 export class ChangePasswordUseCase {
+  private readonly logger = new Logger(ChangePasswordUseCase.name);
+
   constructor(
     private userRepository: UserRepository,
     private passwordService: PasswordService,
@@ -29,6 +31,7 @@ export class ChangePasswordUseCase {
     const isValid = await this.passwordService.verify(user.passwordHash, dto.currentPassword);
 
     if (!isValid) {
+      this.logger.warn(`Failed password change attempt for user: ${user.email} (incorrect current password)`);
       throw new UnauthorizedException('Current password is incorrect');
     }
 
@@ -38,6 +41,7 @@ export class ChangePasswordUseCase {
     // Check if new password is different from current
     const isSamePassword = await this.passwordService.verify(user.passwordHash, dto.newPassword);
     if (isSamePassword) {
+      this.logger.warn(`Password change failed for user: ${user.email} (new password same as current)`);
       throw new BadRequestException('New password must be different from current password');
     }
 
@@ -47,6 +51,8 @@ export class ChangePasswordUseCase {
       passwordHash,
       passwordChangedAt: new Date(),
     });
+
+    this.logger.log(`Password changed successfully for user: ${user.email}`);
 
     return { message: 'Password changed successfully' };
   }

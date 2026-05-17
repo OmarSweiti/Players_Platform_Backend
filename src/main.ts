@@ -1,20 +1,31 @@
 import { NestFactory } from '@nestjs/core';
-import { ValidationPipe } from '@nestjs/common';
+import { ValidationPipe, Logger } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import helmet from 'helmet';
 import compression from 'compression';
+import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
+import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
+import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const configService = app.get(ConfigService);
+  const logger = new Logger('Bootstrap');
+
+  // Apply global interceptors for logging and response transformation
+  app.useGlobalInterceptors(new LoggingInterceptor());
+  app.useGlobalInterceptors(new TransformInterceptor());
 
   // Security - Helmet for secure HTTP headers
   app.use(helmet());
 
   // Compression middleware
   app.use(compression());
+
+  // Cookie parser middleware for HTTP-only cookies
+  app.use(cookieParser());
 
   // CORS Configuration
   const corsOrigin = configService.get<string>('CORS_ORIGIN') || 'http://localhost:3001';
@@ -71,11 +82,11 @@ async function bootstrap() {
   // Shutdown hooks for graceful shutdown
   app.enableShutdownHooks();
 
-  const port = configService.get<number>('app.port') || 3000;
+  const port = configService.get<number>('app.port') || 3001;
   await app.listen(port);
   
-  console.log(`\n🚀 Application is running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/docs`);
-  console.log(`🏥 Health Check: http://localhost:${port}/${apiPrefix}/health\n`);
+  logger.log(`\n🚀 Application is running on: http://localhost:${port}`);
+  logger.log(`📚 API Documentation: http://localhost:${port}/docs`);
+  logger.log(`🏥 Health Check: http://localhost:${port}/${apiPrefix}/health\n`);
 }
 bootstrap();

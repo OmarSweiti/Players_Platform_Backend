@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import * as speakeasy from 'speakeasy';
 import * as qrcode from 'qrcode';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 
 @Injectable()
 export class Enable2FAUseCase {
+  private readonly logger = new Logger(Enable2FAUseCase.name);
+
   constructor(private userRepository: UserRepository) {}
 
   async execute(userId: string, tenantId: string) {
@@ -23,6 +25,8 @@ export class Enable2FAUseCase {
       twoFASecret: secret.base32,
       is2FAEnabled: false,
     });
+
+    this.logger.log(`2FA setup initiated for user ID: ${userId}`);
 
     return {
       secret: secret.base32,

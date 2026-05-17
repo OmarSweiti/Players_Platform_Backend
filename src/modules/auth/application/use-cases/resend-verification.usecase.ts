@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { MailService } from '../../../../infrastructure/mail/mail.service';
 
 @Injectable()
 export class ResendVerificationUseCase {
+  private readonly logger = new Logger(ResendVerificationUseCase.name);
+
   constructor(
     private userRepository: UserRepository,
     private mailService: MailService,
@@ -14,11 +16,13 @@ export class ResendVerificationUseCase {
     const user = await this.userRepository.findByEmail(email, tenantId);
 
     if (!user) {
+      this.logger.warn(`Resend verification requested for non-existent email: ${email}`);
       throw new NotFoundException('User not found');
     }
 
     // Check if email is already verified
     if (user.emailVerifiedAt) {
+      this.logger.log(`Resend verification requested for already verified email: ${email}`);
       return { message: 'Email is already verified' };
     }
 
@@ -35,6 +39,8 @@ export class ResendVerificationUseCase {
 
     // Send verification email
     await this.mailService.sendVerificationEmail(user.email, verificationToken);
+
+    this.logger.log(`Verification email resent to: ${user.email}`);
 
     return { message: 'Verification email sent successfully' };
   }

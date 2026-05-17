@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -6,6 +6,8 @@ import { ResetPasswordDto } from '../../presentation/dto/reset-password.dto';
 
 @Injectable()
 export class ResetPasswordUseCase {
+  private readonly logger = new Logger(ResetPasswordUseCase.name);
+
   constructor(
     private userRepository: UserRepository,
     private passwordService: PasswordService,
@@ -19,11 +21,13 @@ export class ResetPasswordUseCase {
     const user = await this.userRepository.findByResetToken(hashedToken, tenantId);
 
     if (!user) {
+      this.logger.warn(`Password reset attempted with invalid token`);
       throw new BadRequestException('Invalid or expired reset token');
     }
 
     // Check if token has expired
     if (!user.passwordResetExpiry || new Date() > user.passwordResetExpiry) {
+      this.logger.warn(`Password reset attempted with expired token for user: ${user.email}`);
       throw new BadRequestException('Reset token has expired');
     }
 
@@ -43,6 +47,8 @@ export class ResetPasswordUseCase {
 
     // Invalidate all existing sessions by updating passwordChangedAt
     // This will cause JWT validation to fail for old tokens
+
+    this.logger.log(`Password reset successful for user: ${user.email}`);
 
     return { message: 'Password has been reset successfully' };
   }

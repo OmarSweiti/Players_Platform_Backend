@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -7,6 +7,8 @@ import { RegisterDto } from '../../presentation/dto/register.dto';
 
 @Injectable()
 export class RegisterUseCase {
+  private readonly logger = new Logger(RegisterUseCase.name);
+
   constructor(
     private userRepository: UserRepository,
     private passwordService: PasswordService,
@@ -14,48 +16,65 @@ export class RegisterUseCase {
   ) {}
 
   async execute(dto: RegisterDto, tenantId: string) {
-    // Check if user already exists
-    const existingUser = await this.userRepository.findByEmail(dto.email, tenantId);
+    const startTime = Date.now();
     
-    if (existingUser) {
-      throw new ConflictException('User with this email already exists');
+    try {
+      // Check if user already exists
+      const existingUser = await this.userRepository.findByEmail(dto.email, tenantId);
+      
+      if (existingUser) {
+        this.logger.warn(`Registration attempt with existing email: ${dto.email}`);
+        throw new ConflictException('User with this email already exists');
+      }
+
+      // Validate password strength
+      this.validatePasswordStrength(dto.password);
+
+      // Hash password
+      const passwordHash = await this.passwordService.hash(dto.password);
+
+      // Generate email verification token
+      const verificationToken = crypto.randomBytes(32).toString('hex');
+      const verificationTokenExpiry = new Date();
+      verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24); // 24 hours
+
+      // Create user
+      const user = await this.userRepository.create({
+        email: dto.email,
+        passwordHash,
+        role: dto.role,
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        phone: dto.phone,
+        tenantId,
+        emailVerificationToken: verificationToken,
+        emailVerificationExpiry: verificationTokenExpiry,
+      });
+
+      // Send verification email
+      await this.mailService.sendVerificationEmail(user.email, verificationToken);
+
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `New user registered: ${user.email} (tenant: ${tenantId}, role: ${user.role}, duration: ${duration}ms)`,
+      );
+
+      return {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        tenantId: user.tenantId,
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.logger.error(
+        `Registration failed for ${dto.email}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
     }
-
-    // Validate password strength
-    this.validatePasswordStrength(dto.password);
-
-    // Hash password
-    const passwordHash = await this.passwordService.hash(dto.password);
-
-    // Generate email verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationTokenExpiry = new Date();
-    verificationTokenExpiry.setHours(verificationTokenExpiry.getHours() + 24); // 24 hours
-
-    // Create user
-    const user = await this.userRepository.create({
-      email: dto.email,
-      passwordHash,
-      role: dto.role,
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      phone: dto.phone,
-      tenantId,
-      emailVerificationToken: verificationToken,
-      emailVerificationExpiry: verificationTokenExpiry,
-    });
-
-    // Send verification email
-    await this.mailService.sendVerificationEmail(user.email, verificationToken);
-
-    return {
-      id: user.id,
-      email: user.email,
-      firstName: user.firstName,
-      lastName: user.lastName,
-      role: user.role,
-      tenantId: user.tenantId,
-    };
   }
 
   private validatePasswordStrength(password: string): void {

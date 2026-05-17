@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import type { RequestWithUser } from '../../../../common/interfaces/request-with-user.interface';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 
@@ -13,6 +13,8 @@ export interface ActiveSession {
 
 @Injectable()
 export class GetActiveSessionsUseCase {
+  private readonly logger = new Logger(GetActiveSessionsUseCase.name);
+
   constructor(private userRepository: UserRepository) {}
 
   async execute(req: RequestWithUser): Promise<ActiveSession[]> {
@@ -20,11 +22,14 @@ export class GetActiveSessionsUseCase {
     const tenantId = req.tenantId;
 
     if (!userId || !tenantId) {
+      this.logger.warn(`Get active sessions attempted without authentication`);
       return [];
     }
 
     // For now, return a single session since we're using stateless JWT
     // In a production system, you would track sessions in a database or Redis
+    this.logger.debug(`Active sessions retrieved for user ID: ${userId}`);
+    
     return [
       {
         id: 'current-session',

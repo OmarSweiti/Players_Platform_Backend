@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -6,6 +6,8 @@ import { LoginDto } from '../../presentation/dto/login.dto';
 
 @Injectable()
 export class LoginUseCase {
+  private readonly logger = new Logger(LoginUseCase.name);
+
   constructor(
     private userRepository: UserRepository,
     private passwordService: PasswordService,
@@ -19,17 +21,23 @@ export class LoginUseCase {
     const user = await this.userRepository.findByEmail(email, tenantId);
     
     if (!user) {
+      // SECURITY: Log failed login attempt (don't reveal if email exists)
+      this.logger.warn(`Failed login attempt for email: ${email} (user not found)`);
       return null;
     }
 
     // Check if account is locked
     if (user.lockedUntil && new Date() < user.lockedUntil) {
+      this.logger.warn(
+        `Login blocked - Account locked: ${user.email} (locked until: ${user.lockedUntil.toISOString()})`,
+      );
       throw new UnauthorizedException('Account is temporarily locked due to too many failed attempts');
     }
 
     const isValid = await this.passwordService.verify(user.passwordHash, password);
     
     if (!isValid) {
+      this.logger.warn(`Invalid password for user: ${user.email}`);
       await this.handleFailedLogin(user.id);
       return null;
     }
@@ -41,27 +49,45 @@ export class LoginUseCase {
    * Execute login and generate tokens
    */
   async execute(dto: LoginDto, tenantId: string) {
-    const user = await this.validateUser(dto.email, dto.password, tenantId);
+    const startTime = Date.now();
     
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
+    try {
+      const user = await this.validateUser(dto.email, dto.password, tenantId);
+      
+      if (!user) {
+        const duration = Date.now() - startTime;
+        this.logger.warn(`Login failed for ${dto.email} after ${duration}ms`);
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      const tokens = this.generateTokens(user);
+      
+      await this.userRepository.updateLastLogin(user.id);
+
+      const duration = Date.now() - startTime;
+      this.logger.log(
+        `Successful login: ${user.email} (tenant: ${tenantId}, role: ${user.role}, duration: ${duration}ms)`,
+      );
+
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          tenantId: user.tenantId,
+        },
+        ...tokens,
+      };
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      this.logger.error(
+        `Login error for ${dto.email}: ${error.message}`,
+        error.stack,
+      );
+      throw error;
     }
-
-    const tokens = this.generateTokens(user);
-    
-    await this.userRepository.updateLastLogin(user.id);
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        role: user.role,
-        tenantId: user.tenantId,
-      },
-      ...tokens,
-    };
   }
 
   private generateTokens(user: any) {
@@ -84,11 +110,19 @@ export class LoginUseCase {
   private async handleFailedLogin(userId: string) {
     const user = await this.userRepository.incrementFailedLoginAttempts(userId);
     
+    this.logger.warn(
+      `Failed login attempt #${user.failedLoginAttempts} for user ID: ${userId}`,
+    );
+    
     // Lock account after 5 failed attempts
     if (user.failedLoginAttempts >= 5) {
       const lockedUntil = new Date();
       lockedUntil.setMinutes(lockedUntil.getMinutes() + 30); // Lock for 30 minutes
       await this.userRepository.lockAccount(userId, lockedUntil);
+      
+      this.logger.warn(
+        `Account LOCKED: User ID ${userId} locked until ${lockedUntil.toISOString()}`,
+      );
     }
   }
 }

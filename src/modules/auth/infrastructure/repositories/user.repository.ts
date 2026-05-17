@@ -109,4 +109,18 @@ export class UserRepository {
       },
     });
   }
+
+  async updatePasswordChangedAt(userId: string, tenantId: string, timestamp: Date): Promise<User> {
+    return this.prisma.user.update({
+      where: {
+        id_tenantId: {
+          id: userId,
+          tenantId,
+        },
+      },
+      data: {
+        passwordChangedAt: timestamp,
+      },
+    });
+  }
 }

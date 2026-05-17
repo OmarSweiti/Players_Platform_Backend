@@ -18,6 +18,8 @@ import { Enable2FAUseCase } from './application/use-cases/enable-2fa.usecase';
 import { Verify2FAUseCase } from './application/use-cases/verify-2fa.usecase';
 import { Disable2FAUseCase } from './application/use-cases/disable-2fa.usecase';
 import { GetActiveSessionsUseCase } from './application/use-cases/get-active-sessions.usecase';
+import { RevokeSessionUseCase } from './application/use-cases/revoke-session.usecase';
+import { LogoutAllDevicesUseCase } from './application/use-cases/logout-all-devices.usecase';
 import { PasswordService } from './application/services/password.service';
 import { UserRepository } from './infrastructure/repositories/user.repository';
 import { JwtStrategy } from './infrastructure/strategies/jwt.strategy';
@@ -66,6 +68,8 @@ import { MailService } from '../../infrastructure/mail/mail.service';
     Verify2FAUseCase,
     Disable2FAUseCase,
     GetActiveSessionsUseCase,
+    RevokeSessionUseCase,
+    LogoutAllDevicesUseCase,
     PasswordService,
     UserRepository,
     JwtStrategy,

@@ -1,8 +1,10 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Logger } from '@nestjs/common';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 
 @Injectable()
 export class VerifyEmailUseCase {
+  private readonly logger = new Logger(VerifyEmailUseCase.name);
+
   constructor(private userRepository: UserRepository) {}
 
   async execute(token: string, tenantId: string) {
@@ -10,11 +12,13 @@ export class VerifyEmailUseCase {
     const user = await this.userRepository.findByVerificationToken(token, tenantId);
 
     if (!user) {
+      this.logger.warn(`Email verification attempted with invalid token`);
       throw new BadRequestException('Invalid or expired verification token');
     }
 
     // Check if token has expired
     if (!user.emailVerificationExpiry || new Date() > user.emailVerificationExpiry) {
+      this.logger.warn(`Email verification attempted with expired token for user: ${user.email}`);
       throw new BadRequestException('Verification token has expired');
     }
 
@@ -24,6 +28,8 @@ export class VerifyEmailUseCase {
       emailVerificationToken: null,
       emailVerificationExpiry: null,
     });
+
+    this.logger.log(`Email verified successfully for user: ${user.email}`);
 
     return { message: 'Email verified successfully' };
   }

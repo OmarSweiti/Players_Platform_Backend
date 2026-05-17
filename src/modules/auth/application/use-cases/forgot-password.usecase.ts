@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { MailService } from '../../../../infrastructure/mail/mail.service';
@@ -6,6 +6,8 @@ import { ForgotPasswordDto } from '../../presentation/dto/forgot-password.dto';
 
 @Injectable()
 export class ForgotPasswordUseCase {
+  private readonly logger = new Logger(ForgotPasswordUseCase.name);
+
   constructor(
     private userRepository: UserRepository,
     private mailService: MailService,
@@ -16,6 +18,7 @@ export class ForgotPasswordUseCase {
 
     // Always return success to prevent email enumeration
     if (!user) {
+      this.logger.log(`Password reset requested for non-existent email: ${dto.email}`);
       return { message: 'If an account exists with this email, a password reset link has been sent' };
     }
 
@@ -33,6 +36,8 @@ export class ForgotPasswordUseCase {
 
     // Send reset email
     await this.mailService.sendPasswordResetEmail(user.email, resetToken);
+
+    this.logger.log(`Password reset email sent to: ${user.email}`);
 
     return { message: 'If an account exists with this email, a password reset link has been sent' };
   }

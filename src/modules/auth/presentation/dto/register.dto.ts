@@ -3,32 +3,53 @@ import { ApiProperty } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 
 export class RegisterDto {
-  @ApiProperty({ example: 'user@example.com' })
+  @ApiProperty({
+    description: 'User email address (must be unique)',
+    example: 'user@example.com',
+  })
   @IsEmail()
   @IsNotEmpty()
   email: string;
 
-  @ApiProperty({ example: 'password123' })
+  @ApiProperty({
+    description: 'User password (minimum 6 characters)',
+    example: 'SecurePassword123!',
+    minLength: 6,
+  })
   @IsString()
   @IsNotEmpty()
   @MinLength(6)
   password: string;
 
-  @ApiProperty({ example: 'John' })
+  @ApiProperty({
+    description: 'User first name',
+    example: 'John',
+  })
   @IsString()
   @IsNotEmpty()
   firstName: string;
 
-  @ApiProperty({ example: 'Doe' })
+  @ApiProperty({
+    description: 'User last name',
+    example: 'Doe',
+  })
   @IsString()
   @IsNotEmpty()
   lastName: string;
 
-  @ApiProperty({ enum: UserRole, example: UserRole.PLAYER })
+  @ApiProperty({
+    description: 'User role in the system',
+    enum: UserRole,
+    example: UserRole.PLAYER,
+  })
   @IsNotEmpty()
   role: UserRole;
 
-  @ApiProperty({ example: '+1234567890', required: false })
+  @ApiProperty({
+    description: 'Optional phone number',
+    example: '+1234567890',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   phone?: string;

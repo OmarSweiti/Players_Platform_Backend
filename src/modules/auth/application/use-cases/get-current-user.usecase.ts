@@ -1,9 +1,11 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import type { RequestWithUser } from '../../../../common/interfaces/request-with-user.interface';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 
 @Injectable()
 export class GetCurrentUserUseCase {
+  private readonly logger = new Logger(GetCurrentUserUseCase.name);
+
   constructor(private userRepository: UserRepository) {}
 
   async execute(req: RequestWithUser) {
@@ -17,8 +19,11 @@ export class GetCurrentUserUseCase {
     const user = await this.userRepository.findById(userId, tenantId);
 
     if (!user) {
+      this.logger.warn(`Get current user attempted for non-existent user ID: ${userId}`);
       throw new UnauthorizedException('User not found');
     }
+
+    this.logger.debug(`Current user profile retrieved: ${user.email}`);
 
     return {
       id: user.id,
