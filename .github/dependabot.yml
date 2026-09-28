@@ -5,13 +5,17 @@ version: 2
 # politely. Security updates are separate (repository setting) and arrive
 # immediately, ungrouped, against the default branch — a real advisory never
 # waits for the monthly batch.
+#
+# No `target-branch`: development is the default branch, where both version
+# and security updates land anyway — and GitHub stops applying an entry's
+# settings (the commit-message prefix, the labels) to security-update PRs once
+# that entry sets `target-branch`, which leaves them outside the title grammar.
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: monthly }
     cooldown: { default-days: 7 } # let a bad release be yanked before you take it
     open-pull-requests-limit: 5
-    target-branch: development
     commit-message:
       prefix: "chore(repo)" # the title grammar's type(scope); the labeler adds [—]
     labels: ["type: chore", "area: repo", "meta: dependencies"]
@@ -30,7 +34,6 @@ updates:
     schedule: { interval: monthly }
     cooldown: { default-days: 7 }
     open-pull-requests-limit: 5
-    target-branch: development
     commit-message:
       prefix: "chore(repo)"
     labels: ["type: chore", "area: repo", "meta: dependencies"]

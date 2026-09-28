@@ -106,6 +106,14 @@ normalize() {
     *$'\n'* | *$'\r'*) validate "$input"; return 1 ;;
   esac
   candidate=$input
+  # Dependabot's own default subject ("Bump x from 1 to 2", "Update x
+  # requirement from …") appears whenever an entry's commit-message settings do
+  # not apply — security updates under `target-branch` are one such case. Give
+  # it the repository's dependency prefix; anything else still has to conform.
+  case "$candidate" in
+    'Bump '* | 'Update '*)
+      candidate="chore(repo): $(printf '%s' "${candidate:0:1}" | tr '[:upper:]' '[:lower:]')${candidate:1}" ;;
+  esac
   if ! [[ "$candidate" =~ $TAG_AT_END ]]; then
     candidate="$candidate  [—]"
   fi
@@ -179,6 +187,15 @@ self_test() {
     'chore(repo): bump @vitejs/plugin-react from 6.0.5 to 6.1.0 in the js-minor group across 1 directory'
   normalizes 'chore(repo): bump the Rust patch group  [—]' \
     "a conforming title is unchanged" 'chore(repo): bump the Rust patch group  [—]'
+  normalizes 'chore(repo): bump axios from 1.16.0 to 1.18.0  [—]' \
+    "Dependabot's default subject gains the dependency prefix" 'Bump axios from 1.16.0 to 1.18.0'
+  normalizes 'chore(repo): update zod requirement from ^3.0 to ^4.0  [—]' \
+    "a requirement update gains it too" 'Update zod requirement from ^3.0 to ^4.0'
+  normalizes 'chore(repo): bump the npm_and_yarn group  [—]' \
+    "a grouped security update loses its transport detail" 'Bump the npm_and_yarn group across 1 directory with 3 updates'
+  if normalize 'Fix the login bug' >/dev/null 2>&1; then
+    printf '  FAILED  a free-text subject is not rescued\n'; fail=$((fail + 1))
+  else printf '  ok      a free-text subject is not rescued\n'; pass=$((pass + 1)); fi
   if normalize $'chore(repo): bump x\nmalicious second line' >/dev/null 2>&1; then
     printf '  FAILED  a multi-line title is refused\n'; fail=$((fail + 1))
   else printf '  ok      a multi-line title is refused\n'; pass=$((pass + 1)); fi
