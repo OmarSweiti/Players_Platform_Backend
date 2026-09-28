@@ -135,6 +135,22 @@ merge $pr='':
     bash ./scripts/check-attribution.sh --message-file "$text"
     bash ./scripts/watch-required-checks.sh "$target"
     [ "$(snapshot)" = "$before" ] || { echo "merge: REFUSED — the PR changed while its checks ran; run again" >&2; exit 1; }
+    # The admin holds bypass_mode "pull_request", and the API applies it
+    # silently: a PR GitHub would refuse — behind a strict base, blocked by a
+    # rule — merges anyway, recorded only as a bypass. So refuse here unless
+    # GitHub itself calls the merge clean. A deliberate bypass stays possible,
+    # as an explicit `gh pr merge --admin`, never by accident through here.
+    state=UNKNOWN
+    for _ in 1 2 3 4 5 6; do
+      state=$(gh pr view "$target" --json mergeStateStatus --jq .mergeStateStatus)
+      [ "$state" = UNKNOWN ] || break
+      sleep 5 # GitHub computes the state asynchronously after a push
+    done
+    case "$state" in
+      CLEAN | HAS_HOOKS | UNSTABLE) ;; # UNSTABLE: only non-required checks are red
+      BEHIND) echo "merge: REFUSED — the PR is behind its base; run: gh pr update-branch $target — then just merge again" >&2; exit 1 ;;
+      *) echo "merge: REFUSED — GitHub reports mergeStateStatus=$state; only a merge GitHub calls clean goes through this recipe" >&2; exit 1 ;;
+    esac
     get '.body // ""' >"$text"
     gh pr merge "$target" --squash --delete-branch --match-head-commit "$(get .headRefOid)" \
       --subject "$(get .title) (#$(get .number))" --body-file "$text"
@@ -169,6 +185,22 @@ promote-merge $pr:
     bash ./scripts/check-attribution.sh --message-file "$text"
     bash ./scripts/watch-required-checks.sh "$pr"
     [ "$(snapshot)" = "$before" ] || { echo "promote-merge: REFUSED — the PR changed while its checks ran; run again" >&2; exit 1; }
+    # The admin holds bypass_mode "pull_request", and the API applies it
+    # silently: a PR GitHub would refuse — behind a strict base, blocked by a
+    # rule — merges anyway, recorded only as a bypass. So refuse here unless
+    # GitHub itself calls the merge clean. A deliberate bypass stays possible,
+    # as an explicit `gh pr merge --admin`, never by accident through here.
+    state=UNKNOWN
+    for _ in 1 2 3 4 5 6; do
+      state=$(gh pr view "$pr" --json mergeStateStatus --jq .mergeStateStatus)
+      [ "$state" = UNKNOWN ] || break
+      sleep 5 # GitHub computes the state asynchronously after a push
+    done
+    case "$state" in
+      CLEAN | HAS_HOOKS | UNSTABLE) ;; # UNSTABLE: only non-required checks are red
+      BEHIND) echo "promote-merge: REFUSED — the PR is behind its base; run: gh pr update-branch $pr — then just promote-merge again" >&2; exit 1 ;;
+      *) echo "promote-merge: REFUSED — GitHub reports mergeStateStatus=$state; only a merge GitHub calls clean goes through this recipe" >&2; exit 1 ;;
+    esac
     get '.body // ""' >"$text"
     # --merge, never --squash. Never --delete-branch: the head is a flow branch.
     gh pr merge "$pr" --merge --match-head-commit "$(get .headRefOid)" \
