@@ -46,6 +46,11 @@ renamed or deleted — the `pre-commit` hook and the `protected-paths` check bot
 refuse it. Change the schema with the next migration:
 `npx prisma migrate dev --name <what-changed>`.
 
+CI replays every migration on an empty PostgreSQL and fails if the resulting
+database differs from `schema.prisma` (a schema edit without its migration).
+`just migrations` runs the same check locally against a throwaway PostgreSQL in
+Docker — never against your development database.
+
 ## Before you push
 
 `just pre-push` runs the complete local gate: schema validation and client

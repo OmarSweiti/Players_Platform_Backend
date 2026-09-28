@@ -57,8 +57,24 @@ build:
 test:
     npx --no-install jest
 
-# The same gate as CI's required `test` check
+# CI's required `test` check, except the migration replay (that is `just migrations`)
 check: prisma build test
+
+# CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database)
+migrations:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    name="players-platform-migrations-$$"
+    docker run -d --rm --name "$name" -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=ci \
+      -p 127.0.0.1::5432 postgres:17 >/dev/null
+    trap 'docker stop "$name" >/dev/null' EXIT
+    # -h: the init phase listens on the socket only; ready means TCP answers
+    until docker exec "$name" pg_isready -h 127.0.0.1 -U ci -d ci >/dev/null 2>&1; do sleep 1; done
+    port=$(docker port "$name" 5432/tcp | head -n 1 | sed 's/.*://')
+    # Exported, so dotenv (prisma.config.ts) never swaps in the .env database
+    export DATABASE_URL="postgresql://ci:ci@127.0.0.1:$port/ci"
+    npx --no-install prisma migrate deploy
+    npx --no-install prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 
 # The complete local gate: the CI checks, every guard, and a full-history secret scan
 pre-push: check guards

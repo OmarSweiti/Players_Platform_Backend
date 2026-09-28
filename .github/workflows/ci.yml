@@ -29,10 +29,26 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    # A throwaway PostgreSQL for this job only: the migrations are proven on
+    # the engine they will run on, not on a mock. Keep the major equal to
+    # production's once there is one. Pinned by major tag, not digest, on
+    # purpose: a disposable test database should take 17.x patches, and
+    # nothing would ever move a digest here.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci # a disposable service container, not a secret
+          POSTGRES_DB: ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci -d ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
-      # prisma.config.ts reads DATABASE_URL. Nothing in this job connects to a
-      # database: the placeholder only keeps config loading deterministic.
-      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci # prisma.config.ts reads it
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,6 +74,14 @@ jobs:
       - name: Unit tests
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: npx --no-install jest --ci
+      # Forward-only history is only worth something if it replays: every
+      # migration applies to an empty database, and the database it produces is
+      # exactly schema.prisma — a schema edit without its migration is red here.
+      - name: Every migration applies to a real PostgreSQL, and the result is the schema
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
+        run: |
+          npx --no-install prisma migrate deploy
+          npx --no-install prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
       # Lint is not a gate yet: at adoption (28 Sep 2026) eslint reported 748
       # problems (410 of them formatting) and prettier --check flagged 65
       # files. The changes that clear them add the steps here, so this job never

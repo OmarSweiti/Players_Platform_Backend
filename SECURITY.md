@@ -27,6 +27,7 @@ Expect an acknowledgement within a few working days.
 | Changes arrive through pull requests only, on legal routes | rulesets on `development`, `staging`, `main`; the `topology` required check |
 | Release tags never move or disappear | the `tags-v-append-only` ruleset, which binds the admin too |
 | The schema is valid, the code builds, the unit tests pass | the `test` required check |
+| Every migration applies to a real PostgreSQL, and the database it produces is exactly `schema.prisma` | the `test` required check (a PostgreSQL 17 service) |
 | No high or critical npm advisory in the lockfile | `npm audit --audit-level high` in the `supply-chain` required check and the weekly security lane; Dependabot alerts + security updates |
 | Code-level vulnerabilities are looked for | CodeQL default setup (extended suite) on every PR and weekly |
 | Workflow security | SHA-pinned actions (enforced repository-wide), read-only default token, zizmor + actionlint |
@@ -37,6 +38,6 @@ Expect an acknowledgement within a few working days.
 |---|---|
 | `package.json` overrides `mysql2` and `deepmerge-ts`: the prisma CLI pins vulnerable versions of both (still in prisma 7.10.0) | drop the overrides once a prisma release ships patched versions |
 | Lint is not a gate yet: 748 eslint problems at adoption (410 formatting), 65 files not formatted | the changes that clear them add lint and format checks to the `test` check |
-| One unit test; no end-to-end tests in CI; migrations are not yet applied to a real PostgreSQL in CI | tests with the modules they cover; a Postgres service in CI that applies every migration |
+| One unit test; no end-to-end tests in CI | tests with the modules they cover; the e2e suite in CI against the same PostgreSQL service |
 | No required approvals: a sole maintainer cannot approve their own PR | `required_approving_review_count: 1` when a second developer arrives |
 | The admin can bypass the branch rulesets (through a PR only, and logged) | remove the bypass when a second maintainer exists |
