@@ -1,0 +1,93 @@
+name: security
+
+on:
+  push:
+    branches: [development, staging, main]
+    paths: [".github/**", ".gitleaks.toml", "scripts/**"]
+  pull_request:
+    branches: [development, staging, main]
+    paths: [".github/**", ".gitleaks.toml", "scripts/**"]
+  schedule:
+    - cron: "23 3 * * 1" # weekly, Monday 03:23 UTC — advisories do not wait for a PR
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# The event name is part of the key: a scheduled run shares its ref with every
+# push to the default branch, and without it each push cancels the weekly run.
+concurrency:
+  group: security-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # NOT a required check: it is path-filtered, so most PRs never produce it, and
+  # a required-but-absent check blocks a PR forever.
+  workflow-analysis:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Workflow syntax and embedded shell
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
+        with:
+          version: 1.7.12
+          shellcheck: true
+          pyflakes: false
+          cache: false
+      - name: GitHub Actions security audit
+        uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99 # v0.6.3
+        with:
+          inputs: .github
+          version: 1.29.0
+          persona: regular
+          online-audits: true
+          advanced-security: false
+          annotations: true
+
+  scheduled-history-scan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install the pinned, digest-verified Gitleaks release
+        run: ./scripts/install-gitleaks-ci.sh
+      - name: The complete history contains no secret
+        run: gitleaks git --config .gitleaks.toml --redact=100 --verbose --no-banner --ignore-gitleaks-allow .
+      # EDIT: your ecosystem's dependency advisory audit belongs here too.
+
+  # A red weekly run leaves ONE standing issue (commented on each failure),
+  # not an email nobody reads. Schedule-only: never a required check.
+  scheduled-failure-escalation:
+    if: failure() && github.event_name == 'schedule'
+    needs: [workflow-analysis, scheduled-history-scan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write # job-scoped: no job that runs third-party code holds it
+    steps:
+      - name: File or update the standing issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          marker='scheduled-security-failure' # no punctuation: search tokenizes it away
+          body="The scheduled security run failed: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          existing=$(gh issue list --state open --search "$marker in:title" --limit 1 --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$marker: the weekly security workflow is failing" --body "$body"
+          fi

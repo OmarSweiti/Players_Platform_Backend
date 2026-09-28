@@ -1,0 +1,21 @@
+# Intended ownership. With one maintainer, no ruleset requires code-owner
+# review (you cannot approve your own PR), so this is governance metadata —
+# ready for the day a second developer arrives — not a merge control.
+*                          @OmarSweiti
+
+# The gates themselves: changing what CI enforces is a change to the law.
+/.github/                  @OmarSweiti
+/.githooks/                @OmarSweiti
+/scripts/                  @OmarSweiti
+/justfile                  @OmarSweiti
+/.gitleaks.toml            @OmarSweiti
+
+# Authentication, authorization, and the request pipeline.
+/src/modules/auth/         @OmarSweiti
+/src/common/guards/        @OmarSweiti
+/src/main.ts               @OmarSweiti
+
+# The schema, and history that is immutable once committed.
+/prisma/schema.prisma      @OmarSweiti
+/prisma/migrations/        @OmarSweiti
+/docs/adr/                 @OmarSweiti

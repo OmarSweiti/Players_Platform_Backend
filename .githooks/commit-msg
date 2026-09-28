@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# The commit subject obeys the change-title grammar; the message carries no
+# assistant attribution. Fails closed on anything it cannot read.
+set -euo pipefail
+
+msg_file=${1:-}
+[ -n "$msg_file" ] && [ -r "$msg_file" ] || {
+  echo "commit-msg: ERROR — Git did not pass a readable message file; refusing closed." >&2
+  exit 2
+}
+policy_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+
+# `git commit -v` appends the staged diff below a scissors line and strips it
+# only AFTER this hook runs. Check the message, never the diff.
+prefix=$(git config --get core.commentString 2>/dev/null || git config --get core.commentChar 2>/dev/null || true)
+{ [ -n "$prefix" ] && [ "$prefix" != auto ]; } || prefix='#'
+scissors="$prefix ------------------------ >8 ------------------------"
+checked=$(mktemp "${TMPDIR:-/tmp}/commit-msg.XXXXXX")
+trap 'rm -f "$checked"' EXIT
+awk -v s="$scissors" '{ line = $0; sub(/\r$/, "", line); if (line == s) exit; print }' "$msg_file" >"$checked"
+
+# Attribution first, so a Merge/Revert subject cannot smuggle a trailer through.
+bash "$policy_root/scripts/check-attribution.sh" --message-file "$checked"
+
+subject=$(tr -d '\r' <"$checked" | sed -e '/^[[:space:]]*#/d' -e '/^[[:space:]]*$/d' | sed -n 1p)
+case "$subject" in
+  Merge\ * | Revert\ * | fixup!* | squash!* | amend!* | "Initial commit") exit 0 ;; # Git's own subjects
+esac
+bash "$policy_root/scripts/validate-change-title.sh" --validate "$subject"

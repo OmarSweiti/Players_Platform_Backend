@@ -1,0 +1,49 @@
+version: 2
+
+# Monthly and grouped on purpose: every bump is a diff somebody must actually
+# read, and an unread dependency bump is how a supply-chain problem arrives
+# politely. Security updates are separate (repository setting) and arrive
+# immediately, ungrouped, against the default branch — a real advisory never
+# waits for the monthly batch.
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 } # let a bad release be yanked before you take it
+    open-pull-requests-limit: 5
+    target-branch: development
+    commit-message:
+      prefix: "chore(repo)" # the title grammar's type(scope); the labeler adds [—]
+    labels: ["type: chore", "area: repo", "meta: dependencies"]
+    # Split patch from minor: one group is atomic, and one bump that can never
+    # go green would strand every other update in it for a month.
+    groups:
+      actions-patch:
+        applies-to: version-updates
+        update-types: ["patch"]
+      actions-minor:
+        applies-to: version-updates
+        update-types: ["minor"]
+
+  - package-ecosystem: npm
+    directory: "/"
+    schedule: { interval: monthly }
+    cooldown: { default-days: 7 }
+    open-pull-requests-limit: 5
+    target-branch: development
+    commit-message:
+      prefix: "chore(repo)"
+    labels: ["type: chore", "area: repo", "meta: dependencies"]
+    groups:
+      npm-patch:
+        applies-to: version-updates
+        update-types: ["patch"]
+      npm-minor:
+        applies-to: version-updates
+        update-types: ["minor"]
+    ignore:
+      # A major that can never pass your pins only manufactures red PRs. Move
+      # it deliberately, with the runtime it depends on, in one change: the
+      # Node types follow .nvmrc.
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]

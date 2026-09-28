@@ -1,0 +1,18 @@
+# Categories for `gh release create --generate-notes` (release.yml runs it).
+# GitHub files a PR under the FIRST category whose labels match, so
+# `meta: dependencies` precedes Internal: Dependabot PRs also carry `type: chore`.
+# Promotion PRs earn no `type:` label, so they fall to "Other" by design.
+changelog:
+  categories:
+    - title: New capabilities
+      labels: ["type: feat"]
+    - title: Fixes
+      labels: ["type: fix"]
+    - title: Performance
+      labels: ["type: perf"]
+    - title: Dependencies
+      labels: ["meta: dependencies"]
+    - title: Internal
+      labels: ["type: chore", "type: refactor", "type: test", "type: docs"]
+    - title: Other
+      labels: ["*"]

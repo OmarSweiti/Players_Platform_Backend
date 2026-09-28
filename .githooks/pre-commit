@@ -1,0 +1,61 @@
+#!/usr/bin/env bash
+# Inspect the STAGED INDEX — the content Git will commit — never the working
+# tree. Fails closed if Git cannot answer.
+set -euo pipefail
+
+repo_root=$(git rev-parse --show-toplevel)
+policy_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+
+# ── EDIT FOR YOUR PROJECT ───────────────────────────────────────────────────
+MAX_BLOB_BYTES=2000000
+IMMUTABLE_PREFIXES=( # keep equal to scripts/check-protected-paths.sh
+  "prisma/migrations/"
+  "docs/adr/"
+)
+# ────────────────────────────────────────────────────────────────────────────
+
+changes=$(mktemp "${TMPDIR:-/tmp}/pre-commit.XXXXXX")
+trap 'rm -f "$changes"' EXIT
+git diff --cached --name-status --no-renames -z --diff-filter=ACMDT >"$changes"
+
+refuse=0
+no() { echo "pre-commit: REFUSED — $1"; refuse=1; }
+while IFS= read -r -d '' status && IFS= read -r -d '' path; do
+  name=$(printf '%s' "${path##*/}" | tr '[:upper:]' '[:lower:]')
+  if [ "$status" != D ]; then
+    case "$name" in
+      .env.example | .env.sample | .env.template) ;;
+      .env | .env.*) no "$path — environment files hold credentials" ;;
+      *.pem | *.key | *.p12 | *.pfx | *.jks | *.keystore | id_rsa | id_dsa | id_ecdsa | id_ed25519)
+        no "$path — private-key material never enters Git" ;;
+      .npmrc | .netrc | _netrc | .git-credentials | .pypirc) no "$path — this file commonly stores credentials" ;;
+      *.db | *.sqlite | *.sqlite3 | *-wal | *-shm) no "$path — database files are runtime data, not source" ;;
+    esac
+    # A gitlink (submodule) has no blob here; everything else staged does.
+    if [ "$(git cat-file -t ":$path" 2>/dev/null || echo none)" = blob ]; then
+      size=$(git cat-file -s ":$path")
+      [ "$size" -le "$MAX_BLOB_BYTES" ] || no "$path is $size bytes (limit $MAX_BLOB_BYTES) — use a release asset or LFS"
+    fi
+  fi
+  if [ "$status" != A ]; then
+    for prefix in "${IMMUTABLE_PREFIXES[@]}"; do
+      case "$path" in "$prefix"*) no "$path is immutable once committed — add a new file instead" ;; esac
+    done
+  fi
+done <"$changes"
+[ "$refuse" -eq 0 ] || exit 1
+
+# Content, not filenames: a token in config.txt is still a token.
+command -v gitleaks >/dev/null 2>&1 || {
+  echo "pre-commit: gitleaks is required — https://github.com/gitleaks/gitleaks#installing" >&2
+  exit 2
+}
+# --verbose names the rule, file and line; --redact=100 keeps the value out of
+# your terminal and your scrollback. `gitleaks:allow` comments are ignored, so a
+# secret cannot approve itself in the same change.
+if ! gitleaks git --staged --config "$policy_root/.gitleaks.toml" --redact=100 --verbose \
+  --no-banner --log-level error --ignore-gitleaks-allow "$repo_root"; then
+  echo "pre-commit: REFUSED — secret-like content is staged (finding above, redacted)."
+  echo "  Unstage it. If it was a real credential, rotate it first — deleting it is not enough."
+  exit 1
+fi

@@ -1,0 +1,72 @@
+name: labeler
+
+on: # zizmor: ignore[dangerous-triggers] write-scoped metadata only; PR code is never checked out or executed
+  pull_request_target:
+    # `edited` because the title decides the `type:` label and titles change.
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write # add/remove labels and fix a Dependabot title; nothing else
+    steps:
+      # `area:` and `risk:` from paths (.github/labeler.yml). actions/labeler
+      # reads only the changed-file list; it never checks out the PR.
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: true
+
+      # The scripts below come from the trusted revision, never from the PR.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      - name: Rewrite a Dependabot title into the repository grammar
+        if: github.event.pull_request.user.login == 'dependabot[bot]'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: ${{ github.event.pull_request.title }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if ./scripts/validate-change-title.sh --validate "$TITLE" >/dev/null 2>&1; then exit 0; fi
+          normalized=$(./scripts/validate-change-title.sh --normalize "$TITLE")
+          gh pr edit "$NUMBER" --title "$normalized"
+          echo "normalized title: $normalized"
+
+      # `type:` from the first word of the title — a closed list — never from
+      # paths: in a repo that fixes docs in the same PR, a path glob labels
+      # almost everything `type: docs` and the label means nothing.
+      - name: The type label follows the title
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TITLE: ${{ github.event.pull_request.title }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          want=$(./scripts/pr-type-label.sh --label "$TITLE")
+          echo "title earns: ${want:-<nothing — a free-text title>}"
+          while IFS= read -r existing; do
+            if [ -n "$existing" ] && [ "$existing" != "$want" ]; then
+              gh pr edit "$NUMBER" --remove-label "$existing" # a stale type from an older title
+            fi
+          done < <(gh pr view "$NUMBER" --json labels --jq '.labels[].name | select(startswith("type: "))')
+          if [ -n "$want" ]; then gh pr edit "$NUMBER" --add-label "$want"; fi

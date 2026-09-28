@@ -1,0 +1,42 @@
+name: Task
+description: One unit of work you are starting now (WIP = 1). The plan lives in OmarSweiti/Players_Platform; this tracks what is in flight.
+title: "[task] "
+labels: ["type: feat"]
+# projects: ["OmarSweiti/<number>"]   # to auto-add issues to a Projects v2 board
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What exists when this is done that does not exist now.
+    validations:
+      required: true
+  - type: textarea
+    id: files
+    attributes:
+      label: Files
+      description: Every file this will create or change. One that appears late is a scope leak.
+    validations:
+      required: true
+  - type: textarea
+    id: tests
+    attributes:
+      label: Tests to add
+      description: Exact test names.
+    validations:
+      required: true
+  - type: input
+    id: verify
+    attributes:
+      label: Verify
+      description: The command that proves it — not a description of the command.
+      placeholder: "just check"
+    validations:
+      required: true
+  - type: input
+    id: done-when
+    attributes:
+      label: Done when
+      description: One objectively checkable sentence. "It works" is not one.
+    validations:
+      required: true

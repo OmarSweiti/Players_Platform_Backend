@@ -1,0 +1,202 @@
+name: release
+
+# Two channels from one workflow, decided by the tag:
+#   v1.2.0-rc.1  on staging → a PRE-release draft (the candidate / pilot channel)
+#   v1.2.0       on main    → a production draft
+# A human inspects the draft and publishes it; immutable releases then lock
+# the tag and assets. A bad build is a new patch version, never a moved tag.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false # never cancel a release
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # Cheap refusals before any expensive build.
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40 # the CI wait below is 30 minutes
+    permissions:
+      actions: read # read ci.yml's runs for the exact-commit gate
+      contents: read
+    outputs:
+      prerelease: ${{ steps.channel.outputs.prerelease }}
+      tag_object: ${{ steps.tag.outputs.tag_object }}
+    steps:
+      - name: The tag grammar decides the channel
+        id: channel
+        run: |
+          set -euo pipefail
+          core='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+          final="^v${core}\$"
+          candidate="^v${core}-(rc|beta)\\.[1-9][0-9]*\$"
+          if [[ "$GITHUB_REF_NAME" =~ $final ]]; then
+            echo "prerelease=false" >>"$GITHUB_OUTPUT"; echo "branch=main" >>"$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_REF_NAME" =~ $candidate ]]; then
+            echo "prerelease=true" >>"$GITHUB_OUTPUT"; echo "branch=staging" >>"$GITHUB_OUTPUT"
+          else
+            echo "::error::release tags are vX.Y.Z, vX.Y.Z-rc.N or vX.Y.Z-beta.N, without leading zeroes"
+            exit 1
+          fi
+
+      - name: The tag is annotated, signed, verified by GitHub, and names the branch head
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BRANCH: ${{ steps.channel.outputs.branch }}
+        run: |
+          set -euo pipefail
+          ref=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$GITHUB_REF_NAME")
+          [ "$(jq -r .object.type <<<"$ref")" = tag ] || {
+            echo "::error::lightweight tag — releases need a signed annotated tag: git tag -s"; exit 1; }
+          tag_object=$(jq -r .object.sha <<<"$ref")
+          echo "tag_object=$tag_object" >>"$GITHUB_OUTPUT"
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/git/tags/$tag_object")
+          [ "$(jq -r .verification.verified <<<"$tag")" = true ] || {
+            echo "::error::GitHub did not verify the tag signature ($(jq -r .verification.reason <<<"$tag")). Upload the key as a Signing key."; exit 1; }
+          [ "$(jq -r .object.type <<<"$tag")" = commit ] || { echo "::error::the tag must point directly at a commit"; exit 1; }
+          commit=$(jq -r .object.sha <<<"$tag")
+          [ "$commit" = "$GITHUB_SHA" ] || { echo "::error::the tag does not resolve to the workflow commit"; exit 1; }
+          head=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$EXPECTED_BRANCH" --jq .object.sha)
+          [ "$commit" = "$head" ] || {
+            echo "::error::$GITHUB_REF_NAME must tag the CURRENT $EXPECTED_BRANCH head ($head), not $commit."
+            echo "::error::Promote and validate the intended commit, then tag it. Never move a tag."; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Compare with EVERY file the version lives in. The one nobody checks is
+      # the one that drifts — here the lockfile's copy (`npm version` sets both).
+      - name: The version in the tag matches the version in the tree
+        run: |
+          set -euo pipefail
+          want=${GITHUB_REF_NAME#v}
+          want=${want%%-*}
+          have=$(jq -r .version package.json)
+          lock=$(jq -r '.packages[""].version' package-lock.json)
+          [ "$want" = "$have" ] || { echo "::error::tag says $want, package.json says $have"; exit 1; }
+          [ "$want" = "$lock" ] || { echo "::error::tag says $want, package-lock.json says $lock (run npm version)"; exit 1; }
+
+      - name: CI succeeded for this exact commit, as a push to the release branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_BRANCH: ${{ steps.channel.outputs.branch }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do # 90 × 20 s: longer than your slowest branch CI
+            runs=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+              -f branch="$EXPECTED_BRANCH" -f event=push -f head_sha="$GITHUB_SHA" -f per_page=20)
+            # shellcheck disable=SC2016 # $sha and $branch are jq variables, bound by --arg
+            mine='[.workflow_runs[] | select(.head_sha == $sha and .head_branch == $branch)]'
+            green=$(jq --arg sha "$GITHUB_SHA" --arg branch "$EXPECTED_BRANCH" "$mine | map(select(.conclusion == \"success\")) | length" <<<"$runs")
+            active=$(jq --arg sha "$GITHUB_SHA" --arg branch "$EXPECTED_BRANCH" "$mine | map(select(.status != \"completed\")) | length" <<<"$runs")
+            done_=$(jq --arg sha "$GITHUB_SHA" --arg branch "$EXPECTED_BRANCH" "$mine | map(select(.status == \"completed\")) | length" <<<"$runs")
+            if [ "$green" -gt 0 ]; then echo "CI is green for $GITHUB_SHA on $EXPECTED_BRANCH"; exit 0; fi
+            if [ "$active" -eq 0 ] && [ "$done_" -gt 0 ]; then echo "::error::CI for $GITHUB_SHA did not succeed"; exit 1; fi
+            echo "waiting for CI on $GITHUB_SHA ($attempt/90)"
+            sleep 20
+          done
+          echo "::error::no successful ci.yml push run for $GITHUB_SHA on $EXPECTED_BRANCH within 30 minutes"
+          exit 1
+
+  build:
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    # Signing secrets are ENVIRONMENT secrets of `release`, whose only
+    # deployment policy is the tag pattern v* — a run on any other ref cannot
+    # read them, and every run leaves a deployment record. No required
+    # reviewers: approving your own deployment is theatre.
+    environment: release
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          # A release restores no cache: no `cache:`, and setup-node's automatic
+          # package-manager cache is switched off explicitly.
+          package-manager-cache: false
+      # Build from the lockfile with NO cache restore — a cache is mutable state
+      # that other refs could have written, and this is what gets deployed.
+      # Keep signing out of the step that compiles third-party code if you can.
+      - name: Build from the lockfile
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci # generate never connects
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npx --no-install prisma generate
+          npm run build
+          mkdir -p release-assets
+      - name: Software bill of materials (SPDX JSON)
+        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        with:
+          path: .
+          format: spdx-json
+          output-file: release-assets/players-platform-backend-${{ github.ref_name }}.spdx.json
+          syft-version: v1.42.3
+          upload-artifact: false
+          upload-release-assets: false
+      - name: Package the compiled application
+        run: |
+          set -euo pipefail
+          # Runs anywhere with: npm ci --omit=dev && npx prisma generate
+          #   && npx prisma migrate deploy && node dist/main
+          tar -czf "release-assets/players-platform-backend-$GITHUB_REF_NAME.tar.gz" \
+            dist prisma prisma.config.ts package.json package-lock.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-attempt-${{ github.run_attempt }} # a partial re-run cannot mix attempts
+          path: release-assets/
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write # the ONLY job with a write token — and it holds no signing secret
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dist
+      - name: Checksums, then a DRAFT release for a human to publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+          TAG_OBJECT: ${{ needs.guard.outputs.tag_object }}
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/dist"
+          sha256sum -- * >"SHA256SUMS-$GITHUB_REF_NAME.txt"
+          same_tag() { [ "$(gh api "repos/$GH_REPO/git/ref/tags/$GITHUB_REF_NAME" --jq .object.sha)" = "$TAG_OBJECT" ]; }
+          # A draft does not lock its tag: re-check the object the guard approved.
+          same_tag || { echo "::error::the tag moved while the release was building"; exit 1; }
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            [ "$(gh release view "$GITHUB_REF_NAME" --json isDraft --jq .isDraft)" = true ] || {
+              echo "::error::$GITHUB_REF_NAME is already published (immutable). Cut a new version."; exit 1; }
+            gh release upload "$GITHUB_REF_NAME" --clobber -- *
+          else
+            flags=(--draft --verify-tag --generate-notes --title "$GITHUB_REF_NAME")
+            if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+            gh release create "$GITHUB_REF_NAME" "${flags[@]}" -- *
+          fi
+          same_tag || { echo "::error::the tag moved during upload — do NOT publish this draft"; exit 1; }
+          echo "draft ready: inspect every asset, then publish it by hand"

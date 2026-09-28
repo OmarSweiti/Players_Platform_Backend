@@ -1,0 +1,96 @@
+#!/usr/bin/env bash
+# A seatbelt, not branch protection — `--no-verify` bypasses it; the rulesets
+# are the wall. It refuses, before anything leaves the machine:
+#   · a direct, force, or deletion push to a flow branch (they take PRs only)
+#   · moving or deleting an existing tag (tags are append-only)
+#   · a new v* tag that is malformed, lightweight, or unsigned
+#   · assistant attribution or secret-like content in the commits this push publishes
+set -euo pipefail
+
+remote=${1:-}
+[ -n "$remote" ] || { echo "pre-push: ERROR — Git did not pass the remote name; refusing closed." >&2; exit 2; }
+policy_root=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+
+FLOW_BRANCHES=' main staging development '
+zero=0000000000000000000000000000000000000000
+core='(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)'
+release_tag="^v${core}(-(rc|beta)\\.[1-9][0-9]*)?$"
+refuse=0
+commits=$(mktemp "${TMPDIR:-/tmp}/pre-push.XXXXXX")
+trap 'rm -f "$commits"' EXIT
+
+# Every child below reads /dev/null or a file, never our stdin: stdin is Git's
+# ref-update list, and a child that read it would silently skip the other refs.
+while read -r _local_ref local_sha remote_ref remote_sha; do
+  # 1 · the content this push publishes: commits the destination lacks
+  if [ "$local_sha" != "$zero" ]; then
+    case "$remote" in
+      *[!A-Za-z0-9._/-]* | -*) exclude='' ;; # a URL, not a remote name: scan everything
+      *) exclude="--not --remotes=$remote" ;;
+    esac
+    # shellcheck disable=SC2086 # $exclude is deliberately two words, or none
+    git rev-list "$local_sha" $exclude >"$commits" </dev/null
+    if [ -s "$commits" ]; then
+      bash "$policy_root/scripts/check-attribution.sh" --commits-stdin <"$commits" >/dev/null || {
+        echo "pre-push: REFUSED — $remote_ref carries assistant attribution."
+        refuse=1
+      }
+      if ! command -v gitleaks >/dev/null 2>&1; then
+        echo "pre-push: REFUSED — gitleaks is required to scan what you publish."
+        refuse=1
+      elif ! gitleaks git --config "$policy_root/.gitleaks.toml" --redact=100 --verbose --no-banner \
+        --log-level error --ignore-gitleaks-allow --log-opts="$local_sha $exclude" . </dev/null; then
+        echo "pre-push: REFUSED — $remote_ref introduces secret-like content."
+        refuse=1
+      fi
+    fi
+  fi
+
+  # 2 · tags are append-only; a new release tag must be one release.yml accepts
+  case "$remote_ref" in
+    refs/tags/*)
+      tag=${remote_ref#refs/tags/}
+      if [ "$remote_sha" != "$zero" ]; then
+        echo "pre-push: REFUSED — tag '$tag' already exists; tags never move or disappear. Cut a new version."
+        refuse=1
+        continue
+      fi
+      case "$tag" in v*) ;; *) continue ;; esac
+      if ! [[ "$tag" =~ $release_tag ]]; then
+        echo "pre-push: REFUSED — '$tag' is not vX.Y.Z, vX.Y.Z-rc.N or vX.Y.Z-beta.N (no leading zeroes)."
+        refuse=1
+        continue
+      fi
+      if [ "$(git cat-file -t "$local_sha" 2>/dev/null)" != tag ]; then
+        echo "pre-push: REFUSED — '$tag' is a lightweight tag. Create it with: git tag -s $tag -m '<message>'"
+        refuse=1
+        continue
+      fi
+      body=$(git cat-file tag "$local_sha")
+      case "$body" in
+        *"-----BEGIN PGP SIGNATURE-----"* | *"-----BEGIN SSH SIGNATURE-----"* | *"-----BEGIN SIGNED MESSAGE-----"*) ;;
+        *)
+          echo "pre-push: REFUSED — '$tag' is unsigned. Create it with: git tag -s $tag -m '<message>'"
+          refuse=1 ;;
+      esac
+      continue ;;
+  esac
+
+  # 3 · the flow branches take changes through pull requests only
+  branch=${remote_ref#refs/heads/}
+  case "$FLOW_BRANCHES" in *" $branch "*) ;; *) continue ;; esac
+  if [ "$local_sha" = "$zero" ]; then
+    echo "pre-push: REFUSED — deleting '$branch', a trunk of the flow."
+  elif [ "$remote_sha" != "$zero" ] && ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
+    echo "pre-push: REFUSED — force-pushing '$branch' would discard published commits."
+  else
+    echo "pre-push: REFUSED — '$branch' takes changes through a pull request, not a direct push."
+  fi
+  refuse=1
+done
+
+if [ "$refuse" -ne 0 ]; then
+  echo
+  echo "  The flow: feature → development → staging → main. Open a pull request."
+  exit 1
+fi

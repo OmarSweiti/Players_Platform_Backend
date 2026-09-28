@@ -1,0 +1,131 @@
+name: branch-flow
+
+# pull_request_target is load-bearing: GitHub runs this definition from the
+# DEFAULT branch, so a pull request cannot edit away the jobs that judge it.
+# The token is read-only, no secret is referenced, and the PR's code is never
+# executed: only policy scripts from github.workflow_sha — the exact trusted
+# revision that supplied this workflow — run; the PR head is fetched as DATA.
+on: # zizmor: ignore[dangerous-triggers] read-only token; the PR head is data; only trusted-revision policy executes
+  pull_request_target:
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-flow-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # REQUIRED CHECK: the route, the title, and the PR text.
+  topology:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out policy from the exact trusted workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+
+      # Branch names and PR text reach the shell through env, never through
+      # ${{ }} inside `run:` — that is how script injection is kept out.
+      - name: The PR flows feature → development → staging → main
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+        run: bash ./scripts/validate-branch-flow.sh "$HEAD_REF" "$BASE_REF" "$HEAD_REPO" "$BASE_REPO"
+
+      - name: The title is a legal squash subject; title and body carry no assistant attribution
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          # Read the PR LIVE. The event payload keeps the title as it was when
+          # the event fired, and an edit made with GITHUB_TOKEN (the labeler's
+          # Dependabot fix-up) fires no new event, so a re-run would replay the
+          # stale title.
+          pr="$RUNNER_TEMP/pr.json"
+          gh api "repos/$GH_REPO/pulls/$PR_NUMBER" >"$pr"
+          jq -r '.title + "\n" + (.body // "")' "$pr" >"$RUNNER_TEMP/pr-text.txt"
+          bash ./scripts/check-attribution.sh --message-file "$RUNNER_TEMP/pr-text.txt"
+          case "$HEAD_REF" in
+            development | staging | main | hotfix/*)
+              echo "promotion, back-merge or hotfix: merged with a merge commit, so the title is free text."
+              exit 0 ;;
+          esac
+          title=$(jq -r .title "$pr")
+          author=$(jq -r .user.login "$pr")
+          if bash ./scripts/validate-change-title.sh --validate "$title"; then exit 0; fi
+          if [ "$author" = 'dependabot[bot]' ] && bash ./scripts/validate-change-title.sh --normalize "$title" >/dev/null 2>&1; then
+            echo "Dependabot title is normalizable; the labeler workflow rewrites it."
+            exit 0
+          fi
+          exit 1
+
+  # REQUIRED CHECK: what the PR's commits contain.
+  protected-paths:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out policy from the exact trusted workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch the PR head as data — never checked out, never executed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 | tr -d '\n')
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" \
+            fetch --no-tags origin "+refs/pull/$PR_NUMBER/head:refs/remotes/pull/head"
+          [ "$(git rev-parse refs/remotes/pull/head)" = "$HEAD_SHA" ] || {
+            echo "::error::the fetched PR head does not match the event's head SHA"
+            exit 1
+          }
+
+      # `!cancelled()`: each wall reports its own verdict even when the one
+      # before it went red — otherwise one failure hides the others.
+      - name: No PR edits a file that is immutable once committed
+        if: ${{ !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash ./scripts/check-protected-paths.sh "$BASE_SHA" "$HEAD_SHA"
+
+      - name: No PR commit carries assistant attribution
+        if: ${{ !cancelled() }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: git rev-list "$BASE_SHA..$HEAD_SHA" | bash ./scripts/check-attribution.sh --commits-stdin
+
+  # CI cannot choose the merge button, so it makes the required choice loud on
+  # exactly the PRs where a squash would fork the branches. Not a required check.
+  promotion-notice:
+    if: >-
+      github.head_ref == 'development' || github.head_ref == 'staging' ||
+      github.head_ref == 'main' || startsWith(github.head_ref, 'hotfix/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: This PR must use a merge commit
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: echo "::warning::Non-squash PR ($HEAD_REF → $BASE_REF) — use 'Create a merge commit'. A squash here permanently forks the branches."

@@ -1,0 +1,24 @@
+title = "Players Platform backend — secret-scanning policy"
+
+# Keep Gitleaks' maintained rules instead of a snapshot that silently ages.
+# Exceptions are narrow reviewed allowlists HERE — inline `gitleaks:allow`
+# comments are ignored (--ignore-gitleaks-allow) so a secret cannot approve
+# itself in the same change.
+[extend]
+useDefault = true
+
+# Reviewed 2026-09-28, the day the repository went public. Two literal
+# placeholders, matched exactly (anchored), so anything that differs by one
+# character — a real token included — still fails:
+#   · `abc123def456` — the `?token=` of the NestJS starter README's badge URL
+#   · a bare JWT *header* followed by a literal "..." — the Swagger examples in
+#     the auth controller. It decodes to {"alg":"HS256","typ":"JWT"} and has no
+#     payload and no signature, so it can authenticate nothing.
+[[allowlists]]
+description = "documentation placeholders (reviewed 2026-09-28)"
+targetRules = ["generic-api-key"]
+regexTarget = "secret"
+regexes = [
+  '''^abc123def456$''',
+  '''^eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.\.\.$''',
+]

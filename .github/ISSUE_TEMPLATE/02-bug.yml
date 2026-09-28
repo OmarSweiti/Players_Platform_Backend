@@ -1,0 +1,45 @@
+name: Bug
+description: Something behaves wrongly. A bug written down is a test; one in your head comes back.
+title: "fix: "
+labels: ["type: fix"]
+body:
+  - type: textarea
+    id: expected
+    attributes:
+      label: What I expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Exact values, exact messages. "It was wrong" is not a bug report.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Smallest reproduction, from a clean environment
+      placeholder: |
+        1. fresh database
+        2. …
+        Expected X, got Y
+    validations:
+      required: true
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      options:
+        - "P0 — data loss, security breach, or the product is down"
+        - "P1 — a user cannot complete a normal task"
+        - "P2 — wrong, but there is a workaround"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / commit
+      description: A tag or SHA. A branch name is not evidence.
+    validations:
+      required: true

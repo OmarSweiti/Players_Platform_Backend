@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# ADVISORY ONLY — Git ignores this hook's exit status and cannot undo a merge,
+# so it refuses nothing. It says what a pull just invalidated.
+# (Deliberately no post-checkout hook: Git does NOT ignore that one's status —
+# it breaks `git clone` / `git worktree add` — and it fires on every switch.)
+set -uo pipefail
+
+if [ "${1:-0}" = 1 ]; then # a squash merge leaves the incoming content in the index
+  changed=$(git diff --cached --name-only 2>/dev/null) || exit 0
+else
+  git rev-parse --verify --quiet ORIG_HEAD >/dev/null || exit 0
+  changed=$(git diff --name-only ORIG_HEAD HEAD 2>/dev/null) || exit 0
+fi
+[ -n "$changed" ] || exit 0
+
+notes=''
+# ── EDIT: the files your environment is pinned to, and what to run ─────────
+grep -qxE 'package-lock\.json' <<<"$changed" &&
+  notes="$notes  dependencies moved → just setup   (npm ci from the lockfile)"$'\n'
+grep -qxE '\.nvmrc' <<<"$changed" &&
+  notes="$notes  the Node pin moved → install Node $(cat .nvmrc 2>/dev/null), then just setup"$'\n'
+grep -qE '^prisma/migrations/' <<<"$changed" &&
+  notes="$notes  migrations landed → npx prisma migrate deploy   (against your local database)"$'\n'
+grep -qxE 'prisma/schema\.prisma' <<<"$changed" &&
+  notes="$notes  the schema moved → npx prisma generate"$'\n'
+# ────────────────────────────────────────────────────────────────────────────
+[ -n "$notes" ] && printf 'post-merge: this pull changed something your environment is pinned to.\n%s' "$notes" >&2
+exit 0

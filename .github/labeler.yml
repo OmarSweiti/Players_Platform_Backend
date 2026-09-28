@@ -1,0 +1,81 @@
+# Path → label, applied by .github/workflows/labeler.yml (sync-labels: true).
+# Labels you have to remember to add are labels nobody adds.
+# `type:` is NOT here on purpose — it comes from the PR title.
+
+# ── area: mirrors the commit scopes (scripts/validate-change-title.sh) ─────
+# Each product domain is one NestJS module under src/modules/.
+"area: auth":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/auth/**", "src/config/jwt.config.ts"] }]
+"area: users":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/users/**", "src/shared/constants/permissions.constants.ts", "src/shared/types/user.types.ts"] }]
+"area: players":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/players/**"] }]
+"area: contracts":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/contracts/**"] }]
+"area: medical":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/medical/**"] }]
+"area: scouting":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/scouting/**"] }]
+"area: training":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/training/**"] }]
+"area: legal":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/legal/**"] }]
+"area: chat":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/chat/**"] }]
+"area: notifications":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/notifications/**"] }]
+"area: common":
+  - changed-files: [{ any-glob-to-any-file: ["src/common/**"] }]
+"area: infra":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/infrastructure/**"
+          - "src/config/**"
+          - "src/health/**"
+          - "src/main.ts"
+          - "src/app.*.ts"
+          - "nest-cli.json"
+          - "tsconfig*.json"
+          - "package.json"
+"area: db":
+  - changed-files: [{ any-glob-to-any-file: ["prisma/**", "prisma.config.ts", "src/database/**"] }]
+"area: docs":
+  - changed-files: [{ any-glob-to-any-file: ["*.md", "docs/**"] }]
+"area: repo":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - ".githooks/**"
+          - "scripts/**"
+          - "justfile"
+          - ".gitattributes"
+          - ".gitignore"
+          - ".gitleaks.toml"
+          - ".nvmrc"
+          - ".prettierrc"
+          - "eslint.config.mjs"
+          - "package-lock.json"
+
+# ── risk: changes HOW a PR is reviewed, not merely where it lands ──────────
+"risk: migration":
+  - changed-files: [{ any-glob-to-any-file: ["prisma/migrations/**", "prisma/schema.prisma"] }]
+"risk: security":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/modules/auth/**"
+          - "src/common/guards/**"
+          - "src/common/decorators/public.decorator.ts"
+          - "src/common/decorators/permissions.decorator.ts"
+          - "src/common/decorators/roles.decorator.ts"
+          - "src/modules/users/application/services/permission.service.ts"
+          - "src/shared/constants/permissions.constants.ts"
+          - "src/config/jwt.config.ts"
+          - "src/main.ts" # helmet, CORS, cookies, global pipes are wired here
+          - "**/*secret*"
+          - "**/*crypto*"
+          - ".github/workflows/**"
+          - ".github/dependabot.yml"
+          - ".githooks/**"
+          - "scripts/**"
+          - ".gitleaks.toml"
+          - "SECURITY.md"

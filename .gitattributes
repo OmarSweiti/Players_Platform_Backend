@@ -1,0 +1,10 @@
+# Normalize text, and force LF where a shebang or a byte-compared policy file
+# would break under CRLF on Windows.
+* text=auto
+.githooks/* text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+justfile text eol=lf

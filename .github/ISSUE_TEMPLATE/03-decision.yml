@@ -1,0 +1,35 @@
+name: Decision needed
+description: A question only a stakeholder can answer. Never guess one of these in code.
+title: "decision: "
+labels: ["needs: answer", "type: chore"]
+body:
+  - type: textarea
+    id: question
+    attributes:
+      label: The question, as the stakeholder would be asked it
+      description: No jargon.
+    validations:
+      required: true
+  - type: textarea
+    id: blocks
+    attributes:
+      label: What this blocks
+    validations:
+      required: true
+  - type: textarea
+    id: assumption
+    attributes:
+      label: The assumption running in the code meanwhile
+      description: And what it costs to change later.
+    validations:
+      required: true
+  - type: dropdown
+    id: cost
+    attributes:
+      label: Cost of being wrong
+      options:
+        - "Low — copy or a config default"
+        - "Medium — a code path, no stored data changes"
+        - "High — the schema, stored data, or an external contract"
+    validations:
+      required: true
