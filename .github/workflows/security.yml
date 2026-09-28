@@ -64,7 +64,15 @@ jobs:
         run: ./scripts/install-gitleaks-ci.sh
       - name: The complete history contains no secret
         run: gitleaks git --config .gitleaks.toml --redact=100 --verbose --no-banner --ignore-gitleaks-allow .
-      # EDIT: your ecosystem's dependency advisory audit belongs here too.
+      # Advisories are published against code that has not changed: this lane
+      # finds them on a Monday, not on the next unrelated PR.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ !cancelled() }}
+        with:
+          node-version-file: .nvmrc
+      - name: No high or critical npm advisory in the lockfile
+        if: ${{ !cancelled() }}
+        run: npm audit --audit-level high
 
   # A red weekly run leaves ONE standing issue (commented on each failure),
   # not an email nobody reads. Schedule-only: never a required check.
