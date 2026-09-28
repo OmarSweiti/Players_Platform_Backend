@@ -122,11 +122,14 @@ jobs:
           fi
       - name: No assistant attribution anywhere in the reachable history
         run: git rev-list HEAD | bash "$RUNNER_TEMP/policy/check-attribution.sh" --commits-stdin
-      # The npm advisory gate is not on yet: at adoption (28 Sep 2026)
-      # `npm audit --audit-level high` reported 14 high advisories; the mysql2
-      # and deepmerge-ts ones are pinned inside the prisma CLI itself. The
-      # change that resolves them adds the step here and to the weekly lane in
-      # security.yml.
+      # An independent wall: it reports even when a step above went red.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        if: ${{ !cancelled() }}
+        with:
+          node-version-file: .nvmrc
+      - name: No high or critical npm advisory in the lockfile
+        if: ${{ !cancelled() }}
+        run: npm audit --audit-level high
 
   # Runs AFTER a promotion lands (a push to staging or main) and inspects what
   # actually landed: a promotion must be a merge commit, because a squash forks
