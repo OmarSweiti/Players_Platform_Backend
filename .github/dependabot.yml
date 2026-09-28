@@ -44,6 +44,12 @@ updates:
       npm-minor:
         applies-to: version-updates
         update-types: ["minor"]
+      # The NestJS packages share one major: they move together, in one PR, or
+      # a lone major (@nestjs/testing 12 against core 11) can never resolve.
+      nestjs-major:
+        applies-to: version-updates
+        patterns: ["@nestjs/*"]
+        update-types: ["major"]
     ignore:
       # A major that can never pass your pins only manufactures red PRs. Move
       # it deliberately, with the runtime it depends on, in one change: the

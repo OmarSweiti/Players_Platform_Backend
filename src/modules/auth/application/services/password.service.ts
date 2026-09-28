@@ -3,7 +3,7 @@ import * as argon2 from 'argon2';
 
 @Injectable()
 export class PasswordService {
-  private readonly argon2Config = {
+  private readonly argon2Config: argon2.HashOptions = {
     type: argon2.argon2id,
     memoryCost: 65536, // 64 MB
     timeCost: 3, // 3 iterations
