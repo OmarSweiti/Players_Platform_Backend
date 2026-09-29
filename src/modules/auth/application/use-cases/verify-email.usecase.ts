@@ -9,7 +9,10 @@ export class VerifyEmailUseCase {
 
   async execute(token: string, tenantId: string) {
     // Find user with valid verification token
-    const user = await this.userRepository.findByVerificationToken(token, tenantId);
+    const user = await this.userRepository.findByVerificationToken(
+      token,
+      tenantId,
+    );
 
     if (!user) {
       this.logger.warn(`Email verification attempted with invalid token`);
@@ -17,8 +20,13 @@ export class VerifyEmailUseCase {
     }
 
     // Check if token has expired
-    if (!user.emailVerificationExpiry || new Date() > user.emailVerificationExpiry) {
-      this.logger.warn(`Email verification attempted with expired token for user: ${user.email}`);
+    if (
+      !user.emailVerificationExpiry ||
+      new Date() > user.emailVerificationExpiry
+    ) {
+      this.logger.warn(
+        `Email verification attempted with expired token for user: ${user.email}`,
+      );
       throw new BadRequestException('Verification token has expired');
     }
 

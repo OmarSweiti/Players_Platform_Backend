@@ -29,7 +29,7 @@ export class GetActiveSessionsUseCase {
     // For now, return a single session since we're using stateless JWT
     // In a production system, you would track sessions in a database or Redis
     this.logger.debug(`Active sessions retrieved for user ID: ${userId}`);
-    
+
     return [
       {
         id: 'current-session',

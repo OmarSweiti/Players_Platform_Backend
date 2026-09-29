@@ -33,12 +33,16 @@ export class AssignmentRepository {
   /**
    * Create a new scouting assignment
    */
-  async create(data: CreateScoutingAssignmentInput): Promise<ScoutingAssignment> {
+  async create(
+    data: CreateScoutingAssignmentInput,
+  ): Promise<ScoutingAssignment> {
     return this.prisma.scoutingAssignment.create({
       data: {
         ...data,
         status: 'OPEN',
-        targetPosition: data.targetPosition ? (data.targetPosition as any) : undefined,
+        targetPosition: data.targetPosition
+          ? (data.targetPosition as any)
+          : undefined,
       },
       include: {
         assignedTo: {
@@ -64,7 +68,10 @@ export class AssignmentRepository {
   /**
    * Find assignment by ID
    */
-  async findById(id: string, tenantId: string): Promise<ScoutingAssignment | null> {
+  async findById(
+    id: string,
+    tenantId: string,
+  ): Promise<ScoutingAssignment | null> {
     return this.prisma.scoutingAssignment.findUnique({
       where: {
         id_tenantId: {
@@ -176,7 +183,9 @@ export class AssignmentRepository {
       },
       data: {
         ...data,
-        targetPosition: data.targetPosition ? (data.targetPosition as any) : undefined,
+        targetPosition: data.targetPosition
+          ? (data.targetPosition as any)
+          : undefined,
         status: data.status ? (data.status as any) : undefined,
       },
     });
@@ -204,7 +213,10 @@ export class AssignmentRepository {
   /**
    * Get open assignments count for a scout
    */
-  async getOpenAssignmentsCount(scoutId: string, tenantId: string): Promise<number> {
+  async getOpenAssignmentsCount(
+    scoutId: string,
+    tenantId: string,
+  ): Promise<number> {
     return this.prisma.scoutingAssignment.count({
       where: {
         assignedToId: scoutId,

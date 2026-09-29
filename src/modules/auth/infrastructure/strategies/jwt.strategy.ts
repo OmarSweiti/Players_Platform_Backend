@@ -15,7 +15,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: (req: Request) => {
         // Try to extract from Authorization header first
         let token: string | null = null;
-        
+
         if (req.headers.authorization) {
           // Bearer <token>
           const authHeader = req.headers.authorization;
@@ -24,12 +24,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
             token = parts[1];
           }
         }
-        
+
         // Fallback to HTTP-only cookie if not in header
         if (!token && req.cookies?.accessToken) {
           token = req.cookies.accessToken;
         }
-        
+
         return token;
       },
       ignoreExpiration: false,
@@ -38,8 +38,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    const user = await this.userRepository.findById(payload.sub, payload.tenantId);
-    
+    const user = await this.userRepository.findById(
+      payload.sub,
+      payload.tenantId,
+    );
+
     if (!user) {
       throw new UnauthorizedException('User not found');
     }

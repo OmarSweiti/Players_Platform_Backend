@@ -1,4 +1,16 @@
-import { Controller, Post, Body, HttpCode, HttpStatus, Req, Get, Query, UnauthorizedException, UseGuards, Res } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  Req,
+  Get,
+  Query,
+  UnauthorizedException,
+  UseGuards,
+  Res,
+} from '@nestjs/common';
 import type { Response } from 'express';
 import {
   ApiTags,
@@ -64,7 +76,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Authenticate user and return JWT tokens',
     description: `
       Authenticates a user with email and password.
@@ -119,7 +131,7 @@ export class AuthController {
 
     // Set HTTP-only cookies for tokens (more secure than localStorage)
     const isProduction = process.env.NODE_ENV === 'production';
-    
+
     // Access token cookie (15 minutes expiry)
     res.cookie('accessToken', result.accessToken, {
       httpOnly: true,
@@ -145,7 +157,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Register a new user account',
     description: `
       Creates a new user account with email verification.
@@ -158,7 +170,8 @@ export class AuthController {
     description: 'User registered successfully - verification email sent',
     schema: {
       example: {
-        message: 'Registration successful. Please check your email to verify your account.',
+        message:
+          'Registration successful. Please check your email to verify your account.',
         userId: '550e8400-e29b-41d4-a716-446655440000',
       },
     },
@@ -173,7 +186,10 @@ export class AuthController {
       },
     },
   })
-  async register(@Body() registerDto: RegisterDto, @Req() req: RequestWithUser) {
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Req() req: RequestWithUser,
+  ) {
     const tenantId = req.tenantId || 'default-tenant'; // Fallback for initial setup
     return this.registerUseCase.execute(registerDto, tenantId);
   }
@@ -181,9 +197,10 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Refresh access token',
-    description: 'Exchanges a valid refresh token for a new access token (15min expiry)',
+    description:
+      'Exchanges a valid refresh token for a new access token (15min expiry)',
   })
   @ApiBody({ type: RefreshTokenDto })
   @ApiOkResponse({
@@ -201,7 +218,9 @@ export class AuthController {
     @Body() refreshTokenDto: RefreshTokenDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const result = await this.refreshTokenUseCase.execute(refreshTokenDto.refreshToken);
+    const result = await this.refreshTokenUseCase.execute(
+      refreshTokenDto.refreshToken,
+    );
 
     // Set new access token cookie
     const isProduction = process.env.NODE_ENV === 'production';
@@ -219,7 +238,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Logout user',
     description: 'Invalidates current session. Client should discard tokens.',
   })
@@ -235,7 +254,7 @@ export class AuthController {
     // Clear cookies
     res.clearCookie('accessToken', { path: '/' });
     res.clearCookie('refreshToken', { path: '/' });
-    
+
     // Stateless JWT - client should discard tokens
     return { message: 'Logout successful' };
   }
@@ -245,7 +264,10 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Request password reset email' })
   @ApiResponse({ status: 200, description: 'Password reset email sent' })
-  async forgotPassword(@Body() forgotPasswordDto: ForgotPasswordDto, @Req() req: RequestWithUser) {
+  async forgotPassword(
+    @Body() forgotPasswordDto: ForgotPasswordDto,
+    @Req() req: RequestWithUser,
+  ) {
     const tenantId = req.tenantId || 'default-tenant';
     return this.forgotPasswordUseCase.execute(forgotPasswordDto, tenantId);
   }
@@ -256,7 +278,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Reset password with token' })
   @ApiResponse({ status: 200, description: 'Password reset successful' })
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
-  async resetPassword(@Body() resetPasswordDto: ResetPasswordDto, @Req() req: RequestWithUser) {
+  async resetPassword(
+    @Body() resetPasswordDto: ResetPasswordDto,
+    @Req() req: RequestWithUser,
+  ) {
     const tenantId = req.tenantId || 'default-tenant';
     return this.resetPasswordUseCase.execute(resetPasswordDto, tenantId);
   }
@@ -266,7 +291,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Change password for logged-in user' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   @ApiResponse({ status: 401, description: 'Current password is incorrect' })
-  async changePassword(@Body() changePasswordDto: ChangePasswordDto, @Req() req: RequestWithUser) {
+  async changePassword(
+    @Body() changePasswordDto: ChangePasswordDto,
+    @Req() req: RequestWithUser,
+  ) {
     return this.changePasswordUseCase.execute(changePasswordDto, req);
   }
 
@@ -275,7 +303,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify email with token' })
   @ApiResponse({ status: 200, description: 'Email verified successfully' })
   @ApiResponse({ status: 400, description: 'Invalid or expired token' })
-  async verifyEmail(@Query('token') token: string, @Req() req: RequestWithUser) {
+  async verifyEmail(
+    @Query('token') token: string,
+    @Req() req: RequestWithUser,
+  ) {
     const tenantId = req.tenantId || 'default-tenant';
     return this.verifyEmailUseCase.execute(token, tenantId);
   }
@@ -286,9 +317,15 @@ export class AuthController {
   @ApiOperation({ summary: 'Resend verification email' })
   @ApiResponse({ status: 200, description: 'Verification email sent' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async resendVerification(@Body() resendVerificationDto: ResendVerificationDto, @Req() req: RequestWithUser) {
+  async resendVerification(
+    @Body() resendVerificationDto: ResendVerificationDto,
+    @Req() req: RequestWithUser,
+  ) {
     const tenantId = req.tenantId || 'default-tenant';
-    return this.resendVerificationUseCase.execute(resendVerificationDto.email, tenantId);
+    return this.resendVerificationUseCase.execute(
+      resendVerificationDto.email,
+      tenantId,
+    );
   }
 
   @Get('me')
@@ -317,7 +354,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify and enable 2FA' })
   @ApiResponse({ status: 200, description: '2FA enabled successfully' })
   @ApiResponse({ status: 400, description: 'Invalid 2FA code' })
-  async verify2FA(@Body() verify2FADto: Verify2FADto, @Req() req: RequestWithUser) {
+  async verify2FA(
+    @Body() verify2FADto: Verify2FADto,
+    @Req() req: RequestWithUser,
+  ) {
     const userId = req.user?.id;
     const tenantId = req.tenantId;
     if (!userId || !tenantId) {
@@ -331,7 +371,10 @@ export class AuthController {
   @ApiOperation({ summary: 'Disable 2FA' })
   @ApiResponse({ status: 200, description: '2FA disabled successfully' })
   @ApiResponse({ status: 400, description: 'Invalid 2FA code' })
-  async disable2FA(@Body() verify2FADto: Verify2FADto, @Req() req: RequestWithUser) {
+  async disable2FA(
+    @Body() verify2FADto: Verify2FADto,
+    @Req() req: RequestWithUser,
+  ) {
     const userId = req.user?.id;
     const tenantId = req.tenantId;
     if (!userId || !tenantId) {
@@ -349,23 +392,31 @@ export class AuthController {
 
   @Post('sessions/:sessionId/revoke')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Revoke a specific session',
-    description: 'Revokes access for a specific session/device. Note: Requires token blacklisting implementation for stateless JWT.',
+    description:
+      'Revokes access for a specific session/device. Note: Requires token blacklisting implementation for stateless JWT.',
   })
   @ApiResponse({ status: 200, description: 'Session revoked successfully' })
-  @ApiResponse({ status: 400, description: 'Invalid request or session not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid request or session not found',
+  })
   async revokeSession(@Req() req: RequestWithUser, sessionId: string) {
     return this.revokeSessionUseCase.execute(req, sessionId);
   }
 
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ 
+  @ApiOperation({
     summary: 'Logout from all devices',
-    description: 'Invalidates all active sessions by updating passwordChangedAt timestamp. All existing tokens will be rejected.',
+    description:
+      'Invalidates all active sessions by updating passwordChangedAt timestamp. All existing tokens will be rejected.',
   })
-  @ApiResponse({ status: 200, description: 'Logged out from all devices successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out from all devices successfully',
+  })
   async logoutAllDevices(@Req() req: RequestWithUser) {
     return this.logoutAllDevicesUseCase.execute(req);
   }

@@ -19,7 +19,9 @@ export class GetCurrentUserUseCase {
     const user = await this.userRepository.findById(userId, tenantId);
 
     if (!user) {
-      this.logger.warn(`Get current user attempted for non-existent user ID: ${userId}`);
+      this.logger.warn(
+        `Get current user attempted for non-existent user ID: ${userId}`,
+      );
       throw new UnauthorizedException('User not found');
     }
 

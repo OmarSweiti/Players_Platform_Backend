@@ -9,7 +9,12 @@ import {
   Patch,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
@@ -48,7 +53,10 @@ export class ScoutingController {
   @Post('reports')
   @Permissions(PERMISSIONS.SREPORT_CREATE)
   @ApiOperation({ summary: 'Create a new scouting report' })
-  @ApiResponse({ status: HttpStatus.CREATED, description: 'Report created successfully' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Report created successfully',
+  })
   async createReport(
     @CurrentUser() user: any,
     @Body() dto: CreateScoutingReportDto,
@@ -68,7 +76,10 @@ export class ScoutingController {
   @Get('reports')
   @Permissions(PERMISSIONS.REPORT_VIEW)
   @ApiOperation({ summary: 'Get all scouting reports' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'List of scouting reports' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of scouting reports',
+  })
   async getReports(
     @CurrentUser() user: any,
     @Query() query: QueryScoutingReportsDto,
@@ -107,10 +118,13 @@ export class ScoutingController {
   @Get('reports/:id')
   @Permissions(PERMISSIONS.REPORT_VIEW)
   @ApiOperation({ summary: 'Get scouting report by ID' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Scouting report details' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Scouting report details',
+  })
   async getReport(@CurrentUser() user: any, @Param('id') id: string) {
     const report = await this.scoutingReportRepo.findById(id, user.tenantId);
-    
+
     if (!report) {
       return {
         statusCode: HttpStatus.NOT_FOUND,
@@ -127,7 +141,10 @@ export class ScoutingController {
   @Patch('reports/:id')
   @Permissions(PERMISSIONS.SREPORT_UPDATE)
   @ApiOperation({ summary: 'Update scouting report' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Report updated successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Report updated successfully',
+  })
   async updateReport(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -153,9 +170,16 @@ export class ScoutingController {
   @Post('reports/:id/submit')
   @Permissions(PERMISSIONS.SREPORT_SUBMIT)
   @ApiOperation({ summary: 'Submit scouting report for review' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Report submitted successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Report submitted successfully',
+  })
   async submitReport(@CurrentUser() user: any, @Param('id') id: string) {
-    const report = await this.submitReportUseCase.execute(id, user.tenantId, user.id);
+    const report = await this.submitReportUseCase.execute(
+      id,
+      user.tenantId,
+      user.id,
+    );
 
     return {
       statusCode: HttpStatus.OK,
@@ -167,7 +191,10 @@ export class ScoutingController {
   @Post('reports/:id/approve')
   @Permissions(PERMISSIONS.SREPORT_APPROVE)
   @ApiOperation({ summary: 'Approve scouting report' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Report approved successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Report approved successfully',
+  })
   async approveReport(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -189,7 +216,10 @@ export class ScoutingController {
   @Post('reports/:id/reject')
   @Permissions(PERMISSIONS.SREPORT_REJECT)
   @ApiOperation({ summary: 'Reject scouting report' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Report rejected successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Report rejected successfully',
+  })
   async rejectReport(@CurrentUser() user: any, @Param('id') id: string) {
     const report = await this.rejectReportUseCase.execute(id, user.tenantId);
 
@@ -203,7 +233,10 @@ export class ScoutingController {
   @Delete('reports/:id')
   @Permissions(PERMISSIONS.SREPORT_DELETE)
   @ApiOperation({ summary: 'Delete scouting report' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Report deleted successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Report deleted successfully',
+  })
   async deleteReport(@CurrentUser() user: any, @Param('id') id: string) {
     await this.scoutingReportRepo.softDelete(id, user.tenantId);
 
@@ -218,7 +251,10 @@ export class ScoutingController {
   @ApiOperation({ summary: 'Get my scouting report statistics' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Scout statistics' })
   async getMyStats(@CurrentUser() user: any) {
-    const stats = await this.scoutingReportRepo.getStatsByScout(user.id, user.tenantId);
+    const stats = await this.scoutingReportRepo.getStatsByScout(
+      user.id,
+      user.tenantId,
+    );
 
     return {
       statusCode: HttpStatus.OK,
@@ -231,7 +267,10 @@ export class ScoutingController {
   @Post('watchlist')
   @Permissions(PERMISSIONS.WATCHLIST_MANAGE)
   @ApiOperation({ summary: 'Add player to watchlist' })
-  @ApiResponse({ status: HttpStatus.CREATED, description: 'Player added to watchlist' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Player added to watchlist',
+  })
   async addToWatchlist(
     @CurrentUser() user: any,
     @Body() dto: AddToWatchlistDto,
@@ -254,9 +293,15 @@ export class ScoutingController {
   @Get('watchlist')
   @Permissions(PERMISSIONS.WATCHLIST_VIEW)
   @ApiOperation({ summary: 'Get my watchlist' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'List of watched players' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'List of watched players',
+  })
   async getWatchlist(@CurrentUser() user: any) {
-    const watchlist = await this.manageWatchlistUseCase.getWatchlist(user.id, user.tenantId);
+    const watchlist = await this.manageWatchlistUseCase.getWatchlist(
+      user.id,
+      user.tenantId,
+    );
 
     return {
       statusCode: HttpStatus.OK,
@@ -267,12 +312,19 @@ export class ScoutingController {
   @Delete('watchlist/:playerId')
   @Permissions(PERMISSIONS.WATCHLIST_MANAGE)
   @ApiOperation({ summary: 'Remove player from watchlist' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Player removed from watchlist' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Player removed from watchlist',
+  })
   async removeFromWatchlist(
     @CurrentUser() user: any,
     @Param('playerId') playerId: string,
   ) {
-    await this.manageWatchlistUseCase.removeFromWatchlist(user.id, user.tenantId, playerId);
+    await this.manageWatchlistUseCase.removeFromWatchlist(
+      user.id,
+      user.tenantId,
+      playerId,
+    );
 
     return {
       statusCode: HttpStatus.OK,
@@ -305,7 +357,10 @@ export class ScoutingController {
   @Post('assignments')
   @Permissions(PERMISSIONS.ASSIGNMENT_MANAGE)
   @ApiOperation({ summary: 'Create scouting assignment' })
-  @ApiResponse({ status: HttpStatus.CREATED, description: 'Assignment created successfully' })
+  @ApiResponse({
+    status: HttpStatus.CREATED,
+    description: 'Assignment created successfully',
+  })
   async createAssignment(
     @CurrentUser() user: any,
     @Body() dto: CreateAssignmentDto,
@@ -332,11 +387,12 @@ export class ScoutingController {
     @CurrentUser() user: any,
     @Query('status') status?: string,
   ) {
-    const assignments = await this.manageAssignmentUseCase.getAssignmentsByScout(
-      user.id,
-      user.tenantId,
-      status,
-    );
+    const assignments =
+      await this.manageAssignmentUseCase.getAssignmentsByScout(
+        user.id,
+        user.tenantId,
+        status,
+      );
 
     return {
       statusCode: HttpStatus.OK,
@@ -352,11 +408,12 @@ export class ScoutingController {
     @CurrentUser() user: any,
     @Query('status') status?: string,
   ) {
-    const assignments = await this.manageAssignmentUseCase.getAssignmentsByDirector(
-      user.id,
-      user.tenantId,
-      status,
-    );
+    const assignments =
+      await this.manageAssignmentUseCase.getAssignmentsByDirector(
+        user.id,
+        user.tenantId,
+        status,
+      );
 
     return {
       statusCode: HttpStatus.OK,
@@ -367,7 +424,10 @@ export class ScoutingController {
   @Patch('assignments/:id')
   @Permissions(PERMISSIONS.ASSIGNMENT_MANAGE)
   @ApiOperation({ summary: 'Update assignment' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Assignment updated successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Assignment updated successfully',
+  })
   async updateAssignment(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -394,7 +454,10 @@ export class ScoutingController {
   @Patch('assignments/:id/status')
   @Permissions(PERMISSIONS.ASSIGNMENT_UPDATE)
   @ApiOperation({ summary: 'Update assignment status' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Status updated successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Status updated successfully',
+  })
   async updateAssignmentStatus(
     @CurrentUser() user: any,
     @Param('id') id: string,
@@ -418,9 +481,16 @@ export class ScoutingController {
   @Delete('assignments/:id')
   @Permissions(PERMISSIONS.ASSIGNMENT_MANAGE)
   @ApiOperation({ summary: 'Delete assignment' })
-  @ApiResponse({ status: HttpStatus.OK, description: 'Assignment deleted successfully' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Assignment deleted successfully',
+  })
   async deleteAssignment(@CurrentUser() user: any, @Param('id') id: string) {
-    await this.manageAssignmentUseCase.deleteAssignment(id, user.tenantId, user.id);
+    await this.manageAssignmentUseCase.deleteAssignment(
+      id,
+      user.tenantId,
+      user.id,
+    );
 
     return {
       statusCode: HttpStatus.OK,

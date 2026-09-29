@@ -15,16 +15,13 @@ import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
     // Repositories
     MedicalRecordRepository,
     TreatmentSessionRepository,
-    
+
     // Use Cases
     CreateMedicalRecordUseCase,
     UpdateMedicalRecordUseCase,
     CreateTreatmentSessionUseCase,
     UpdateTreatmentSessionUseCase,
   ],
-  exports: [
-    MedicalRecordRepository,
-    TreatmentSessionRepository,
-  ],
+  exports: [MedicalRecordRepository, TreatmentSessionRepository],
 })
 export class MedicalModule {}

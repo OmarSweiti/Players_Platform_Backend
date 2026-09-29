@@ -18,8 +18,13 @@ export class ForgotPasswordUseCase {
 
     // Always return success to prevent email enumeration
     if (!user) {
-      this.logger.log(`Password reset requested for non-existent email: ${dto.email}`);
-      return { message: 'If an account exists with this email, a password reset link has been sent' };
+      this.logger.log(
+        `Password reset requested for non-existent email: ${dto.email}`,
+      );
+      return {
+        message:
+          'If an account exists with this email, a password reset link has been sent',
+      };
     }
 
     // Generate secure reset token (expires in 1 hour)
@@ -28,7 +33,10 @@ export class ForgotPasswordUseCase {
     resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1);
 
     // Store hashed token in database
-    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
     await this.userRepository.update(user.id, {
       passwordResetToken: hashedToken,
       passwordResetExpiry: resetTokenExpiry,
@@ -39,6 +47,9 @@ export class ForgotPasswordUseCase {
 
     this.logger.log(`Password reset email sent to: ${user.email}`);
 
-    return { message: 'If an account exists with this email, a password reset link has been sent' };
+    return {
+      message:
+        'If an account exists with this email, a password reset link has been sent',
+    };
   }
 }

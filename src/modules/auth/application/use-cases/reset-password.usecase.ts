@@ -1,4 +1,9 @@
-import { Injectable, BadRequestException, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -15,10 +20,16 @@ export class ResetPasswordUseCase {
 
   async execute(dto: ResetPasswordDto, tenantId: string) {
     // Hash the token to compare with stored hash
-    const hashedToken = crypto.createHash('sha256').update(dto.token).digest('hex');
+    const hashedToken = crypto
+      .createHash('sha256')
+      .update(dto.token)
+      .digest('hex');
 
     // Find user with valid reset token
-    const user = await this.userRepository.findByResetToken(hashedToken, tenantId);
+    const user = await this.userRepository.findByResetToken(
+      hashedToken,
+      tenantId,
+    );
 
     if (!user) {
       this.logger.warn(`Password reset attempted with invalid token`);
@@ -27,7 +38,9 @@ export class ResetPasswordUseCase {
 
     // Check if token has expired
     if (!user.passwordResetExpiry || new Date() > user.passwordResetExpiry) {
-      this.logger.warn(`Password reset attempted with expired token for user: ${user.email}`);
+      this.logger.warn(
+        `Password reset attempted with expired token for user: ${user.email}`,
+      );
       throw new BadRequestException('Reset token has expired');
     }
 
@@ -58,22 +71,34 @@ export class ResetPasswordUseCase {
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(
+      password,
+    );
 
     if (password.length < minLength) {
-      throw new BadRequestException('Password must be at least 8 characters long');
+      throw new BadRequestException(
+        'Password must be at least 8 characters long',
+      );
     }
     if (!hasUpperCase) {
-      throw new BadRequestException('Password must contain at least one uppercase letter');
+      throw new BadRequestException(
+        'Password must contain at least one uppercase letter',
+      );
     }
     if (!hasLowerCase) {
-      throw new BadRequestException('Password must contain at least one lowercase letter');
+      throw new BadRequestException(
+        'Password must contain at least one lowercase letter',
+      );
     }
     if (!hasNumbers) {
-      throw new BadRequestException('Password must contain at least one number');
+      throw new BadRequestException(
+        'Password must contain at least one number',
+      );
     }
     if (!hasSpecialChar) {
-      throw new BadRequestException('Password must contain at least one special character');
+      throw new BadRequestException(
+        'Password must contain at least one special character',
+      );
     }
   }
 }

@@ -1,4 +1,9 @@
-import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnModuleDestroy,
+  Logger,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
@@ -10,14 +15,17 @@ export interface TenantContext {
 }
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   private readonly logger = new Logger(PrismaService.name);
   private readonly asyncLocalStorage = new AsyncLocalStorage<TenantContext>();
   private pool: Pool;
 
   constructor(private configService: ConfigService) {
     const databaseUrl = configService.get<string>('DATABASE_URL');
-    
+
     if (!databaseUrl) {
       throw new Error('DATABASE_URL environment variable is not set');
     }
@@ -71,7 +79,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     try {
       await this.$connect();
       this.logger.log('Successfully connected to database');
-      
+
       // Note: Prisma 7.x with adapter does not support $use middleware
       // Tenant isolation should be handled at the application/service layer
       // using the runWithTenant method and explicit tenantId filtering

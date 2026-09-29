@@ -14,12 +14,16 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
   async validate(email: string, password: string): Promise<any> {
     // Note: tenantId will be extracted from request context in actual implementation
     const tenantId = 'default-tenant'; // Temporary fallback
-    const user = await this.loginUseCase.validateUser(email, password, tenantId);
-    
+    const user = await this.loginUseCase.validateUser(
+      email,
+      password,
+      tenantId,
+    );
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
-    
+
     return user;
   }
 }

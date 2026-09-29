@@ -63,7 +63,10 @@ export class TreatmentSessionRepository {
     });
   }
 
-  async findById(id: string, tenantId: string): Promise<TreatmentSession | null> {
+  async findById(
+    id: string,
+    tenantId: string,
+  ): Promise<TreatmentSession | null> {
     return this.prisma.treatmentSession.findUnique({
       where: {
         id_tenantId: {
@@ -115,7 +118,8 @@ export class TreatmentSessionRepository {
     };
 
     if (filters?.status) where.status = filters.status;
-    if (filters?.medicalRecordId) where.medicalRecordId = filters.medicalRecordId;
+    if (filters?.medicalRecordId)
+      where.medicalRecordId = filters.medicalRecordId;
     if (filters?.dateFrom || filters?.dateTo) {
       where.sessionDate = {};
       if (filters.dateFrom) where.sessionDate.gte = filters.dateFrom;
@@ -211,7 +215,10 @@ export class TreatmentSessionRepository {
     });
   }
 
-  async getUpcomingSessions(playerId: string, tenantId: string): Promise<TreatmentSession[]> {
+  async getUpcomingSessions(
+    playerId: string,
+    tenantId: string,
+  ): Promise<TreatmentSession[]> {
     return this.prisma.treatmentSession.findMany({
       where: {
         playerId,

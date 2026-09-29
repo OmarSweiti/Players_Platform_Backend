@@ -28,7 +28,8 @@ async function bootstrap() {
   app.use(cookieParser());
 
   // CORS Configuration
-  const corsOrigin = configService.get<string>('CORS_ORIGIN') || 'http://localhost:3001';
+  const corsOrigin =
+    configService.get<string>('CORS_ORIGIN') || 'http://localhost:3001';
   app.enableCors({
     origin: corsOrigin,
     credentials: true,
@@ -84,7 +85,7 @@ async function bootstrap() {
 
   const port = configService.get<number>('app.port') || 3001;
   await app.listen(port);
-  
+
   logger.log(`\n🚀 Application is running on: http://localhost:${port}`);
   logger.log(`📚 API Documentation: http://localhost:${port}/docs`);
   logger.log(`🏥 Health Check: http://localhost:${port}/${apiPrefix}/health\n`);
