@@ -50,9 +50,29 @@ updates:
         applies-to: version-updates
         patterns: ["@nestjs/*"]
         update-types: ["major"]
+      # ESLint and its plugins share majors the same way.
+      eslint-major:
+        applies-to: version-updates
+        patterns: ["eslint", "@eslint/*", "typescript-eslint", "eslint-*"]
+        update-types: ["major"]
     ignore:
       # A major that can never pass your pins only manufactures red PRs. Move
       # it deliberately, with the runtime it depends on, in one change: the
       # Node types follow .nvmrc.
       - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      # A TypeScript major needs the whole toolchain to support it first
+      # (ts-jest, typescript-eslint, the Nest CLI): move it deliberately.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # NestJS 12 ships as ES modules and needs the test setup migrated first;
+      # bullmq 6 needs @nestjs/bullmq 12. Planned as one step, not a merge.
+      - dependency-name: "@nestjs/*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "bullmq"
+        update-types: ["version-update:semver-major"]
+      # ESLint 10 moves with its plugins and the lint gate, deliberately.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@eslint/*"
         update-types: ["version-update:semver-major"]
