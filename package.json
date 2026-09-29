@@ -21,7 +21,7 @@
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts"
   },
   "dependencies": {
-    "@nestjs/bullmq": "^11.0.4",
+    "@nestjs/bullmq": "^11.0.5",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
     "@nestjs/core": "^11.0.1",
@@ -62,8 +62,8 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.7",
-    "@eslint/js": "^9.18.0",
-    "@nestjs/cli": "^11.0.0",
+    "@eslint/js": "^9.39.5",
+    "@nestjs/cli": "^11.0.24",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.2.6",
     "@types/express": "^5.0.0",
