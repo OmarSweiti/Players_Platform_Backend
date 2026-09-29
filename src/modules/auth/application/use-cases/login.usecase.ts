@@ -92,7 +92,6 @@ export class LoginUseCase {
         ...tokens,
       };
     } catch (error) {
-      const duration = Date.now() - startTime;
       this.logger.error(
         `Login error for ${dto.email}: ${error.message}`,
         error.stack,

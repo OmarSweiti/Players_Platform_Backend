@@ -8,7 +8,6 @@ import {
   Get,
   Query,
   UnauthorizedException,
-  UseGuards,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
@@ -20,9 +19,7 @@ import {
   ApiBearerAuth,
   ApiOkResponse,
   ApiUnauthorizedResponse,
-  ApiBadRequestResponse,
   ApiConflictResponse,
-  ApiNotFoundResponse,
   ApiTooManyRequestsResponse,
 } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';

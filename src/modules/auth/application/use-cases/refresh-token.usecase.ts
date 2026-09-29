@@ -11,7 +11,7 @@ export class RefreshTokenUseCase {
     private configService: ConfigService,
   ) {}
 
-  async execute(refreshToken: string) {
+  execute(refreshToken: string): Promise<{ accessToken: string }> {
     try {
       const payload = this.jwtService.verify(refreshToken, {
         secret: this.configService.get<string>('jwt.refreshSecret'),
@@ -28,10 +28,10 @@ export class RefreshTokenUseCase {
         `Access token refreshed for user: ${payload.email} (${payload.sub})`,
       );
 
-      return {
+      return Promise.resolve({
         accessToken: newAccessToken,
-      };
-    } catch (error) {
+      });
+    } catch {
       this.logger.warn(`Invalid refresh token used`);
       throw new UnauthorizedException('Invalid refresh token');
     }

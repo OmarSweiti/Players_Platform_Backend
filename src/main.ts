@@ -90,4 +90,4 @@ async function bootstrap() {
   logger.log(`📚 API Documentation: http://localhost:${port}/docs`);
   logger.log(`🏥 Health Check: http://localhost:${port}/${apiPrefix}/health\n`);
 }
-bootstrap();
+void bootstrap();

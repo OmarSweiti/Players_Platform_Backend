@@ -17,20 +17,20 @@ export class GetActiveSessionsUseCase {
 
   constructor(private userRepository: UserRepository) {}
 
-  async execute(req: RequestWithUser): Promise<ActiveSession[]> {
+  execute(req: RequestWithUser): Promise<ActiveSession[]> {
     const userId = req.user?.id;
     const tenantId = req.tenantId;
 
     if (!userId || !tenantId) {
       this.logger.warn(`Get active sessions attempted without authentication`);
-      return [];
+      return Promise.resolve([]);
     }
 
     // For now, return a single session since we're using stateless JWT
     // In a production system, you would track sessions in a database or Redis
     this.logger.debug(`Active sessions retrieved for user ID: ${userId}`);
 
-    return [
+    return Promise.resolve([
       {
         id: 'current-session',
         deviceInfo: 'Current Browser',
@@ -39,6 +39,6 @@ export class GetActiveSessionsUseCase {
         createdAt: new Date(),
         isCurrent: true,
       },
-    ];
+    ]);
   }
 }

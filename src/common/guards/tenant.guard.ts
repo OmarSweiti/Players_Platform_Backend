@@ -11,7 +11,7 @@ import { RequestWithUser } from '../interfaces/request-with-user.interface';
 export class TenantGuard implements CanActivate {
   constructor(private prisma: PrismaService) {}
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
+  canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest<RequestWithUser>();
     const user = request.user;
 

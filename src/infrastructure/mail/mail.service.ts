@@ -14,13 +14,14 @@ export class MailService {
   /**
    * Send email (placeholder - integrate with actual email provider)
    */
-  async sendEmail(to: string, subject: string, html: string): Promise<void> {
+  sendEmail(to: string, subject: string, html: string): Promise<void> {
     this.logger.log(`Sending email to ${to} with subject: ${subject}`);
 
     // TODO: Integrate with actual email service (SendGrid, AWS SES, etc.)
     // For now, just log the email
     this.logger.debug(`From: ${this.mailFrom}, To: ${to}, Subject: ${subject}`);
     this.logger.debug(`HTML: ${html}`);
+    return Promise.resolve();
   }
 
   /**

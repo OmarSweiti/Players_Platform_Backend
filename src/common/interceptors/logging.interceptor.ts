@@ -19,7 +19,6 @@ export class LoggingInterceptor implements NestInterceptor {
     const method = request.method;
     const url = request.url;
     const ip = request.ip || request.headers['x-forwarded-for'] || 'unknown';
-    const userAgent = request.headers['user-agent'] || 'unknown';
     const tenantId =
       request.headers['x-tenant-id'] || request.tenantId || 'N/A';
 

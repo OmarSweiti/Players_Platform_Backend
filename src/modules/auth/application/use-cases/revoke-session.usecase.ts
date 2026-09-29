@@ -8,7 +8,7 @@ export class RevokeSessionUseCase {
 
   constructor(private userRepository: UserRepository) {}
 
-  async execute(
+  execute(
     req: RequestWithUser,
     sessionId: string,
   ): Promise<{ message: string }> {
@@ -32,9 +32,9 @@ export class RevokeSessionUseCase {
     // For production: Store active tokens in Redis with expiry, check on each request
     // Alternative: Use refresh token rotation and invalidate specific refresh tokens
 
-    return {
+    return Promise.resolve({
       message:
         'Session revocation requires token blacklisting implementation. Please logout from all devices instead.',
-    };
+    });
   }
 }

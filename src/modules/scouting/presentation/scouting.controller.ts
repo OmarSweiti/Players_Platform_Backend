@@ -439,7 +439,7 @@ export class ScoutingController {
       {
         ...dto,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-        status: dto.status ? (dto.status as any) : undefined,
+        status: dto.status || undefined,
       },
       user.id,
     );
