@@ -66,7 +66,7 @@ migrations:
     set -euo pipefail
     name="players-platform-migrations-$$"
     docker run -d --rm --name "$name" -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=ci \
-      -p 127.0.0.1::5432 postgres:17 >/dev/null
+      -p 127.0.0.1::5432 postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 >/dev/null
     trap 'docker stop "$name" >/dev/null' EXIT
     # -h: the init phase listens on the socket only; ready means TCP answers
     until docker exec "$name" pg_isready -h 127.0.0.1 -U ci -d ci >/dev/null 2>&1; do sleep 1; done
