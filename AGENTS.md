@@ -1,4 +1,4 @@
-# Backend — Sodara Players Platform
+# Backend — Sadara Players Platform
 
 The NestJS API, worker and realtime processes, and the Prisma schema. **The plan lives in the umbrella
 repository**, not here:
