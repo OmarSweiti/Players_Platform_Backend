@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsNumber, IsUUID, IsDateString, Min, Max, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsNumber,
+  IsUUID,
+  IsDateString,
+  Min,
+  Max,
+  IsEnum,
+} from 'class-validator';
 import { PlayerPosition } from '@prisma/client';
 
 export class CreateScoutingReportDto {

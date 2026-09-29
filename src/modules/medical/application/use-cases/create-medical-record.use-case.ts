@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
-import { MedicalRecordRepository, CreateMedicalRecordInput } from '../../infrastructure/repositories/medical-record.repository';
+import {
+  MedicalRecordRepository,
+  CreateMedicalRecordInput,
+} from '../../infrastructure/repositories/medical-record.repository';
 
 @Injectable()
 export class CreateMedicalRecordUseCase {
-  constructor(
-    private readonly medicalRecordRepo: MedicalRecordRepository,
-  ) {}
+  constructor(private readonly medicalRecordRepo: MedicalRecordRepository) {}
 
   async execute(input: CreateMedicalRecordInput) {
     // Validate injury date is not in the future
@@ -14,11 +15,19 @@ export class CreateMedicalRecordUseCase {
     }
 
     // Validate recovery dates
-    if (input.recoveryDate && input.injuryDate && input.recoveryDate < input.injuryDate) {
+    if (
+      input.recoveryDate &&
+      input.injuryDate &&
+      input.recoveryDate < input.injuryDate
+    ) {
       throw new Error('Recovery date cannot be before injury date');
     }
 
-    if (input.returnToPlayDate && input.injuryDate && input.returnToPlayDate < input.injuryDate) {
+    if (
+      input.returnToPlayDate &&
+      input.injuryDate &&
+      input.returnToPlayDate < input.injuryDate
+    ) {
       throw new Error('Return to play date cannot be before injury date');
     }
 

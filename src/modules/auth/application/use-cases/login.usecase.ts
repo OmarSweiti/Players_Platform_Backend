@@ -17,12 +17,18 @@ export class LoginUseCase {
   /**
    * Validate user credentials without generating tokens
    */
-  async validateUser(email: string, password: string, tenantId: string): Promise<any> {
+  async validateUser(
+    email: string,
+    password: string,
+    tenantId: string,
+  ): Promise<any> {
     const user = await this.userRepository.findByEmail(email, tenantId);
-    
+
     if (!user) {
       // SECURITY: Log failed login attempt (don't reveal if email exists)
-      this.logger.warn(`Failed login attempt for email: ${email} (user not found)`);
+      this.logger.warn(
+        `Failed login attempt for email: ${email} (user not found)`,
+      );
       return null;
     }
 
@@ -31,11 +37,16 @@ export class LoginUseCase {
       this.logger.warn(
         `Login blocked - Account locked: ${user.email} (locked until: ${user.lockedUntil.toISOString()})`,
       );
-      throw new UnauthorizedException('Account is temporarily locked due to too many failed attempts');
+      throw new UnauthorizedException(
+        'Account is temporarily locked due to too many failed attempts',
+      );
     }
 
-    const isValid = await this.passwordService.verify(user.passwordHash, password);
-    
+    const isValid = await this.passwordService.verify(
+      user.passwordHash,
+      password,
+    );
+
     if (!isValid) {
       this.logger.warn(`Invalid password for user: ${user.email}`);
       await this.handleFailedLogin(user.id);
@@ -50,10 +61,10 @@ export class LoginUseCase {
    */
   async execute(dto: LoginDto, tenantId: string) {
     const startTime = Date.now();
-    
+
     try {
       const user = await this.validateUser(dto.email, dto.password, tenantId);
-      
+
       if (!user) {
         const duration = Date.now() - startTime;
         this.logger.warn(`Login failed for ${dto.email} after ${duration}ms`);
@@ -61,7 +72,7 @@ export class LoginUseCase {
       }
 
       const tokens = this.generateTokens(user);
-      
+
       await this.userRepository.updateLastLogin(user.id);
 
       const duration = Date.now() - startTime;
@@ -109,17 +120,17 @@ export class LoginUseCase {
 
   private async handleFailedLogin(userId: string) {
     const user = await this.userRepository.incrementFailedLoginAttempts(userId);
-    
+
     this.logger.warn(
       `Failed login attempt #${user.failedLoginAttempts} for user ID: ${userId}`,
     );
-    
+
     // Lock account after 5 failed attempts
     if (user.failedLoginAttempts >= 5) {
       const lockedUntil = new Date();
       lockedUntil.setMinutes(lockedUntil.getMinutes() + 30); // Lock for 30 minutes
       await this.userRepository.lockAccount(userId, lockedUntil);
-      
+
       this.logger.warn(
         `Account LOCKED: User ID ${userId} locked until ${lockedUntil.toISOString()}`,
       );

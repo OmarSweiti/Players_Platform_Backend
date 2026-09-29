@@ -15,16 +15,19 @@ export class LocalStorageService implements StorageService {
     }
   }
 
-  async upload(file: Express.Multer.File, folder: string): Promise<UploadResult> {
+  async upload(
+    file: Express.Multer.File,
+    folder: string,
+  ): Promise<UploadResult> {
     const key = `${folder}/${uuidv4()}-${file.originalname}`;
     const filePath = path.join(this.uploadPath, key);
-    
+
     // Ensure directory exists
     await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
-    
+
     // Write file
     await fs.promises.writeFile(filePath, file.buffer);
-    
+
     return {
       url: `/uploads/${key}`,
       key,

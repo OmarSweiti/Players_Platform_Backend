@@ -42,7 +42,16 @@ export const ROLE_DISPLAY_NAMES: Record<UserRole, string> = {
   GUARDIAN: 'Guardian',
 };
 
-export type RoleCategory = 'executive' | 'operations' | 'football' | 'medical' | 'legal' | 'finance' | 'analysis' | 'player' | 'guardian';
+export type RoleCategory =
+  | 'executive'
+  | 'operations'
+  | 'football'
+  | 'medical'
+  | 'legal'
+  | 'finance'
+  | 'analysis'
+  | 'player'
+  | 'guardian';
 
 export const ROLE_CATEGORIES: Record<UserRole, RoleCategory> = {
   SUPER_ADMIN: 'executive',
@@ -75,7 +84,10 @@ export function getRoleDisplayName(role: UserRole): string {
 /**
  * Check if user has higher or equal hierarchy level
  */
-export function hasHigherOrEqualHierarchy(userRole: UserRole, targetRole: UserRole): boolean {
+export function hasHigherOrEqualHierarchy(
+  userRole: UserRole,
+  targetRole: UserRole,
+): boolean {
   return ROLE_HIERARCHY[userRole] >= ROLE_HIERARCHY[targetRole];
 }
 

@@ -1,11 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { AssignmentRepository, CreateScoutingAssignmentInput, UpdateScoutingAssignmentInput } from '../../infrastructure/repositories/assignment.repository';
+import {
+  AssignmentRepository,
+  CreateScoutingAssignmentInput,
+  UpdateScoutingAssignmentInput,
+} from '../../infrastructure/repositories/assignment.repository';
 
 @Injectable()
 export class ManageAssignmentUseCase {
-  constructor(
-    private readonly assignmentRepo: AssignmentRepository,
-  ) {}
+  constructor(private readonly assignmentRepo: AssignmentRepository) {}
 
   /**
    * Create a new scouting assignment
@@ -43,7 +45,7 @@ export class ManageAssignmentUseCase {
     directorId: string,
   ) {
     const assignment = await this.assignmentRepo.findById(id, tenantId);
-    
+
     if (!assignment) {
       throw new Error('Assignment not found');
     }
@@ -72,7 +74,7 @@ export class ManageAssignmentUseCase {
     userRole: string,
   ) {
     const assignment = await this.assignmentRepo.findById(id, tenantId);
-    
+
     if (!assignment) {
       throw new Error('Assignment not found');
     }
@@ -80,7 +82,9 @@ export class ManageAssignmentUseCase {
     // Validate status transition
     const validStatuses = ['OPEN', 'IN_PROGRESS', 'COMPLETED'];
     if (!validStatuses.includes(status)) {
-      throw new Error('Invalid status. Must be OPEN, IN_PROGRESS, or COMPLETED');
+      throw new Error(
+        'Invalid status. Must be OPEN, IN_PROGRESS, or COMPLETED',
+      );
     }
 
     // Scout can only update their own assignments to IN_PROGRESS or COMPLETED
@@ -99,15 +103,31 @@ export class ManageAssignmentUseCase {
   /**
    * Get assignments for a scout
    */
-  async getAssignmentsByScout(scoutId: string, tenantId: string, status?: string) {
-    return await this.assignmentRepo.getAssignmentsByScout(scoutId, tenantId, status);
+  async getAssignmentsByScout(
+    scoutId: string,
+    tenantId: string,
+    status?: string,
+  ) {
+    return await this.assignmentRepo.getAssignmentsByScout(
+      scoutId,
+      tenantId,
+      status,
+    );
   }
 
   /**
    * Get assignments created by a director
    */
-  async getAssignmentsByDirector(directorId: string, tenantId: string, status?: string) {
-    return await this.assignmentRepo.getAssignmentsByDirector(directorId, tenantId, status);
+  async getAssignmentsByDirector(
+    directorId: string,
+    tenantId: string,
+    status?: string,
+  ) {
+    return await this.assignmentRepo.getAssignmentsByDirector(
+      directorId,
+      tenantId,
+      status,
+    );
   }
 
   /**
@@ -122,7 +142,7 @@ export class ManageAssignmentUseCase {
    */
   async deleteAssignment(id: string, tenantId: string, directorId: string) {
     const assignment = await this.assignmentRepo.findById(id, tenantId);
-    
+
     if (!assignment) {
       throw new Error('Assignment not found');
     }

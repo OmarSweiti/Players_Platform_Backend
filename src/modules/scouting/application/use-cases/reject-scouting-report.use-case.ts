@@ -3,13 +3,11 @@ import { ScoutingReportRepository } from '../../infrastructure/repositories/scou
 
 @Injectable()
 export class RejectScoutingReportUseCase {
-  constructor(
-    private readonly scoutingReportRepo: ScoutingReportRepository,
-  ) {}
+  constructor(private readonly scoutingReportRepo: ScoutingReportRepository) {}
 
   async execute(id: string, tenantId: string, reason?: string) {
     const report = await this.scoutingReportRepo.findById(id, tenantId);
-    
+
     if (!report) {
       throw new Error('Scouting report not found');
     }

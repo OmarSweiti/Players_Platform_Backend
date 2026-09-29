@@ -1,4 +1,10 @@
-import { Injectable, NestInterceptor, ExecutionContext, CallHandler, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  NestInterceptor,
+  ExecutionContext,
+  CallHandler,
+  Logger,
+} from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
 
@@ -9,13 +15,14 @@ export class LoggingInterceptor implements NestInterceptor {
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
     const response = context.switchToHttp().getResponse();
-    
+
     const method = request.method;
     const url = request.url;
     const ip = request.ip || request.headers['x-forwarded-for'] || 'unknown';
     const userAgent = request.headers['user-agent'] || 'unknown';
-    const tenantId = request.headers['x-tenant-id'] || request.tenantId || 'N/A';
-    
+    const tenantId =
+      request.headers['x-tenant-id'] || request.tenantId || 'N/A';
+
     const now = Date.now();
     const requestId = this.generateRequestId();
 
@@ -57,6 +64,8 @@ export class LoggingInterceptor implements NestInterceptor {
   }
 
   private generateRequestId(): string {
-    return Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+    return (
+      Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
+    );
   }
 }

@@ -16,13 +16,17 @@ export class ResendVerificationUseCase {
     const user = await this.userRepository.findByEmail(email, tenantId);
 
     if (!user) {
-      this.logger.warn(`Resend verification requested for non-existent email: ${email}`);
+      this.logger.warn(
+        `Resend verification requested for non-existent email: ${email}`,
+      );
       throw new NotFoundException('User not found');
     }
 
     // Check if email is already verified
     if (user.emailVerifiedAt) {
-      this.logger.log(`Resend verification requested for already verified email: ${email}`);
+      this.logger.log(
+        `Resend verification requested for already verified email: ${email}`,
+      );
       return { message: 'Email is already verified' };
     }
 

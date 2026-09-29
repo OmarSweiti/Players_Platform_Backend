@@ -3,9 +3,7 @@ import { WatchlistRepository } from '../../infrastructure/repositories/watchlist
 
 @Injectable()
 export class ManageWatchlistUseCase {
-  constructor(
-    private readonly watchlistRepo: WatchlistRepository,
-  ) {}
+  constructor(private readonly watchlistRepo: WatchlistRepository) {}
 
   /**
    * Add player to watchlist
@@ -22,14 +20,28 @@ export class ManageWatchlistUseCase {
       throw new Error('Priority must be HIGH, MEDIUM, or LOW');
     }
 
-    return await this.watchlistRepo.addToWatchlist(userId, tenantId, playerId, priority, notes);
+    return await this.watchlistRepo.addToWatchlist(
+      userId,
+      tenantId,
+      playerId,
+      priority,
+      notes,
+    );
   }
 
   /**
    * Remove player from watchlist
    */
-  async removeFromWatchlist(userId: string, tenantId: string, playerId: string) {
-    return await this.watchlistRepo.removeFromWatchlist(userId, tenantId, playerId);
+  async removeFromWatchlist(
+    userId: string,
+    tenantId: string,
+    playerId: string,
+  ) {
+    return await this.watchlistRepo.removeFromWatchlist(
+      userId,
+      tenantId,
+      playerId,
+    );
   }
 
   /**

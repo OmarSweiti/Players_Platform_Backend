@@ -73,7 +73,7 @@ async function bootstrap() {
 
   // Step 4: Create sample tenants for testing
   console.log('\nStep 4: Creating sample tenants...');
-  
+
   const sampleTenants = [
     {
       name: 'Manchester United FC',
@@ -131,7 +131,9 @@ async function bootstrap() {
           isActive: true,
         },
       });
-      console.log(`  ✓ Created admin user: ${adminEmail} (Password: Admin@123456)`);
+      console.log(
+        `  ✓ Created admin user: ${adminEmail} (Password: Admin@123456)`,
+      );
     }
   }
 
@@ -146,7 +148,9 @@ async function bootstrap() {
       where: { slug: tenantData.slug },
     });
     if (tenant) {
-      console.log(`- ${tenantData.name}: admin@${tenantData.slug}.com / Admin@123456`);
+      console.log(
+        `- ${tenantData.name}: admin@${tenantData.slug}.com / Admin@123456`,
+      );
       console.log(`  Tenant ID: ${tenant.id}`);
     }
   }

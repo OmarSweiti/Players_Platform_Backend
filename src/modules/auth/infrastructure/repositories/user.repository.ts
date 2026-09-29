@@ -72,27 +72,33 @@ export class UserRepository {
     });
   }
 
-  async update(userId: string, data: {
-    passwordHash?: string;
-    passwordResetToken?: string | null;
-    passwordResetExpiry?: Date | null;
-    passwordChangedAt?: Date;
-    lastLoginAt?: Date;
-    failedLoginAttempts?: number;
-    lockedUntil?: Date | null;
-    emailVerifiedAt?: Date;
-    emailVerificationToken?: string | null;
-    emailVerificationExpiry?: Date | null;
-    twoFASecret?: string | null;
-    is2FAEnabled?: boolean;
-  }): Promise<User> {
+  async update(
+    userId: string,
+    data: {
+      passwordHash?: string;
+      passwordResetToken?: string | null;
+      passwordResetExpiry?: Date | null;
+      passwordChangedAt?: Date;
+      lastLoginAt?: Date;
+      failedLoginAttempts?: number;
+      lockedUntil?: Date | null;
+      emailVerifiedAt?: Date;
+      emailVerificationToken?: string | null;
+      emailVerificationExpiry?: Date | null;
+      twoFASecret?: string | null;
+      is2FAEnabled?: boolean;
+    },
+  ): Promise<User> {
     return this.prisma.user.update({
       where: { id: userId },
       data,
     });
   }
 
-  async findByResetToken(token: string, tenantId: string): Promise<User | null> {
+  async findByResetToken(
+    token: string,
+    tenantId: string,
+  ): Promise<User | null> {
     return this.prisma.user.findFirst({
       where: {
         passwordResetToken: token,
@@ -101,7 +107,10 @@ export class UserRepository {
     });
   }
 
-  async findByVerificationToken(token: string, tenantId: string): Promise<User | null> {
+  async findByVerificationToken(
+    token: string,
+    tenantId: string,
+  ): Promise<User | null> {
     return this.prisma.user.findFirst({
       where: {
         emailVerificationToken: token,
@@ -110,7 +119,11 @@ export class UserRepository {
     });
   }
 
-  async updatePasswordChangedAt(userId: string, tenantId: string, timestamp: Date): Promise<User> {
+  async updatePasswordChangedAt(
+    userId: string,
+    tenantId: string,
+    timestamp: Date,
+  ): Promise<User> {
     return this.prisma.user.update({
       where: {
         id_tenantId: {

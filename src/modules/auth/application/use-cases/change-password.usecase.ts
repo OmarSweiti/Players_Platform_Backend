@@ -1,4 +1,9 @@
-import { Injectable, UnauthorizedException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import type { RequestWithUser } from '../../../../common/interfaces/request-with-user.interface';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -28,10 +33,15 @@ export class ChangePasswordUseCase {
     }
 
     // Verify current password
-    const isValid = await this.passwordService.verify(user.passwordHash, dto.currentPassword);
+    const isValid = await this.passwordService.verify(
+      user.passwordHash,
+      dto.currentPassword,
+    );
 
     if (!isValid) {
-      this.logger.warn(`Failed password change attempt for user: ${user.email} (incorrect current password)`);
+      this.logger.warn(
+        `Failed password change attempt for user: ${user.email} (incorrect current password)`,
+      );
       throw new UnauthorizedException('Current password is incorrect');
     }
 
@@ -39,10 +49,17 @@ export class ChangePasswordUseCase {
     this.validatePasswordStrength(dto.newPassword);
 
     // Check if new password is different from current
-    const isSamePassword = await this.passwordService.verify(user.passwordHash, dto.newPassword);
+    const isSamePassword = await this.passwordService.verify(
+      user.passwordHash,
+      dto.newPassword,
+    );
     if (isSamePassword) {
-      this.logger.warn(`Password change failed for user: ${user.email} (new password same as current)`);
-      throw new BadRequestException('New password must be different from current password');
+      this.logger.warn(
+        `Password change failed for user: ${user.email} (new password same as current)`,
+      );
+      throw new BadRequestException(
+        'New password must be different from current password',
+      );
     }
 
     // Hash and update password
@@ -62,22 +79,34 @@ export class ChangePasswordUseCase {
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(
+      password,
+    );
 
     if (password.length < minLength) {
-      throw new BadRequestException('Password must be at least 8 characters long');
+      throw new BadRequestException(
+        'Password must be at least 8 characters long',
+      );
     }
     if (!hasUpperCase) {
-      throw new BadRequestException('Password must contain at least one uppercase letter');
+      throw new BadRequestException(
+        'Password must contain at least one uppercase letter',
+      );
     }
     if (!hasLowerCase) {
-      throw new BadRequestException('Password must contain at least one lowercase letter');
+      throw new BadRequestException(
+        'Password must contain at least one lowercase letter',
+      );
     }
     if (!hasNumbers) {
-      throw new BadRequestException('Password must contain at least one number');
+      throw new BadRequestException(
+        'Password must contain at least one number',
+      );
     }
     if (!hasSpecialChar) {
-      throw new BadRequestException('Password must contain at least one special character');
+      throw new BadRequestException(
+        'Password must contain at least one special character',
+      );
     }
   }
 }

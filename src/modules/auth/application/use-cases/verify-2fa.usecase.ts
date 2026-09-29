@@ -12,12 +12,16 @@ export class Verify2FAUseCase {
     const user = await this.userRepository.findById(userId, tenantId);
 
     if (!user || !user.twoFASecret) {
-      this.logger.warn(`2FA verification attempted but not initialized for user ID: ${userId}`);
+      this.logger.warn(
+        `2FA verification attempted but not initialized for user ID: ${userId}`,
+      );
       throw new BadRequestException('2FA not initialized');
     }
 
     if (user.is2FAEnabled) {
-      this.logger.warn(`2FA verification attempted but already enabled for user: ${user.email}`);
+      this.logger.warn(
+        `2FA verification attempted but already enabled for user: ${user.email}`,
+      );
       throw new BadRequestException('2FA is already enabled');
     }
 

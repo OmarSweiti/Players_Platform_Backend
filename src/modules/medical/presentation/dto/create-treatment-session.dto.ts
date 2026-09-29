@@ -1,4 +1,13 @@
-import { IsString, IsOptional, IsUUID, IsDateString, IsEnum, IsNumber, Min, Max } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsUUID,
+  IsDateString,
+  IsEnum,
+  IsNumber,
+  Min,
+  Max,
+} from 'class-validator';
 
 export class CreateTreatmentSessionDto {
   @IsUUID()

@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { TreatmentSessionRepository, CreateTreatmentSessionInput } from '../../infrastructure/repositories/treatment-session.repository';
+import {
+  TreatmentSessionRepository,
+  CreateTreatmentSessionInput,
+} from '../../infrastructure/repositories/treatment-session.repository';
 
 @Injectable()
 export class CreateTreatmentSessionUseCase {

@@ -19,10 +19,14 @@ export class LogoutAllDevicesUseCase {
 
     // Update passwordChangedAt timestamp to invalidate all existing JWT tokens
     // This is because JWT validation checks if token was issued before passwordChangedAt
-    await this.userRepository.updatePasswordChangedAt(userId, tenantId, new Date());
+    await this.userRepository.updatePasswordChangedAt(
+      userId,
+      tenantId,
+      new Date(),
+    );
 
     this.logger.log(`All sessions invalidated for user ID: ${userId}`);
-    
+
     return {
       message: 'Successfully logged out from all devices',
     };

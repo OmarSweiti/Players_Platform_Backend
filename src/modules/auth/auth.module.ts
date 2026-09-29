@@ -32,9 +32,10 @@ import { MailService } from '../../infrastructure/mail/mail.service';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => {
-        const secret = configService.get<string>('jwt.secret') || 'default-secret';
+        const secret =
+          configService.get<string>('jwt.secret') || 'default-secret';
         const expiresIn = configService.get<string>('jwt.expiresIn') || '15m';
-        
+
         return {
           secret,
           signOptions: {

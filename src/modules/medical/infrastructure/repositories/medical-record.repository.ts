@@ -108,7 +108,8 @@ export class MedicalRecordRepository {
     };
 
     if (filters?.injuryType) where.injuryType = filters.injuryType;
-    if (filters?.isConfidential !== undefined) where.isConfidential = filters.isConfidential;
+    if (filters?.isConfidential !== undefined)
+      where.isConfidential = filters.isConfidential;
     if (filters?.dateFrom || filters?.dateTo) {
       where.injuryDate = {};
       if (filters.dateFrom) where.injuryDate.gte = filters.dateFrom;
@@ -154,7 +155,8 @@ export class MedicalRecordRepository {
 
     if (filters?.playerId) where.playerId = filters.playerId;
     if (filters?.injuryType) where.injuryType = filters.injuryType;
-    if (filters?.isConfidential !== undefined) where.isConfidential = filters.isConfidential;
+    if (filters?.isConfidential !== undefined)
+      where.isConfidential = filters.isConfidential;
 
     const [records, total] = await Promise.all([
       this.prisma.medicalRecord.findMany({
@@ -216,7 +218,10 @@ export class MedicalRecordRepository {
     });
   }
 
-  async getActiveInjuries(playerId: string, tenantId: string): Promise<MedicalRecord[]> {
+  async getActiveInjuries(
+    playerId: string,
+    tenantId: string,
+  ): Promise<MedicalRecord[]> {
     return this.prisma.medicalRecord.findMany({
       where: {
         playerId,
@@ -228,7 +233,10 @@ export class MedicalRecordRepository {
     });
   }
 
-  async getPlayerInjuryHistory(playerId: string, tenantId: string): Promise<any> {
+  async getPlayerInjuryHistory(
+    playerId: string,
+    tenantId: string,
+  ): Promise<any> {
     const [total, byType, bySeverity] = await Promise.all([
       this.prisma.medicalRecord.count({
         where: { playerId, tenantId, deletedAt: null },

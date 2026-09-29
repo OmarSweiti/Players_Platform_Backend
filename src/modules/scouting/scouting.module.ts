@@ -20,7 +20,7 @@ import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
     ScoutingReportRepository,
     WatchlistRepository,
     AssignmentRepository,
-    
+
     // Use Cases
     CreateScoutingReportUseCase,
     UpdateScoutingReportUseCase,

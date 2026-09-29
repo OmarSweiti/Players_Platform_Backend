@@ -9,7 +9,12 @@ import {
   Patch,
   HttpStatus,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+} from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
@@ -42,14 +47,19 @@ export class MedicalController {
   @Post('records')
   @Permissions(PERMISSIONS.MEDICAL_CREATE)
   @ApiOperation({ summary: 'Create medical record' })
-  async createRecord(@CurrentUser() user: any, @Body() dto: CreateMedicalRecordDto) {
+  async createRecord(
+    @CurrentUser() user: any,
+    @Body() dto: CreateMedicalRecordDto,
+  ) {
     const record = await this.createMedicalRecordUseCase.execute({
       ...dto,
       createdById: user.id,
       tenantId: user.tenantId,
       injuryDate: dto.injuryDate ? new Date(dto.injuryDate) : undefined,
       recoveryDate: dto.recoveryDate ? new Date(dto.recoveryDate) : undefined,
-      returnToPlayDate: dto.returnToPlayDate ? new Date(dto.returnToPlayDate) : undefined,
+      returnToPlayDate: dto.returnToPlayDate
+        ? new Date(dto.returnToPlayDate)
+        : undefined,
     });
 
     return {
@@ -70,7 +80,12 @@ export class MedicalController {
     const filters = {
       playerId: query.playerId,
       injuryType: query.injuryType,
-      isConfidential: query.isConfidential === 'true' ? true : query.isConfidential === 'false' ? false : undefined,
+      isConfidential:
+        query.isConfidential === 'true'
+          ? true
+          : query.isConfidential === 'false'
+            ? false
+            : undefined,
     };
 
     const { records, total } = await this.medicalRecordRepo.findAll(
@@ -89,14 +104,23 @@ export class MedicalController {
   @Get('records/player/:playerId')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get medical records for a player' })
-  async getPlayerRecords(@CurrentUser() user: any, @Param('playerId') playerId: string, @Query() query: any) {
+  async getPlayerRecords(
+    @CurrentUser() user: any,
+    @Param('playerId') playerId: string,
+    @Query() query: any,
+  ) {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
 
     const filters = {
       injuryType: query.injuryType,
-      isConfidential: query.isConfidential === 'true' ? true : query.isConfidential === 'false' ? false : undefined,
+      isConfidential:
+        query.isConfidential === 'true'
+          ? true
+          : query.isConfidential === 'false'
+            ? false
+            : undefined,
     };
 
     const { records, total } = await this.medicalRecordRepo.findByPlayer(
@@ -118,9 +142,12 @@ export class MedicalController {
   @ApiOperation({ summary: 'Get medical record by ID' })
   async getRecord(@CurrentUser() user: any, @Param('id') id: string) {
     const record = await this.medicalRecordRepo.findById(id, user.tenantId);
-    
+
     if (!record) {
-      return { statusCode: HttpStatus.NOT_FOUND, message: 'Medical record not found' };
+      return {
+        statusCode: HttpStatus.NOT_FOUND,
+        message: 'Medical record not found',
+      };
     }
 
     return { statusCode: HttpStatus.OK, data: record };
@@ -141,7 +168,9 @@ export class MedicalController {
         ...dto,
         injuryDate: dto.injuryDate ? new Date(dto.injuryDate) : undefined,
         recoveryDate: dto.recoveryDate ? new Date(dto.recoveryDate) : undefined,
-        returnToPlayDate: dto.returnToPlayDate ? new Date(dto.returnToPlayDate) : undefined,
+        returnToPlayDate: dto.returnToPlayDate
+          ? new Date(dto.returnToPlayDate)
+          : undefined,
       },
       user.id,
       user.role,
@@ -160,14 +189,23 @@ export class MedicalController {
   async deleteRecord(@CurrentUser() user: any, @Param('id') id: string) {
     await this.medicalRecordRepo.softDelete(id, user.tenantId);
 
-    return { statusCode: HttpStatus.OK, message: 'Medical record deleted successfully' };
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Medical record deleted successfully',
+    };
   }
 
   @Get('records/player/:playerId/active-injuries')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get active injuries for a player' })
-  async getActiveInjuries(@CurrentUser() user: any, @Param('playerId') playerId: string) {
-    const injuries = await this.medicalRecordRepo.getActiveInjuries(playerId, user.tenantId);
+  async getActiveInjuries(
+    @CurrentUser() user: any,
+    @Param('playerId') playerId: string,
+  ) {
+    const injuries = await this.medicalRecordRepo.getActiveInjuries(
+      playerId,
+      user.tenantId,
+    );
 
     return { statusCode: HttpStatus.OK, data: injuries };
   }
@@ -175,8 +213,14 @@ export class MedicalController {
   @Get('records/player/:playerId/history')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get player injury history statistics' })
-  async getInjuryHistory(@CurrentUser() user: any, @Param('playerId') playerId: string) {
-    const stats = await this.medicalRecordRepo.getPlayerInjuryHistory(playerId, user.tenantId);
+  async getInjuryHistory(
+    @CurrentUser() user: any,
+    @Param('playerId') playerId: string,
+  ) {
+    const stats = await this.medicalRecordRepo.getPlayerInjuryHistory(
+      playerId,
+      user.tenantId,
+    );
 
     return { statusCode: HttpStatus.OK, data: stats };
   }
@@ -186,7 +230,10 @@ export class MedicalController {
   @Post('sessions')
   @Permissions(PERMISSIONS.MEDICAL_CREATE)
   @ApiOperation({ summary: 'Create treatment session' })
-  async createSession(@CurrentUser() user: any, @Body() dto: CreateTreatmentSessionDto) {
+  async createSession(
+    @CurrentUser() user: any,
+    @Body() dto: CreateTreatmentSessionDto,
+  ) {
     const session = await this.createTreatmentSessionUseCase.execute({
       ...dto,
       conductedBy: user.id,
@@ -205,7 +252,11 @@ export class MedicalController {
   @Get('sessions/player/:playerId')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get treatment sessions for a player' })
-  async getPlayerSessions(@CurrentUser() user: any, @Param('playerId') playerId: string, @Query() query: any) {
+  async getPlayerSessions(
+    @CurrentUser() user: any,
+    @Param('playerId') playerId: string,
+    @Query() query: any,
+  ) {
     const page = query.page || 1;
     const limit = query.limit || 20;
     const skip = (page - 1) * limit;
@@ -236,9 +287,12 @@ export class MedicalController {
   @ApiOperation({ summary: 'Get treatment session by ID' })
   async getSession(@CurrentUser() user: any, @Param('id') id: string) {
     const session = await this.treatmentSessionRepo.findById(id, user.tenantId);
-    
+
     if (!session) {
-      return { statusCode: HttpStatus.NOT_FOUND, message: 'Treatment session not found' };
+      return {
+        statusCode: HttpStatus.NOT_FOUND,
+        message: 'Treatment session not found',
+      };
     }
 
     return { statusCode: HttpStatus.OK, data: session };
@@ -279,7 +333,11 @@ export class MedicalController {
     @Param('id') id: string,
     @Body('status') status: string,
   ) {
-    const session = await this.treatmentSessionRepo.updateStatus(id, user.tenantId, status as any);
+    const session = await this.treatmentSessionRepo.updateStatus(
+      id,
+      user.tenantId,
+      status as any,
+    );
 
     return {
       statusCode: HttpStatus.OK,
@@ -294,14 +352,23 @@ export class MedicalController {
   async deleteSession(@CurrentUser() user: any, @Param('id') id: string) {
     await this.treatmentSessionRepo.delete(id, user.tenantId);
 
-    return { statusCode: HttpStatus.OK, message: 'Treatment session deleted successfully' };
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'Treatment session deleted successfully',
+    };
   }
 
   @Get('sessions/player/:playerId/upcoming')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get upcoming treatment sessions' })
-  async getUpcomingSessions(@CurrentUser() user: any, @Param('playerId') playerId: string) {
-    const sessions = await this.treatmentSessionRepo.getUpcomingSessions(playerId, user.tenantId);
+  async getUpcomingSessions(
+    @CurrentUser() user: any,
+    @Param('playerId') playerId: string,
+  ) {
+    const sessions = await this.treatmentSessionRepo.getUpcomingSessions(
+      playerId,
+      user.tenantId,
+    );
 
     return { statusCode: HttpStatus.OK, data: sessions };
   }
@@ -309,8 +376,14 @@ export class MedicalController {
   @Get('sessions/player/:playerId/stats')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get treatment session statistics' })
-  async getSessionStats(@CurrentUser() user: any, @Param('playerId') playerId: string) {
-    const stats = await this.treatmentSessionRepo.getSessionStats(playerId, user.tenantId);
+  async getSessionStats(
+    @CurrentUser() user: any,
+    @Param('playerId') playerId: string,
+  ) {
+    const stats = await this.treatmentSessionRepo.getSessionStats(
+      playerId,
+      user.tenantId,
+    );
 
     return { statusCode: HttpStatus.OK, data: stats };
   }

@@ -45,7 +45,11 @@ export class WatchlistRepository {
     });
   }
 
-  async removeFromWatchlist(userId: string, tenantId: string, playerId: string): Promise<PlayerWatchlist> {
+  async removeFromWatchlist(
+    userId: string,
+    tenantId: string,
+    playerId: string,
+  ): Promise<PlayerWatchlist> {
     return this.prisma.playerWatchlist.delete({
       where: {
         userId_playerId: {
@@ -57,7 +61,10 @@ export class WatchlistRepository {
     });
   }
 
-  async getUserWatchlist(userId: string, tenantId: string): Promise<PlayerWatchlist[]> {
+  async getUserWatchlist(
+    userId: string,
+    tenantId: string,
+  ): Promise<PlayerWatchlist[]> {
     return this.prisma.playerWatchlist.findMany({
       where: {
         userId,
@@ -81,7 +88,11 @@ export class WatchlistRepository {
     });
   }
 
-  async isInWatchlist(userId: string, tenantId: string, playerId: string): Promise<boolean> {
+  async isInWatchlist(
+    userId: string,
+    tenantId: string,
+    playerId: string,
+  ): Promise<boolean> {
     const count = await this.prisma.playerWatchlist.count({
       where: {
         userId,

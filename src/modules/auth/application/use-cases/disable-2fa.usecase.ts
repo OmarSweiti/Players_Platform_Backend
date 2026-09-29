@@ -11,12 +11,16 @@ export class Disable2FAUseCase {
     const user = await this.userRepository.findById(userId, tenantId);
 
     if (!user || !user.is2FAEnabled) {
-      this.logger.warn(`2FA disable attempted but not enabled for user ID: ${userId}`);
+      this.logger.warn(
+        `2FA disable attempted but not enabled for user ID: ${userId}`,
+      );
       throw new BadRequestException('2FA is not enabled');
     }
 
     if (!user.twoFASecret) {
-      this.logger.warn(`2FA disable attempted but secret not found for user: ${user.email}`);
+      this.logger.warn(
+        `2FA disable attempted but secret not found for user: ${user.email}`,
+      );
       throw new BadRequestException('2FA secret not found');
     }
 
@@ -30,7 +34,9 @@ export class Disable2FAUseCase {
     });
 
     if (!verified) {
-      this.logger.warn(`Invalid 2FA code provided when disabling for user: ${user.email}`);
+      this.logger.warn(
+        `Invalid 2FA code provided when disabling for user: ${user.email}`,
+      );
       throw new BadRequestException('Invalid 2FA code');
     }
 

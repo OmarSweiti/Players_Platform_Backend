@@ -4,13 +4,15 @@ import { RecommendationLevel } from '@prisma/client';
 
 @Injectable()
 export class ApproveScoutingReportUseCase {
-  constructor(
-    private readonly scoutingReportRepo: ScoutingReportRepository,
-  ) {}
+  constructor(private readonly scoutingReportRepo: ScoutingReportRepository) {}
 
-  async execute(id: string, tenantId: string, recommendation: RecommendationLevel) {
+  async execute(
+    id: string,
+    tenantId: string,
+    recommendation: RecommendationLevel,
+  ) {
     const report = await this.scoutingReportRepo.findById(id, tenantId);
-    
+
     if (!report) {
       throw new Error('Scouting report not found');
     }
@@ -19,6 +21,10 @@ export class ApproveScoutingReportUseCase {
       throw new Error('Only SUBMITTED reports can be approved');
     }
 
-    return await this.scoutingReportRepo.approveReport(id, tenantId, recommendation);
+    return await this.scoutingReportRepo.approveReport(
+      id,
+      tenantId,
+      recommendation,
+    );
   }
 }

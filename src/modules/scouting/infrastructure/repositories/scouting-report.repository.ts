@@ -145,7 +145,11 @@ export class ScoutingReportRepository {
     return { reports, total };
   }
 
-  async update(id: string, tenantId: string, data: UpdateScoutingReportInput): Promise<ScoutingReport> {
+  async update(
+    id: string,
+    tenantId: string,
+    data: UpdateScoutingReportInput,
+  ): Promise<ScoutingReport> {
     return this.prisma.scoutingReport.update({
       where: {
         id_tenantId: {
@@ -195,7 +199,11 @@ export class ScoutingReportRepository {
     });
   }
 
-  async approveReport(id: string, tenantId: string, recommendation: any): Promise<ScoutingReport> {
+  async approveReport(
+    id: string,
+    tenantId: string,
+    recommendation: any,
+  ): Promise<ScoutingReport> {
     return this.prisma.scoutingReport.update({
       where: {
         id_tenantId: {

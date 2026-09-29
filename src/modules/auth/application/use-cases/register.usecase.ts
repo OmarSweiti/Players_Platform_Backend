@@ -1,4 +1,9 @@
-import { Injectable, ConflictException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  ConflictException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import * as crypto from 'crypto';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
@@ -17,13 +22,18 @@ export class RegisterUseCase {
 
   async execute(dto: RegisterDto, tenantId: string) {
     const startTime = Date.now();
-    
+
     try {
       // Check if user already exists
-      const existingUser = await this.userRepository.findByEmail(dto.email, tenantId);
-      
+      const existingUser = await this.userRepository.findByEmail(
+        dto.email,
+        tenantId,
+      );
+
       if (existingUser) {
-        this.logger.warn(`Registration attempt with existing email: ${dto.email}`);
+        this.logger.warn(
+          `Registration attempt with existing email: ${dto.email}`,
+        );
         throw new ConflictException('User with this email already exists');
       }
 
@@ -52,7 +62,10 @@ export class RegisterUseCase {
       });
 
       // Send verification email
-      await this.mailService.sendVerificationEmail(user.email, verificationToken);
+      await this.mailService.sendVerificationEmail(
+        user.email,
+        verificationToken,
+      );
 
       const duration = Date.now() - startTime;
       this.logger.log(
@@ -82,22 +95,34 @@ export class RegisterUseCase {
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password);
+    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(
+      password,
+    );
 
     if (password.length < minLength) {
-      throw new BadRequestException('Password must be at least 8 characters long');
+      throw new BadRequestException(
+        'Password must be at least 8 characters long',
+      );
     }
     if (!hasUpperCase) {
-      throw new BadRequestException('Password must contain at least one uppercase letter');
+      throw new BadRequestException(
+        'Password must contain at least one uppercase letter',
+      );
     }
     if (!hasLowerCase) {
-      throw new BadRequestException('Password must contain at least one lowercase letter');
+      throw new BadRequestException(
+        'Password must contain at least one lowercase letter',
+      );
     }
     if (!hasNumbers) {
-      throw new BadRequestException('Password must contain at least one number');
+      throw new BadRequestException(
+        'Password must contain at least one number',
+      );
     }
     if (!hasSpecialChar) {
-      throw new BadRequestException('Password must contain at least one special character');
+      throw new BadRequestException(
+        'Password must contain at least one special character',
+      );
     }
   }
 }

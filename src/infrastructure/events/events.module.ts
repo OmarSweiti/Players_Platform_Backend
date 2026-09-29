@@ -17,10 +17,7 @@ import { EventService } from './event.service';
       }),
       inject: [ConfigService],
     }),
-    BullModule.registerQueue(
-      { name: 'notifications' },
-      { name: 'audit-logs' },
-    ),
+    BullModule.registerQueue({ name: 'notifications' }, { name: 'audit-logs' }),
   ],
   providers: [EventService],
   exports: [EventService],

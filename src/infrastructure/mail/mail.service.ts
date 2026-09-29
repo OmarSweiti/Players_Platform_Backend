@@ -7,7 +7,8 @@ export class MailService {
   private readonly mailFrom: string;
 
   constructor(private configService: ConfigService) {
-    this.mailFrom = this.configService.get<string>('MAIL_FROM') || 'noreply@example.com';
+    this.mailFrom =
+      this.configService.get<string>('MAIL_FROM') || 'noreply@example.com';
   }
 
   /**
@@ -15,7 +16,7 @@ export class MailService {
    */
   async sendEmail(to: string, subject: string, html: string): Promise<void> {
     this.logger.log(`Sending email to ${to} with subject: ${subject}`);
-    
+
     // TODO: Integrate with actual email service (SendGrid, AWS SES, etc.)
     // For now, just log the email
     this.logger.debug(`From: ${this.mailFrom}, To: ${to}, Subject: ${subject}`);
@@ -32,7 +33,7 @@ export class MailService {
       <p>Please click the link below to verify your email:</p>
       <a href="${verificationLink}">Verify Email</a>
     `;
-    
+
     await this.sendEmail(email, 'Verify Your Email', html);
   }
 
@@ -47,7 +48,7 @@ export class MailService {
       <a href="${resetLink}">Reset Password</a>
       <p>This link will expire in 1 hour.</p>
     `;
-    
+
     await this.sendEmail(email, 'Password Reset Request', html);
   }
 }

@@ -1,4 +1,10 @@
-import { ExceptionFilter, Catch, ArgumentsHost, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  ExceptionFilter,
+  Catch,
+  ArgumentsHost,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { Request, Response } from 'express';
 
 export interface ErrorResponse {
@@ -23,7 +29,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       statusCode = exception.getStatus();
       const responseBody = exception.getResponse();
-      
+
       if (typeof responseBody === 'string') {
         message = responseBody;
       } else if (typeof responseBody === 'object') {
@@ -36,7 +42,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
       message = 'Internal server error';
       error = 'Internal Server Error';
-      
+
       // Log the actual error for debugging
       console.error('Unhandled exception:', exception);
     }
