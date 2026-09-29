@@ -2,7 +2,7 @@
 
 ## Status
 
-The Players Platform (Sodara) is in development and has no production
+The Players Platform (Sadara) is in development and has no production
 deployment. Nothing here claims a certification, an audit, or a compliance
 standard, and nothing should — not in code, docs, API descriptions, or a commit
 message — until it has actually been completed.
