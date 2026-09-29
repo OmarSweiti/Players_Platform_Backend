@@ -19,6 +19,7 @@ updates:
     commit-message:
       prefix: "chore(repo)" # the title grammar's type(scope); the labeler adds [—]
     labels: ["type: chore", "area: repo", "meta: dependencies"]
+    assignees: ["OmarSweiti"] # the maintainer; CODEOWNERS already requests the review
     # Split patch from minor: one group is atomic, and one bump that can never
     # go green would strand every other update in it for a month.
     groups:
@@ -37,6 +38,7 @@ updates:
     commit-message:
       prefix: "chore(repo)"
     labels: ["type: chore", "area: repo", "meta: dependencies"]
+    assignees: ["OmarSweiti"]
     groups:
       npm-patch:
         applies-to: version-updates
