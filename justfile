@@ -108,13 +108,13 @@ pr $title='' $body='':
     just pre-push
     git push -u origin HEAD
     if [ -n "$body" ]; then
-      gh pr create --base development --title "$title" --body-file "$body"
+      gh pr create --assignee @me --base development --title "$title" --body-file "$body"
     elif [ -n "$title" ]; then
       git fetch -q origin development
-      gh pr create --base development --title "$title" \
+      gh pr create --assignee @me --base development --title "$title" \
         --body "$(git log --reverse --format='- %s' "$(git merge-base origin/development HEAD)"..HEAD)"
     else
-      gh pr create --base development --fill-first
+      gh pr create --assignee @me --base development --fill-first
     fi
     bash ./scripts/watch-required-checks.sh "$(gh pr view --json url --jq .url)"
 
@@ -163,11 +163,11 @@ merge $pr='':
 
 # Open the development → staging promotion (a release candidate)
 promote-staging:
-    gh pr create --base staging --head development --title "promote development to staging" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
+    gh pr create --assignee @me --base staging --head development --title "promote development to staging" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
 
 # Open the staging → main promotion (production)
 promote-main:
-    gh pr create --base main --head staging --title "promote staging to main" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
+    gh pr create --assignee @me --base main --head staging --title "promote staging to main" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
 
 # Merge a promotion with a MERGE COMMIT once every required check is green: just promote-merge 42
 promote-merge $pr:

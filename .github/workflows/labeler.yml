@@ -22,8 +22,21 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
-      pull-requests: write # add/remove labels and fix a Dependabot title; nothing else
+      pull-requests: write # the assignee, labels, and a Dependabot title fix; nothing else
     steps:
+      # Every pull request is assigned to the maintainer when it opens, whoever
+      # opened it: a recipe, Dependabot, the web UI. First, so a later step's
+      # failure cannot skip it; only on open, so a deliberate unassignment is
+      # not undone by the next push.
+      - name: Assign the maintainer
+        if: github.event.action == 'opened' || github.event.action == 'reopened'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          MAINTAINER: ${{ github.repository_owner }}
+        run: gh pr edit "$NUMBER" --add-assignee "$MAINTAINER"
+
       # `area:` and `risk:` from paths (.github/labeler.yml). actions/labeler
       # reads only the changed-file list; it never checks out the PR.
       - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13 # v7
