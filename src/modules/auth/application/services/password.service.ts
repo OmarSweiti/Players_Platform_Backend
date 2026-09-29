@@ -23,7 +23,7 @@ export class PasswordService {
   async verify(hash: string, password: string): Promise<boolean> {
     try {
       return await argon2.verify(hash, password);
-    } catch (error) {
+    } catch {
       return false;
     }
   }

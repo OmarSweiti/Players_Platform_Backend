@@ -4,7 +4,6 @@ import {
   CreateScoutingReportInput,
 } from '../../infrastructure/repositories/scouting-report.repository';
 import { WatchlistRepository } from '../../infrastructure/repositories/watchlist.repository';
-import { AssignmentRepository } from '../../infrastructure/repositories/assignment.repository';
 
 @Injectable()
 export class CreateScoutingReportUseCase {

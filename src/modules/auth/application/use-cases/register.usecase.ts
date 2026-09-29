@@ -81,7 +81,6 @@ export class RegisterUseCase {
         tenantId: user.tenantId,
       };
     } catch (error) {
-      const duration = Date.now() - startTime;
       this.logger.error(
         `Registration failed for ${dto.email}: ${error.message}`,
         error.stack,
@@ -95,9 +94,7 @@ export class RegisterUseCase {
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(
-      password,
-    );
+    const hasSpecialChar = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password);
 
     if (password.length < minLength) {
       throw new BadRequestException(

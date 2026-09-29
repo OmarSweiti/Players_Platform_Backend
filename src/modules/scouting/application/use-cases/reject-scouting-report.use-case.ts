@@ -5,7 +5,7 @@ import { ScoutingReportRepository } from '../../infrastructure/repositories/scou
 export class RejectScoutingReportUseCase {
   constructor(private readonly scoutingReportRepo: ScoutingReportRepository) {}
 
-  async execute(id: string, tenantId: string, reason?: string) {
+  async execute(id: string, tenantId: string, _reason?: string) {
     const report = await this.scoutingReportRepo.findById(id, tenantId);
 
     if (!report) {

@@ -9,7 +9,7 @@ export class Enable2FAUseCase {
 
   constructor(private userRepository: UserRepository) {}
 
-  async execute(userId: string, tenantId: string) {
+  async execute(userId: string, _tenantId: string) {
     // Generate 2FA secret
     const secret = speakeasy.generateSecret({
       length: 32,

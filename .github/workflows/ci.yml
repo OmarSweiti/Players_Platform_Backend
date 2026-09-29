@@ -82,10 +82,16 @@ jobs:
         run: |
           npx --no-install prisma migrate deploy
           npx --no-install prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
-      # Lint is not a gate yet: at adoption (28 Sep 2026) eslint reported 748
-      # problems (410 of them formatting) and prettier --check flagged 65
-      # files. The changes that clear them add the steps here, so this job never
-      # claims a check it does not make. Until then: `just lint`.
+      # Zero warnings. The unsafe-`any` findings in code the plan retires or
+      # rebuilds (auth, medical, scouting) are recorded in
+      # eslint-suppressions.json: a new one fails, and a fixed one fails too
+      # until `just lint-prune` removes it, so the baseline only shrinks.
+      - name: Lint — ESLint with no warnings, against the recorded baseline
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
+        run: npx --no-install eslint --max-warnings=0 "{src,apps,libs,test}/**/*.ts"
+      - name: Format — every file is Prettier-formatted
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts"
 
   # REQUIRED CHECK. The policy scripts and the git hooks prove they still refuse.
   guards:

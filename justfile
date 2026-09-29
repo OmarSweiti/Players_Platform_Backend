@@ -20,6 +20,8 @@ setup:
     # .git/config is not versioned: without this a clone inherits whatever
     # global identity the machine has, and its commits stop resolving to you.
     git config --local user.email "{{ email }}"
+    # `git blame` skips formatting-only commits, as GitHub's blame view does
+    git config --local blame.ignoreRevsFile .git-blame-ignore-revs
     if [ -f "{{ signing_key }}" ]; then
       git config --local gpg.format ssh
       git config --local user.signingkey "{{ signing_key }}"
@@ -39,10 +41,14 @@ setup:
 guards:
     bash ./scripts/test-policy.sh
 
-# Lint and format check (not CI gates yet — see the note in ci.yml)
+# Lint (zero warnings, against eslint-suppressions.json) and format — CI gates
 lint:
-    npx --no-install eslint "{src,apps,libs,test}/**/*.ts"
+    npx --no-install eslint --max-warnings=0 "{src,apps,libs,test}/**/*.ts"
     npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts"
+
+# After fixing or deleting baselined code: drop the suppressions that no longer occur
+lint-prune:
+    npx --no-install eslint "{src,apps,libs,test}/**/*.ts" --prune-suppressions
 
 # The Prisma schema is valid, and the client generates from it (neither connects)
 prisma:
@@ -58,7 +64,7 @@ test:
     npx --no-install jest
 
 # CI's required `test` check, except the migration replay (that is `just migrations`)
-check: prisma build test
+check: prisma lint build test
 
 # CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database)
 migrations:

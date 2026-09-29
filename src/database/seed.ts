@@ -159,4 +159,7 @@ async function bootstrap() {
   await app.close();
 }
 
-bootstrap();
+bootstrap().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});

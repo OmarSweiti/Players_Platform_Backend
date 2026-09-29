@@ -9,12 +9,7 @@ import {
   Patch,
   HttpStatus,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
@@ -262,7 +257,7 @@ export class MedicalController {
     const skip = (page - 1) * limit;
 
     const filters = {
-      status: query.status as any,
+      status: query.status,
       medicalRecordId: query.medicalRecordId,
       dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
