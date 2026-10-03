@@ -9,6 +9,7 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { AsyncLocalStorage } from 'async_hooks';
+import { databaseConnectionOf } from './database-url';
 
 export interface TenantContext {
   tenantId: string;
@@ -30,16 +31,20 @@ export class PrismaService
       throw new Error('DATABASE_URL environment variable is not set');
     }
 
+    // A `schema` parameter selects the schema Prisma names in its queries
+    // (the API test harness gives every run its own); pg never sees it.
+    const { connectionString, schema } = databaseConnectionOf(databaseUrl);
+
     // Create a connection pool for the adapter
     const pool = new Pool({
-      connectionString: databaseUrl,
+      connectionString,
       max: 10, // Maximum number of connections in the pool
       idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
       connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
     });
 
     // Create the PostgreSQL adapter
-    const adapter = new PrismaPg(pool);
+    const adapter = new PrismaPg(pool, schema ? { schema } : undefined);
 
     // Initialize PrismaClient with the adapter - super() must be called first
     super({

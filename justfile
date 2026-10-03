@@ -59,12 +59,35 @@ prisma:
 build:
     npm run build
 
-# Unit tests
+# Type-check everything the build leaves out too: tests, the harness, the tool configs
+# (SWC strips types when Vitest runs them, so this is the only place a test is type-checked)
+typecheck:
+    npx --no-install tsc --noEmit -p tsconfig.json
+
+# Unit tests (Vitest): src/**/*.spec.ts
 test:
-    npx --no-install jest
+    npx --no-install vitest run --project unit
+
+# Integration tests on a real PostgreSQL, in a schema of their own per run: test/**/*.integration-spec.ts
+test-int *$args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source ./scripts/test-database.sh
+    set -- $args
+    if [ "${1:-}" = "--" ]; then shift; fi
+    npx --no-install vitest run --project integration "$@"
+
+# API tests through HTTP on a real PostgreSQL, in a schema of their own per run: test/**/*.e2e-spec.ts
+test-e2e *$args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    source ./scripts/test-database.sh
+    set -- $args
+    if [ "${1:-}" = "--" ]; then shift; fi
+    npx --no-install vitest run --project e2e "$@"
 
 # CI's required `test` check, except the migration replay (that is `just migrations`)
-check: prisma lint build test
+check: prisma lint build typecheck test
 
 # CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database)
 migrations:

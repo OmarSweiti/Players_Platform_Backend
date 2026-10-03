@@ -64,7 +64,7 @@ updates:
       - dependency-name: "@types/node"
         update-types: ["version-update:semver-major"]
       # A TypeScript major needs the whole toolchain to support it first
-      # (ts-jest, typescript-eslint, the Nest CLI): move it deliberately.
+      # (typescript-eslint, the Nest CLI): move it deliberately.
       - dependency-name: "typescript"
         update-types: ["version-update:semver-major"]
       # NestJS 12 ships as ES modules and needs the test setup migrated first;

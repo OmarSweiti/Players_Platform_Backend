@@ -13,8 +13,8 @@ cd backend && cp .env.example .env && just migrate && npm run start:dev   # http
 
 | Command | Does |
 |---|---|
-| `just check` | Prisma validate and generate, build, unit tests — what CI's required `test` check runs |
-| `just test-int` · `just test-e2e` | integration and API tests on a real PostgreSQL |
+| `just check` | Prisma validate and generate, lint and format, build, type-check, unit tests — what CI's required `test` check runs |
+| `just test-int` · `just test-e2e` | integration and API tests on the local stack's PostgreSQL, each run in a schema of its own |
 | `just migrations` | replay every migration on a throwaway PostgreSQL 18; no drift allowed |
 | `just pr '<title>'` · `just merge <URL>` | ship a change through the flow — see `CONTRIBUTING.md` |
 

@@ -71,9 +71,14 @@ jobs:
       - name: Build
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: npm run build
+      # The build leaves the tests out, and SWC strips their types when Vitest
+      # runs them: this step is the only one that type-checks the test code.
+      - name: Type-check everything, tests included
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
+        run: npx --no-install tsc --noEmit -p tsconfig.json
       - name: Unit tests
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
-        run: npx --no-install jest --ci
+        run: npx --no-install vitest run --project unit
       # Forward-only history is only worth something if it replays: every
       # migration applies to an empty database, and the database it produces is
       # exactly schema.prisma — a schema edit without its migration is red here.

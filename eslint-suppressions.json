@@ -36,11 +36,6 @@
       "count": 3
     }
   },
-  "src/main.ts": {
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    }
-  },
   "src/modules/auth/application/use-cases/disable-2fa.usecase.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
