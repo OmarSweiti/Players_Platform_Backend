@@ -4,11 +4,12 @@ import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
+import type { Env } from '../../../../config/env.schema';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
-    private configService: ConfigService,
+    config: ConfigService<Env, true>,
     private userRepository: UserRepository,
   ) {
     super({
@@ -33,7 +34,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         return token;
       },
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>('jwt.secret') || 'default-secret',
+      secretOrKey: config.get('JWT_SECRET', { infer: true }),
     });
   }
 

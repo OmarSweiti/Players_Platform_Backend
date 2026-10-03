@@ -1,10 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR, APP_FILTER, APP_PIPE } from '@nestjs/core';
-import appConfig from './config/configuration';
-import databaseConfig from './config/database.config';
-import jwtConfig from './config/jwt.config';
-import redisConfig from './config/redis.config';
+import { configOptions } from './config/env.schema';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { EventsModule } from './infrastructure/events/events.module';
 import { MailModule } from './infrastructure/mail/mail.module';
@@ -28,10 +25,9 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({
-      isGlobal: true,
-      load: [appConfig, databaseConfig, jwtConfig, redisConfig],
-    }),
+    // Validates the environment as this module loads: the API refuses to
+    // boot on a missing or invalid variable (src/config/env.schema.ts).
+    ConfigModule.forRoot(configOptions),
     PrismaModule,
     EventsModule,
     MailModule,

@@ -5,6 +5,7 @@ import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import type { Env } from './config/env.schema';
 
 /**
  * The HTTP pipeline: middleware, interceptors, CORS, the route prefix and
@@ -12,7 +13,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
  * exercise the pipeline that production runs. Returns the route prefix.
  */
 export function configureApp(app: INestApplication): string {
-  const configService = app.get(ConfigService);
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
 
   // Apply global interceptors for logging and response transformation
   app.useGlobalInterceptors(new LoggingInterceptor());
@@ -28,17 +29,15 @@ export function configureApp(app: INestApplication): string {
   app.use(cookieParser());
 
   // CORS Configuration
-  const corsOrigin =
-    configService.get<string>('CORS_ORIGIN') || 'http://localhost:3001';
   app.enableCors({
-    origin: corsOrigin,
+    origin: config.get('CORS_ORIGIN', { infer: true }),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID'],
   });
 
   // Global prefix for API routes
-  const apiPrefix = configService.get<string>('app.apiPrefix') || 'api';
+  const apiPrefix = config.get('API_PREFIX', { infer: true });
   app.setGlobalPrefix(apiPrefix);
 
   // Global validation pipe with strict configuration
@@ -47,7 +46,8 @@ export function configureApp(app: INestApplication): string {
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      disableErrorMessages: process.env.NODE_ENV === 'production',
+      disableErrorMessages:
+        config.get('NODE_ENV', { infer: true }) === 'production',
     }),
   );
 

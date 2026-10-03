@@ -25,16 +25,16 @@ import { UserRepository } from './infrastructure/repositories/user.repository';
 import { JwtStrategy } from './infrastructure/strategies/jwt.strategy';
 import { LocalStrategy } from './infrastructure/strategies/local.strategy';
 import { MailService } from '../../infrastructure/mail/mail.service';
+import type { Env } from '../../config/env.schema';
 
 @Module({
   imports: [
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => {
-        const secret =
-          configService.get<string>('jwt.secret') || 'default-secret';
-        const expiresIn = configService.get<string>('jwt.expiresIn') || '15m';
+      useFactory: (config: ConfigService<Env, true>) => {
+        const secret = config.get('JWT_SECRET', { infer: true });
+        const expiresIn = config.get('JWT_EXPIRES_IN', { infer: true });
 
         return {
           secret,

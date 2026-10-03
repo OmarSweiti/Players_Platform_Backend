@@ -1,5 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../../../config/env.schema';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
 import { LoginDto } from '../../presentation/dto/login.dto';
@@ -16,6 +18,7 @@ export class LoginUseCase {
     private userRepository: UserRepository,
     private passwordService: PasswordService,
     private jwtService: JwtService,
+    private config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -113,7 +116,7 @@ export class LoginUseCase {
     return {
       accessToken: this.jwtService.sign(payload),
       refreshToken: this.jwtService.sign(payload, {
-        secret: process.env.JWT_REFRESH_SECRET,
+        secret: this.config.get('JWT_REFRESH_SECRET', { infer: true }),
         expiresIn: '7d',
       }),
     };

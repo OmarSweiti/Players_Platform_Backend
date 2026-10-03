@@ -1,14 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../config/env.schema';
 
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private readonly mailFrom: string;
 
-  constructor(private configService: ConfigService) {
-    this.mailFrom =
-      this.configService.get<string>('MAIL_FROM') || 'noreply@example.com';
+  constructor(private config: ConfigService<Env, true>) {
+    this.mailFrom = this.config.get('MAIL_FROM', { infer: true });
   }
 
   /**
@@ -26,7 +26,7 @@ export class MailService {
    * Send verification email
    */
   async sendVerificationEmail(email: string, token: string): Promise<void> {
-    const verificationLink = `${this.configService.get('CORS_ORIGIN')}/verify-email?token=${token}`;
+    const verificationLink = `${this.config.get('CORS_ORIGIN', { infer: true })}/verify-email?token=${token}`;
     const html = `
       <h1>Email Verification</h1>
       <p>Please click the link below to verify your email:</p>
@@ -40,7 +40,7 @@ export class MailService {
    * Send password reset email
    */
   async sendPasswordResetEmail(email: string, token: string): Promise<void> {
-    const resetLink = `${this.configService.get('CORS_ORIGIN')}/reset-password?token=${token}`;
+    const resetLink = `${this.config.get('CORS_ORIGIN', { infer: true })}/reset-password?token=${token}`;
     const html = `
       <h1>Password Reset</h1>
       <p>Please click the link below to reset your password:</p>

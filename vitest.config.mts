@@ -7,18 +7,22 @@ import { defineConfig, type TestUserConfig } from 'vitest/config';
 // decorator metadata survives; Vitest loads ES-module packages natively.
 const compile = () => swc.vite({ module: { type: 'es6' } });
 
-// Synthetic, test-only configuration. Never a real secret.
+// Synthetic, test-only configuration. Never a real secret. DATABASE_URL is
+// the run's own schema, set by test/harness/setup-env.ts.
 const testEnv = {
   NODE_ENV: 'test',
-  JWT_SECRET: 'test-only-signing-value',
-  JWT_REFRESH_SECRET: 'test-only-refresh-value',
+  JWT_SECRET: 'test-only-signing-value-for-the-test-run',
+  JWT_REFRESH_SECRET: 'test-only-refresh-value-for-the-test-run',
   REDIS_HOST: '127.0.0.1',
   REDIS_PORT: '6379',
+  CORS_ORIGIN: 'https://app.agency.test',
+  MAIL_FROM: 'no-reply@agency.test',
 };
 
 const onDatabase = {
   environment: 'node',
   globalSetup: ['test/harness/global-setup.ts'],
+  setupFiles: ['test/harness/setup-env.ts'],
   env: testEnv,
   testTimeout: 60_000,
   hookTimeout: 120_000,

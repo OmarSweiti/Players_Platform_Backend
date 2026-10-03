@@ -14,6 +14,7 @@ import {
   describeError,
   stackFramesOf,
 } from '../../common/logging/describe-error';
+import type { Env } from '../../config/env.schema';
 
 export interface TenantContext {
   tenantId: string;
@@ -28,12 +29,8 @@ export class PrismaService
   private readonly asyncLocalStorage = new AsyncLocalStorage<TenantContext>();
   private pool: Pool;
 
-  constructor(private configService: ConfigService) {
-    const databaseUrl = configService.get<string>('DATABASE_URL');
-
-    if (!databaseUrl) {
-      throw new Error('DATABASE_URL environment variable is not set');
-    }
+  constructor(config: ConfigService<Env, true>) {
+    const databaseUrl = config.get('DATABASE_URL', { infer: true });
 
     // A `schema` parameter selects the schema Prisma names in its queries
     // (the API test harness gives every run its own); pg never sees it.
