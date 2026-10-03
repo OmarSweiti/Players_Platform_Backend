@@ -92,6 +92,9 @@
   },
   "overrides": {
     "mysql2": "^3.24.4",
-    "deepmerge-ts": "^8.0.2"
+    "deepmerge-ts": "^8.0.2",
+    "@nestjs/swagger": {
+      "js-yaml": "5.4.2"
+    }
   }
 }
