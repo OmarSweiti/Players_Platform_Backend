@@ -7,7 +7,6 @@ import {
   Query,
   Delete,
   Patch,
-  HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
@@ -30,6 +29,7 @@ import { CreateTreatmentSessionUseCase } from '../application/use-cases/create-t
 import { UpdateTreatmentSessionUseCase } from '../application/use-cases/update-treatment-session.usecase';
 import { MedicalRecordRepository } from '../infrastructure/repositories/medical-record.repository';
 import { TreatmentSessionRepository } from '../infrastructure/repositories/treatment-session.repository';
+import { NotFoundError } from '../../../common/errors/domain-error';
 
 @ApiTags('Medical')
 @ApiBearerAuth()
@@ -64,11 +64,7 @@ export class MedicalController {
         : undefined,
     });
 
-    return {
-      statusCode: HttpStatus.CREATED,
-      message: 'Medical record created successfully',
-      data: record,
-    };
+    return record;
   }
 
   @Get('records')
@@ -87,17 +83,13 @@ export class MedicalController {
       isConfidential: query.isConfidential,
     };
 
-    const { records, total } = await this.medicalRecordRepo.findAll(
+    const { records } = await this.medicalRecordRepo.findAll(
       user.tenantId,
       filters,
       { skip, take: limit },
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: records,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+    return records;
   }
 
   @Get('records/player/:playerId')
@@ -117,18 +109,14 @@ export class MedicalController {
       isConfidential: query.isConfidential,
     };
 
-    const { records, total } = await this.medicalRecordRepo.findByPlayer(
+    const { records } = await this.medicalRecordRepo.findByPlayer(
       playerId,
       user.tenantId,
       filters,
       { skip, take: limit },
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: records,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+    return records;
   }
 
   @Get('records/:id')
@@ -141,13 +129,10 @@ export class MedicalController {
     const record = await this.medicalRecordRepo.findById(id, user.tenantId);
 
     if (!record) {
-      return {
-        statusCode: HttpStatus.NOT_FOUND,
-        message: 'Medical record not found',
-      };
+      throw new NotFoundError('Medical record not found');
     }
 
-    return { statusCode: HttpStatus.OK, data: record };
+    return record;
   }
 
   @Patch('records/:id')
@@ -173,11 +158,7 @@ export class MedicalController {
       user.role,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Medical record updated successfully',
-      data: record,
-    };
+    return record;
   }
 
   @Delete('records/:id')
@@ -188,11 +169,6 @@ export class MedicalController {
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
     await this.medicalRecordRepo.softDelete(id, user.tenantId);
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Medical record deleted successfully',
-    };
   }
 
   @Get('records/player/:playerId/active-injuries')
@@ -207,7 +183,7 @@ export class MedicalController {
       user.tenantId,
     );
 
-    return { statusCode: HttpStatus.OK, data: injuries };
+    return injuries;
   }
 
   @Get('records/player/:playerId/history')
@@ -216,13 +192,13 @@ export class MedicalController {
   async getInjuryHistory(
     @CurrentUser() user: any,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
-  ) {
+  ): Promise<unknown> {
     const stats = await this.medicalRecordRepo.getPlayerInjuryHistory(
       playerId,
       user.tenantId,
     );
 
-    return { statusCode: HttpStatus.OK, data: stats };
+    return stats;
   }
 
   // ==================== TREATMENT SESSIONS ====================
@@ -242,11 +218,7 @@ export class MedicalController {
       status: dto.status,
     });
 
-    return {
-      statusCode: HttpStatus.CREATED,
-      message: 'Treatment session created successfully',
-      data: session,
-    };
+    return session;
   }
 
   @Get('sessions/player/:playerId')
@@ -268,18 +240,14 @@ export class MedicalController {
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
     };
 
-    const { sessions, total } = await this.treatmentSessionRepo.findByPlayer(
+    const { sessions } = await this.treatmentSessionRepo.findByPlayer(
       playerId,
       user.tenantId,
       filters,
       { skip, take: limit },
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: sessions,
-      meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
-    };
+    return sessions;
   }
 
   @Get('sessions/:id')
@@ -292,13 +260,10 @@ export class MedicalController {
     const session = await this.treatmentSessionRepo.findById(id, user.tenantId);
 
     if (!session) {
-      return {
-        statusCode: HttpStatus.NOT_FOUND,
-        message: 'Treatment session not found',
-      };
+      throw new NotFoundError('Treatment session not found');
     }
 
-    return { statusCode: HttpStatus.OK, data: session };
+    return session;
   }
 
   @Patch('sessions/:id')
@@ -321,11 +286,7 @@ export class MedicalController {
       user.role,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Treatment session updated successfully',
-      data: session,
-    };
+    return session;
   }
 
   @Patch('sessions/:id/status')
@@ -343,11 +304,7 @@ export class MedicalController {
       status,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Session status updated successfully',
-      data: session,
-    };
+    return session;
   }
 
   @Delete('sessions/:id')
@@ -358,11 +315,6 @@ export class MedicalController {
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
     await this.treatmentSessionRepo.delete(id, user.tenantId);
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Treatment session deleted successfully',
-    };
   }
 
   @Get('sessions/player/:playerId/upcoming')
@@ -377,7 +329,7 @@ export class MedicalController {
       user.tenantId,
     );
 
-    return { statusCode: HttpStatus.OK, data: sessions };
+    return sessions;
   }
 
   @Get('sessions/player/:playerId/stats')
@@ -386,12 +338,12 @@ export class MedicalController {
   async getSessionStats(
     @CurrentUser() user: any,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
-  ) {
+  ): Promise<unknown> {
     const stats = await this.treatmentSessionRepo.getSessionStats(
       playerId,
       user.tenantId,
     );
 
-    return { statusCode: HttpStatus.OK, data: stats };
+    return stats;
   }
 }

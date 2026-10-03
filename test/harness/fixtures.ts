@@ -1,5 +1,11 @@
 import { randomBytes } from 'node:crypto';
-import type { PrismaClient, Tenant, User, UserRole } from '@prisma/client';
+import type {
+  Player,
+  PrismaClient,
+  Tenant,
+  User,
+  UserRole,
+} from '@prisma/client';
 import { afterAll, inject } from 'vitest';
 import { prismaFor } from './db';
 
@@ -28,6 +34,15 @@ export function createTenant(
   const slug = opts.slug ?? `tenant-${suffix()}`;
   return (opts.prisma ?? runPrisma()).tenant.create({
     data: { name: `Test agency ${slug}`, slug },
+  });
+}
+
+export function createPlayer(
+  tenant: Tenant,
+  prisma: PrismaClient = runPrisma(),
+): Promise<Player> {
+  return prisma.player.create({
+    data: { tenantId: tenant.id, fullName: `Test Player ${suffix()}` },
   });
 }
 

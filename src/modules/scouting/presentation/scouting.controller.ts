@@ -1,5 +1,6 @@
 import {
   Controller,
+  HttpCode,
   Get,
   Post,
   Body,
@@ -38,6 +39,7 @@ import { RejectScoutingReportUseCase } from '../application/use-cases/reject-sco
 import { ManageWatchlistUseCase } from '../application/use-cases/manage-watchlist.usecase';
 import { ManageAssignmentUseCase } from '../application/use-cases/manage-assignment.usecase';
 import { ScoutingReportRepository } from '../infrastructure/repositories/scouting-report.repository';
+import { NotFoundError } from '../../../common/errors/domain-error';
 
 @ApiTags('Scouting')
 @ApiBearerAuth()
@@ -72,11 +74,7 @@ export class ScoutingController {
       scoutId: user.id,
       tenantId: user.tenantId,
     });
-    return {
-      statusCode: HttpStatus.CREATED,
-      message: 'Scouting report created successfully',
-      data: report,
-    };
+    return report;
   }
 
   @Get('reports')
@@ -102,22 +100,13 @@ export class ScoutingController {
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
     };
 
-    const { reports, total } = await this.scoutingReportRepo.findMany(
+    const { reports } = await this.scoutingReportRepo.findMany(
       user.tenantId,
       filters,
       { skip, take: limit },
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: reports,
-      meta: {
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
+    return reports;
   }
 
   @Get('reports/:id')
@@ -134,16 +123,10 @@ export class ScoutingController {
     const report = await this.scoutingReportRepo.findById(id, user.tenantId);
 
     if (!report) {
-      return {
-        statusCode: HttpStatus.NOT_FOUND,
-        message: 'Scouting report not found',
-      };
+      throw new NotFoundError('Scouting report not found');
     }
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: report,
-    };
+    return report;
   }
 
   @Patch('reports/:id')
@@ -168,14 +151,11 @@ export class ScoutingController {
       user.id,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Scouting report updated successfully',
-      data: report,
-    };
+    return report;
   }
 
   @Post('reports/:id/submit')
+  @HttpCode(HttpStatus.OK)
   @Permissions(PERMISSIONS.SREPORT_SUBMIT)
   @ApiOperation({ summary: 'Submit scouting report for review' })
   @ApiResponse({
@@ -192,14 +172,11 @@ export class ScoutingController {
       user.id,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Scouting report submitted successfully',
-      data: report,
-    };
+    return report;
   }
 
   @Post('reports/:id/approve')
+  @HttpCode(HttpStatus.OK)
   @Permissions(PERMISSIONS.SREPORT_APPROVE)
   @ApiOperation({ summary: 'Approve scouting report' })
   @ApiResponse({
@@ -218,14 +195,11 @@ export class ScoutingController {
       recommendation,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Scouting report approved successfully',
-      data: report,
-    };
+    return report;
   }
 
   @Post('reports/:id/reject')
+  @HttpCode(HttpStatus.OK)
   @Permissions(PERMISSIONS.SREPORT_REJECT)
   @ApiOperation({ summary: 'Reject scouting report' })
   @ApiResponse({
@@ -238,11 +212,7 @@ export class ScoutingController {
   ) {
     const report = await this.rejectReportUseCase.execute(id, user.tenantId);
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Scouting report rejected successfully',
-      data: report,
-    };
+    return report;
   }
 
   @Delete('reports/:id')
@@ -257,27 +227,19 @@ export class ScoutingController {
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
     await this.scoutingReportRepo.softDelete(id, user.tenantId);
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Scouting report deleted successfully',
-    };
   }
 
   @Get('reports/stats/my-stats')
   @Permissions(PERMISSIONS.REPORT_VIEW)
   @ApiOperation({ summary: 'Get my scouting report statistics' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Scout statistics' })
-  async getMyStats(@CurrentUser() user: any) {
+  async getMyStats(@CurrentUser() user: any): Promise<unknown> {
     const stats = await this.scoutingReportRepo.getStatsByScout(
       user.id,
       user.tenantId,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: stats,
-    };
+    return stats;
   }
 
   // ==================== WATCHLIST ====================
@@ -301,11 +263,7 @@ export class ScoutingController {
       dto.notes,
     );
 
-    return {
-      statusCode: HttpStatus.CREATED,
-      message: 'Player added to watchlist successfully',
-      data: entry,
-    };
+    return entry;
   }
 
   @Get('watchlist')
@@ -321,10 +279,7 @@ export class ScoutingController {
       user.tenantId,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: watchlist,
-    };
+    return watchlist;
   }
 
   @Delete('watchlist/:playerId')
@@ -343,11 +298,6 @@ export class ScoutingController {
       user.tenantId,
       playerId,
     );
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Player removed from watchlist successfully',
-    };
   }
 
   @Get('watchlist/check/:playerId')
@@ -364,10 +314,7 @@ export class ScoutingController {
       playerId,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: { isInWatchlist },
-    };
+    return { isInWatchlist };
   }
 
   // ==================== ASSIGNMENTS ====================
@@ -390,11 +337,7 @@ export class ScoutingController {
       dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
     });
 
-    return {
-      statusCode: HttpStatus.CREATED,
-      message: 'Scouting assignment created successfully',
-      data: assignment,
-    };
+    return assignment;
   }
 
   @Get('assignments/my-assignments')
@@ -412,10 +355,7 @@ export class ScoutingController {
         status,
       );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: assignments,
-    };
+    return assignments;
   }
 
   @Get('assignments/director-view')
@@ -433,10 +373,7 @@ export class ScoutingController {
         status,
       );
 
-    return {
-      statusCode: HttpStatus.OK,
-      data: assignments,
-    };
+    return assignments;
   }
 
   @Patch('assignments/:id')
@@ -462,11 +399,7 @@ export class ScoutingController {
       user.id,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Assignment updated successfully',
-      data: assignment,
-    };
+    return assignment;
   }
 
   @Patch('assignments/:id/status')
@@ -489,11 +422,7 @@ export class ScoutingController {
       user.role,
     );
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Assignment status updated successfully',
-      data: assignment,
-    };
+    return assignment;
   }
 
   @Delete('assignments/:id')
@@ -512,10 +441,5 @@ export class ScoutingController {
       user.tenantId,
       user.id,
     );
-
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'Assignment deleted successfully',
-    };
   }
 }
