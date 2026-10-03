@@ -12,14 +12,6 @@
       "count": 1
     }
   },
-  "src/common/interceptors/logging.interceptor.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    }
-  },
   "src/common/interceptors/transform.interceptor.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
@@ -69,7 +61,7 @@
       "count": 11
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 15
+      "count": 13
     }
   },
   "src/modules/auth/application/use-cases/refresh-token.usecase.ts": {
@@ -77,12 +69,7 @@
       "count": 5
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    }
-  },
-  "src/modules/auth/application/use-cases/register.usecase.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
+      "count": 5
     }
   },
   "src/modules/auth/application/use-cases/verify-2fa-for-login.usecase.ts": {

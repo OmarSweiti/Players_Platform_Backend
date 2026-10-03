@@ -17,7 +17,7 @@ export class ResendVerificationUseCase {
 
     if (!user) {
       this.logger.warn(
-        `Resend verification requested for non-existent email: ${email}`,
+        'Resend verification requested: no account has that address',
       );
       throw new NotFoundException('User not found');
     }
@@ -25,7 +25,7 @@ export class ResendVerificationUseCase {
     // Check if email is already verified
     if (user.emailVerifiedAt) {
       this.logger.log(
-        `Resend verification requested for already verified email: ${email}`,
+        `Resend verification requested for user ${user.id}, already verified`,
       );
       return { message: 'Email is already verified' };
     }
@@ -44,7 +44,7 @@ export class ResendVerificationUseCase {
     // Send verification email
     await this.mailService.sendVerificationEmail(user.email, verificationToken);
 
-    this.logger.log(`Verification email resent to: ${user.email}`);
+    this.logger.log(`Verification email resent to user ${user.id}`);
 
     return { message: 'Verification email sent successfully' };
   }

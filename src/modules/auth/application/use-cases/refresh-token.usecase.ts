@@ -24,9 +24,7 @@ export class RefreshTokenUseCase {
         tenantId: payload.tenantId,
       });
 
-      this.logger.log(
-        `Access token refreshed for user: ${payload.email} (${payload.sub})`,
-      );
+      this.logger.log(`Access token refreshed for user ${payload.sub}`);
 
       return Promise.resolve({
         accessToken: newAccessToken,

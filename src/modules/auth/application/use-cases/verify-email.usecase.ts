@@ -25,7 +25,7 @@ export class VerifyEmailUseCase {
       new Date() > user.emailVerificationExpiry
     ) {
       this.logger.warn(
-        `Email verification attempted with expired token for user: ${user.email}`,
+        `Email verification attempted with expired token for user ${user.id}`,
       );
       throw new BadRequestException('Verification token has expired');
     }
@@ -37,7 +37,7 @@ export class VerifyEmailUseCase {
       emailVerificationExpiry: null,
     });
 
-    this.logger.log(`Email verified successfully for user: ${user.email}`);
+    this.logger.log(`Email verified successfully for user ${user.id}`);
 
     return { message: 'Email verified successfully' };
   }

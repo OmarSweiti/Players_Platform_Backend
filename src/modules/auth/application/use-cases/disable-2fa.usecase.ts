@@ -19,7 +19,7 @@ export class Disable2FAUseCase {
 
     if (!user.twoFASecret) {
       this.logger.warn(
-        `2FA disable attempted but secret not found for user: ${user.email}`,
+        `2FA disable attempted but secret not found for user ${user.id}`,
       );
       throw new BadRequestException('2FA secret not found');
     }
@@ -35,7 +35,7 @@ export class Disable2FAUseCase {
 
     if (!verified) {
       this.logger.warn(
-        `Invalid 2FA code provided when disabling for user: ${user.email}`,
+        `Invalid 2FA code provided when disabling for user ${user.id}`,
       );
       throw new BadRequestException('Invalid 2FA code');
     }
@@ -46,7 +46,7 @@ export class Disable2FAUseCase {
       twoFASecret: null,
     });
 
-    this.logger.log(`2FA disabled successfully for user: ${user.email}`);
+    this.logger.log(`2FA disabled successfully for user ${user.id}`);
 
     return {
       message: '2FA disabled successfully',

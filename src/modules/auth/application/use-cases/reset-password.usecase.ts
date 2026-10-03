@@ -34,7 +34,7 @@ export class ResetPasswordUseCase {
     // Check if token has expired
     if (!user.passwordResetExpiry || new Date() > user.passwordResetExpiry) {
       this.logger.warn(
-        `Password reset attempted with expired token for user: ${user.email}`,
+        `Password reset attempted with expired token for user ${user.id}`,
       );
       throw new BadRequestException('Reset token has expired');
     }
@@ -56,7 +56,7 @@ export class ResetPasswordUseCase {
     // Invalidate all existing sessions by updating passwordChangedAt
     // This will cause JWT validation to fail for old tokens
 
-    this.logger.log(`Password reset successful for user: ${user.email}`);
+    this.logger.log(`Password reset successful for user ${user.id}`);
 
     return { message: 'Password has been reset successfully' };
   }

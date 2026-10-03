@@ -3,6 +3,10 @@ import { JwtService } from '@nestjs/jwt';
 import { UserRepository } from '../../infrastructure/repositories/user.repository';
 import { PasswordService } from '../services/password.service';
 import { LoginDto } from '../../presentation/dto/login.dto';
+import {
+  describeError,
+  stackFramesOf,
+} from '../../../../common/logging/describe-error';
 
 @Injectable()
 export class LoginUseCase {
@@ -26,16 +30,14 @@ export class LoginUseCase {
 
     if (!user) {
       // SECURITY: Log failed login attempt (don't reveal if email exists)
-      this.logger.warn(
-        `Failed login attempt for email: ${email} (user not found)`,
-      );
+      this.logger.warn('Failed login attempt: no account has that address');
       return null;
     }
 
     // Check if account is locked
     if (user.lockedUntil && new Date() < user.lockedUntil) {
       this.logger.warn(
-        `Login blocked - Account locked: ${user.email} (locked until: ${user.lockedUntil.toISOString()})`,
+        `Login blocked - Account locked: user ${user.id} (locked until: ${user.lockedUntil.toISOString()})`,
       );
       throw new UnauthorizedException(
         'Account is temporarily locked due to too many failed attempts',
@@ -48,7 +50,7 @@ export class LoginUseCase {
     );
 
     if (!isValid) {
-      this.logger.warn(`Invalid password for user: ${user.email}`);
+      this.logger.warn(`Invalid password for user ${user.id}`);
       await this.handleFailedLogin(user.id);
       return null;
     }
@@ -67,7 +69,7 @@ export class LoginUseCase {
 
       if (!user) {
         const duration = Date.now() - startTime;
-        this.logger.warn(`Login failed for ${dto.email} after ${duration}ms`);
+        this.logger.warn(`Login failed after ${duration}ms`);
         throw new UnauthorizedException('Invalid credentials');
       }
 
@@ -77,7 +79,7 @@ export class LoginUseCase {
 
       const duration = Date.now() - startTime;
       this.logger.log(
-        `Successful login: ${user.email} (tenant: ${tenantId}, role: ${user.role}, duration: ${duration}ms)`,
+        `Successful login: user ${user.id} (tenant: ${tenantId}, role: ${user.role}, duration: ${duration}ms)`,
       );
 
       return {
@@ -93,8 +95,8 @@ export class LoginUseCase {
       };
     } catch (error) {
       this.logger.error(
-        `Login error for ${dto.email}: ${error.message}`,
-        error.stack,
+        `Login error: ${describeError(error)}`,
+        stackFramesOf(error),
       );
       throw error;
     }

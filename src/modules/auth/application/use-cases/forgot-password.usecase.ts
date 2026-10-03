@@ -18,9 +18,7 @@ export class ForgotPasswordUseCase {
 
     // Always return success to prevent email enumeration
     if (!user) {
-      this.logger.log(
-        `Password reset requested for non-existent email: ${dto.email}`,
-      );
+      this.logger.log('Password reset requested: no account has that address');
       return {
         message:
           'If an account exists with this email, a password reset link has been sent',
@@ -45,7 +43,7 @@ export class ForgotPasswordUseCase {
     // Send reset email
     await this.mailService.sendPasswordResetEmail(user.email, resetToken);
 
-    this.logger.log(`Password reset email sent to: ${user.email}`);
+    this.logger.log(`Password reset email sent to user ${user.id}`);
 
     return {
       message:
