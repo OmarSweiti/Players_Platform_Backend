@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { bootApp, type BootedApp } from '../harness/app';
-import { createMember, createTenant } from '../harness/fixtures';
+import { createMember, createTenant, runPrisma } from '../harness/fixtures';
 
 describe('the API test harness', () => {
   let booted: BootedApp;
@@ -36,5 +36,16 @@ describe('the API test harness', () => {
       SELECT count(*) FROM information_schema.tables
       WHERE table_schema = ${schema} AND table_name IN ('tenants', 'users')`;
     expect(Number(tables[0].count)).toBe(2);
+  });
+
+  it('raw_sql_runs_in_the_run_schema', async () => {
+    // Prisma names the schema in its own queries; raw SQL has only the
+    // connection's search_path, which must be the same schema.
+    const schema = inject('databaseSchema');
+    for (const prisma of [booted.app.get(PrismaService), runPrisma()]) {
+      const [row] = await prisma.$queryRaw<{ schema: string }[]>`
+        SELECT current_schema() AS schema`;
+      expect(row.schema).toBe(schema);
+    }
   });
 });

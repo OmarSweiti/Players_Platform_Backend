@@ -33,12 +33,15 @@ export class PrismaService
     const databaseUrl = config.get('DATABASE_URL', { infer: true });
 
     // A `schema` parameter selects the schema Prisma names in its queries
-    // (the API test harness gives every run its own); pg never sees it.
-    const { connectionString, schema } = databaseConnectionOf(databaseUrl);
+    // (the API test harness gives every run its own), and the search_path of
+    // every connection, so raw SQL runs in it too (database-url.ts).
+    const { connectionString, schema, options } =
+      databaseConnectionOf(databaseUrl);
 
     // Create a connection pool for the adapter
     const pool = new Pool({
       connectionString,
+      options,
       max: 10, // Maximum number of connections in the pool
       idleTimeoutMillis: 30000, // Close idle connections after 30 seconds
       connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
