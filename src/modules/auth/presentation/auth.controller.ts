@@ -11,6 +11,8 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../../config/env.schema';
 import {
   ApiTags,
   ApiOperation,
@@ -68,6 +70,7 @@ export class AuthController {
     private getActiveSessionsUseCase: GetActiveSessionsUseCase,
     private revokeSessionUseCase: RevokeSessionUseCase,
     private logoutAllDevicesUseCase: LogoutAllDevicesUseCase,
+    private config: ConfigService<Env, true>,
   ) {}
 
   @Public()
@@ -127,7 +130,8 @@ export class AuthController {
     const result = await this.loginUseCase.execute(loginDto, tenantId);
 
     // Set HTTP-only cookies for tokens (more secure than localStorage)
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction =
+      this.config.get('NODE_ENV', { infer: true }) === 'production';
 
     // Access token cookie (15 minutes expiry)
     res.cookie('accessToken', result.accessToken, {
@@ -220,7 +224,8 @@ export class AuthController {
     );
 
     // Set new access token cookie
-    const isProduction = process.env.NODE_ENV === 'production';
+    const isProduction =
+      this.config.get('NODE_ENV', { infer: true }) === 'production';
     res.cookie('accessToken', result.accessToken, {
       httpOnly: true,
       secure: isProduction,

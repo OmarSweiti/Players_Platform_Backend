@@ -8,7 +8,8 @@ and the progress record — **start there**.
 ```bash
 git clone --recurse-submodules git@github.com:OmarSweiti/Players_Platform.git
 cd Players_Platform && just setup-all && just up          # the whole local stack
-cd backend && cp .env.example .env && just migrate && npm run start:dev   # https://sadara.localhost/api/v1
+cd backend && cp .env.example .env     # then set JWT_SECRET and JWT_REFRESH_SECRET: openssl rand -base64 48
+just migrate && npm run start:dev      # https://sadara.localhost/api/v1
 ```
 
 | Command | Does |

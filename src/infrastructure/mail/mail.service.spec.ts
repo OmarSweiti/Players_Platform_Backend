@@ -2,6 +2,7 @@ import { Logger, type LoggerService } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
 import { format } from 'node:util';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { Env } from '../../config/env.schema';
 import { MailService } from './mail.service';
 
 const TOKEN = 'canary-token-3c9d1e';
@@ -20,7 +21,7 @@ describe('MailService', () => {
   const config = {
     get: (key: string) =>
       key === 'CORS_ORIGIN' ? 'https://sadara.localhost' : undefined,
-  } as unknown as ConfigService;
+  } as unknown as ConfigService<Env, true>;
 
   beforeEach(() => {
     lines.length = 0;

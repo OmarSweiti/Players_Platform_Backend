@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import type { Env } from '../../../../config/env.schema';
 
 @Injectable()
 export class RefreshTokenUseCase {
@@ -8,13 +9,13 @@ export class RefreshTokenUseCase {
 
   constructor(
     private jwtService: JwtService,
-    private configService: ConfigService,
+    private config: ConfigService<Env, true>,
   ) {}
 
   execute(refreshToken: string): Promise<{ accessToken: string }> {
     try {
       const payload = this.jwtService.verify(refreshToken, {
-        secret: this.configService.get<string>('jwt.refreshSecret'),
+        secret: this.config.get('JWT_REFRESH_SECRET', { infer: true }),
       });
 
       const newAccessToken = this.jwtService.sign({
