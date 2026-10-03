@@ -76,6 +76,20 @@ describe('secrets and personal data stay out of logs and error responses', () =>
     }
   });
 
+  it('unmatched_routes_never_echo_the_query_string', async () => {
+    // Nest's own not-found message quotes the request's original URL.
+    const response = await booted.http
+      .get('/api/no-such-route')
+      .query({ token: TOKEN });
+
+    expect(response.status).toBe(404);
+    expect(JSON.stringify(response.body)).not.toContain(TOKEN);
+    expect(response.body).toMatchObject({
+      message: 'Cannot GET /api/no-such-route',
+      path: '/api/no-such-route',
+    });
+  });
+
   it('error_responses_never_echo_the_query_string', async () => {
     const response = await booted.http
       .get('/api/auth/verify-email')

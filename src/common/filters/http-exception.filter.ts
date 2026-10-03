@@ -18,6 +18,21 @@ export interface ErrorResponse {
   path: string;
 }
 
+/**
+ * A message that quotes the request's full URL — Nest's own not-found
+ * message, `Cannot GET /api/x?token=…`, does — quotes its path instead.
+ */
+function withoutQuery(
+  message: string | string[],
+  request: Request,
+): string | string[] {
+  const strip = (text: string) =>
+    request.originalUrl === request.path
+      ? text
+      : text.split(request.originalUrl).join(request.path);
+  return Array.isArray(message) ? message.map(strip) : strip(message);
+}
+
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
@@ -58,7 +73,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
 
     const errorResponse: ErrorResponse = {
       statusCode,
-      message,
+      message: withoutQuery(message, request),
       error,
       timestamp: new Date().toISOString(),
       path: request.path, // never request.url: the query can carry a token
