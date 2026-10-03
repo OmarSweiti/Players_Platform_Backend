@@ -11,7 +11,7 @@ import { ValidationFailedError } from './common/errors/domain-error';
 import { fieldIssuesOf } from './common/errors/schema-issues';
 import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
 import { assignRequestId } from './common/logging/request-id';
 import type { Env } from './config/env.schema';
 
@@ -32,9 +32,9 @@ export function configureApp(app: INestApplication): string {
   // Every error, from every layer, as RFC 9457 problem details.
   app.useGlobalFilters(new ProblemDetailsFilter());
 
-  // Apply global interceptors for logging and response transformation
+  // The access log, then every success as `{ data }`, once.
   app.useGlobalInterceptors(new LoggingInterceptor());
-  app.useGlobalInterceptors(new TransformInterceptor());
+  app.useGlobalInterceptors(new EnvelopeInterceptor());
 
   // Security - Helmet for secure HTTP headers
   app.use(helmet());

@@ -198,6 +198,7 @@ describe('strict validation, one mechanism', () => {
   });
 
   it('a_query_is_coerced_explicitly', async () => {
+    const findAll = vi.spyOn(MedicalRecordRepository.prototype, 'findAll');
     const records = (query: Record<string, string>) =>
       booted.http.get('/api/v1/medical/records').set(member).query(query);
 
@@ -207,7 +208,12 @@ describe('strict validation, one mechanism', () => {
       isConfidential: 'false',
     });
     expect(valid.status).toBe(200);
-    expect(JSON.stringify(valid.body)).toContain('"page":2,"limit":5');
+    // Numbers and a boolean by the time the repository sees them.
+    expect(findAll).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ isConfidential: false }),
+      { skip: 5, take: 5 },
+    );
 
     expect((await records({ isConfidential: 'yes' })).body).toMatchObject({
       code: 'VALIDATION_FAILED',
