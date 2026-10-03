@@ -14,8 +14,10 @@ export function setupSwagger(
   if (nodeEnv !== 'development') return false;
 
   const config = new DocumentBuilder()
-    .setTitle('Football Management Platform API')
-    .setDescription('API documentation for the Football Management Platform')
+    .setTitle('Sadara API')
+    .setDescription(
+      'Player management for sports agencies, in Arabic and English',
+    )
     .setVersion('1.0')
     .addBearerAuth(
       {

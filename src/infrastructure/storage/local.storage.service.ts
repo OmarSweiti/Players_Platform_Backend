@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { StorageService, UploadResult } from './storage.service';
+import {
+  StorageService,
+  type UploadedFile,
+  UploadResult,
+} from './storage.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -15,10 +19,7 @@ export class LocalStorageService implements StorageService {
     }
   }
 
-  async upload(
-    file: Express.Multer.File,
-    folder: string,
-  ): Promise<UploadResult> {
+  async upload(file: UploadedFile, folder: string): Promise<UploadResult> {
     const key = `${folder}/${uuidv4()}-${file.originalname}`;
     const filePath = path.join(this.uploadPath, key);
 
