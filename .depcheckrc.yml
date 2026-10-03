@@ -1,0 +1,6 @@
+# `npx depcheck` (0.2.7): every package the code imports is declared, and
+# every declared package is imported. Exceptions, each one used where
+# depcheck cannot see:
+ignores:
+  # nest-cli.json names it as the generator collection of `nest generate`
+  - '@nestjs/schematics'
