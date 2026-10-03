@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { databaseConnectionOf } from './database-url';
 
 describe('databaseConnectionOf', () => {
-  it('moves the schema from the URL to the adapter', () => {
+  it('moves the schema from the URL to the adapter and the search_path', () => {
     expect(
       databaseConnectionOf(
         'postgresql://app:pw@127.0.0.1:5432/sadara_test?schema=sadara_test_ab12cd34ef56',
@@ -10,6 +10,7 @@ describe('databaseConnectionOf', () => {
     ).toEqual({
       connectionString: 'postgresql://app:pw@127.0.0.1:5432/sadara_test',
       schema: 'sadara_test_ab12cd34ef56',
+      options: '-c search_path=sadara_test_ab12cd34ef56',
     });
   });
 
@@ -22,6 +23,7 @@ describe('databaseConnectionOf', () => {
       connectionString:
         'postgresql://app:pw@127.0.0.1:5432/sadara?sslmode=disable',
       schema: undefined,
+      options: undefined,
     });
   });
 

@@ -76,8 +76,8 @@ export function prismaFor(url: string): {
   prisma: PrismaClient;
   close(): Promise<void>;
 } {
-  const { connectionString, schema } = databaseConnectionOf(url);
-  const pool = new Pool({ connectionString, max: 2 });
+  const { connectionString, schema, options } = databaseConnectionOf(url);
+  const pool = new Pool({ connectionString, options, max: 2 });
   const prisma = new PrismaClient({
     adapter: new PrismaPg(pool, schema ? { schema } : undefined),
   });

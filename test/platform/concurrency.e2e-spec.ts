@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Body, Controller, Get, Param, Patch, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { Prisma } from '@prisma/client';
-import { afterAll, beforeAll, describe, expect, it, inject } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { IfMatch } from '../../src/common/concurrency/if-match.decorator';
 import {
@@ -18,11 +17,9 @@ import { bootApp, type BootedApp } from '../harness/app';
 import { runPrisma } from '../harness/fixtures';
 
 // The fixture aggregate: a table of this run's schema only, editable the way
-// every domain aggregate is — `revision` from 1, a compare-and-update. Raw SQL
-// names the schema itself: Prisma qualifies only its own model queries.
-const FIXTURES = `"${inject('databaseSchema')}".concurrency_fixture`;
+// every domain aggregate is — `revision` from 1, a compare-and-update.
 const FIXTURE_TABLE = `
-  CREATE TABLE ${FIXTURES} (
+  CREATE TABLE concurrency_fixture (
     id uuid PRIMARY KEY,
     tenant_id uuid NOT NULL,
     name text NOT NULL,
@@ -67,7 +64,7 @@ class FixtureController {
   private async load(id: string): Promise<FixtureRow> {
     const [row] = await this.prisma.$queryRaw<FixtureRow[]>`
       SELECT id, tenant_id AS "tenantId", name, revision
-      FROM ${Prisma.raw(FIXTURES)} WHERE id = ${id}::uuid`;
+      FROM concurrency_fixture WHERE id = ${id}::uuid`;
     if (!row) throw new NotFoundError('No such fixture');
     return row;
   }
@@ -99,7 +96,7 @@ class FixtureController {
     });
     await barrier?.arrive();
     const changed = await this.prisma.$executeRaw`
-      UPDATE ${Prisma.raw(FIXTURES)}
+      UPDATE concurrency_fixture
       SET name = ${name}, revision = revision + 1
       WHERE id = ${id}::uuid AND tenant_id = ${current.tenantId}::uuid
         AND revision = ${revision}`;
@@ -123,7 +120,7 @@ describe('optimistic concurrency', () => {
   async function newFixture(): Promise<{ path: string; etag: string }> {
     const id = randomUUID();
     await runPrisma().$executeRaw`
-      INSERT INTO ${Prisma.raw(FIXTURES)} (id, tenant_id, name)
+      INSERT INTO concurrency_fixture (id, tenant_id, name)
       VALUES (${id}::uuid, ${randomUUID()}::uuid, 'Original')`;
     const path = `/api/v1/probe/fixtures/${id}`;
     const read = await booted.http.get(path);
