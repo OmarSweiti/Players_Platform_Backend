@@ -100,7 +100,8 @@ describe('NestJS 12', () => {
       .query({ page: '0' });
     expect(invalid.status).toBe(400);
     expect(invalid.body).toMatchObject({
-      message: [expect.stringMatching(/^page: /)],
+      code: 'VALIDATION_FAILED',
+      fieldErrors: [{ field: '/page', code: 'TOO_SMALL' }],
     });
 
     // A strict schema refuses a property it does not name.

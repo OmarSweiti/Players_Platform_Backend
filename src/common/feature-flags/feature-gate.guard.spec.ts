@@ -18,12 +18,6 @@ const httpContext = (controller: object): ExecutionContext =>
   ({
     getType: () => 'http',
     getClass: () => controller,
-    switchToHttp: () => ({
-      getRequest: () => ({
-        method: 'GET',
-        originalUrl: '/api/medical/records?token=never-echoed',
-      }),
-    }),
   }) as unknown as ExecutionContext;
 
 describe('FeatureGateGuard', () => {
@@ -38,8 +32,9 @@ describe('FeatureGateGuard', () => {
   it('answers what an unknown route answers when its module is disabled', () => {
     const attempt = () =>
       gate({}).canActivate(httpContext(MedicalLikeController));
+    // An unknown route raises NotFoundException too; the problem filter
+    // answers both alike (test/platform/feature-flags.e2e-spec.ts).
     expect(attempt).toThrow(NotFoundException);
-    expect(attempt).toThrow('Cannot GET /api/medical/records');
   });
 
   it('never gates a route outside a feature', () => {

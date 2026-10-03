@@ -3,6 +3,11 @@ import {
   MedicalRecordRepository,
   UpdateMedicalRecordInput,
 } from '../../infrastructure/repositories/medical-record.repository';
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationFailedError,
+} from '../../../../common/errors/domain-error';
 
 @Injectable()
 export class UpdateMedicalRecordUseCase {
@@ -18,7 +23,7 @@ export class UpdateMedicalRecordUseCase {
     const record = await this.medicalRecordRepo.findById(id, tenantId);
 
     if (!record) {
-      throw new Error('Medical record not found');
+      throw new NotFoundError('Medical record not found');
     }
 
     // Only medical staff can update confidential records
@@ -26,7 +31,7 @@ export class UpdateMedicalRecordUseCase {
       record.isConfidential &&
       !['MEDICAL', 'PHYSIOTHERAPIST', 'SUPER_ADMIN'].includes(userRole)
     ) {
-      throw new Error(
+      throw new ForbiddenError(
         'Insufficient permissions to update confidential medical records',
       );
     }
@@ -37,7 +42,10 @@ export class UpdateMedicalRecordUseCase {
       input.injuryDate &&
       input.recoveryDate < input.injuryDate
     ) {
-      throw new Error('Recovery date cannot be before injury date');
+      throw new ValidationFailedError(
+        'Recovery date cannot be before injury date',
+        [{ field: '/recoveryDate', code: 'OUT_OF_RANGE' }],
+      );
     }
 
     return await this.medicalRecordRepo.update(id, tenantId, input);

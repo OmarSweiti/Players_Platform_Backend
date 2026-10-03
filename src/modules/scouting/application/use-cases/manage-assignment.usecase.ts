@@ -4,6 +4,11 @@ import {
   CreateScoutingAssignmentInput,
   UpdateScoutingAssignmentInput,
 } from '../../infrastructure/repositories/assignment.repository';
+import {
+  ForbiddenError,
+  NotFoundError,
+  ValidationFailedError,
+} from '../../../../common/errors/domain-error';
 
 @Injectable()
 export class ManageAssignmentUseCase {
@@ -15,21 +20,30 @@ export class ManageAssignmentUseCase {
   async createAssignment(input: CreateScoutingAssignmentInput) {
     // Validate age range
     if (input.minAge && input.maxAge && input.minAge > input.maxAge) {
-      throw new Error('Minimum age cannot be greater than maximum age');
+      throw new ValidationFailedError(
+        'Minimum age cannot be greater than maximum age',
+        [{ field: '/minAge', code: 'OUT_OF_RANGE' }],
+      );
     }
 
     // Validate age bounds
     if (input.minAge && (input.minAge < 15 || input.minAge > 40)) {
-      throw new Error('Minimum age must be between 15 and 40');
+      throw new ValidationFailedError('Minimum age must be between 15 and 40', [
+        { field: '/minAge', code: 'OUT_OF_RANGE' },
+      ]);
     }
 
     if (input.maxAge && (input.maxAge < 15 || input.maxAge > 40)) {
-      throw new Error('Maximum age must be between 15 and 40');
+      throw new ValidationFailedError('Maximum age must be between 15 and 40', [
+        { field: '/maxAge', code: 'OUT_OF_RANGE' },
+      ]);
     }
 
     // Validate due date
     if (input.dueDate && input.dueDate < new Date()) {
-      throw new Error('Due date cannot be in the past');
+      throw new ValidationFailedError('Due date cannot be in the past', [
+        { field: '/dueDate', code: 'OUT_OF_RANGE' },
+      ]);
     }
 
     return await this.assignmentRepo.create(input);
@@ -47,17 +61,22 @@ export class ManageAssignmentUseCase {
     const assignment = await this.assignmentRepo.findById(id, tenantId);
 
     if (!assignment) {
-      throw new Error('Assignment not found');
+      throw new NotFoundError('Assignment not found');
     }
 
     // Only the creator (sporting director) can update
     if (assignment.assignedById !== directorId) {
-      throw new Error('Only the assigning director can update this assignment');
+      throw new ForbiddenError(
+        'Only the assigning director can update this assignment',
+      );
     }
 
     // Validate age range if updating
     if (input.minAge && input.maxAge && input.minAge > input.maxAge) {
-      throw new Error('Minimum age cannot be greater than maximum age');
+      throw new ValidationFailedError(
+        'Minimum age cannot be greater than maximum age',
+        [{ field: '/minAge', code: 'OUT_OF_RANGE' }],
+      );
     }
 
     return await this.assignmentRepo.update(id, tenantId, input);
@@ -76,25 +95,28 @@ export class ManageAssignmentUseCase {
     const assignment = await this.assignmentRepo.findById(id, tenantId);
 
     if (!assignment) {
-      throw new Error('Assignment not found');
+      throw new NotFoundError('Assignment not found');
     }
 
     // Validate status transition
     const validStatuses = ['OPEN', 'IN_PROGRESS', 'COMPLETED'];
     if (!validStatuses.includes(status)) {
-      throw new Error(
+      throw new ValidationFailedError(
         'Invalid status. Must be OPEN, IN_PROGRESS, or COMPLETED',
+        [{ field: '/status', code: 'INVALID_VALUE' }],
       );
     }
 
     // Scout can only update their own assignments to IN_PROGRESS or COMPLETED
     if (userRole === 'SCOUT' && assignment.assignedToId !== userId) {
-      throw new Error('You can only update your own assignments');
+      throw new ForbiddenError('You can only update your own assignments');
     }
 
     // Sporting Director can update any assignment
     if (userRole !== 'SPORTING_DIRECTOR' && userRole !== 'SCOUT') {
-      throw new Error('Insufficient permissions to update assignment status');
+      throw new ForbiddenError(
+        'Insufficient permissions to update assignment status',
+      );
     }
 
     return await this.assignmentRepo.updateStatus(id, tenantId, status);
@@ -144,12 +166,14 @@ export class ManageAssignmentUseCase {
     const assignment = await this.assignmentRepo.findById(id, tenantId);
 
     if (!assignment) {
-      throw new Error('Assignment not found');
+      throw new NotFoundError('Assignment not found');
     }
 
     // Only the creator can delete
     if (assignment.assignedById !== directorId) {
-      throw new Error('Only the assigning director can delete this assignment');
+      throw new ForbiddenError(
+        'Only the assigning director can delete this assignment',
+      );
     }
 
     return await this.assignmentRepo.delete(id, tenantId);

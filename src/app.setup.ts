@@ -7,17 +7,27 @@ import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
+import { ValidationFailedError } from './common/errors/domain-error';
+import { fieldIssuesOf } from './common/errors/schema-issues';
+import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
+import { assignRequestId } from './common/logging/request-id';
 import type { Env } from './config/env.schema';
 
 /**
- * The HTTP pipeline: middleware, interceptors, CORS, the route prefix and
- * validation. `main.ts` and the API test harness both call it, so the tests
- * exercise the pipeline that production runs. Returns the route prefix.
+ * The HTTP pipeline: middleware, interceptors, CORS, the route prefix,
+ * validation and errors. `main.ts` and the API test harness both call it, so
+ * the tests exercise the pipeline that production runs. Returns the prefix.
  */
 export function configureApp(app: INestApplication): string {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+
+  // First, so that every response carries its request id (X-Request-Id).
+  app.use(assignRequestId);
+
+  // Every error, from every layer, as RFC 9457 problem details.
+  app.useGlobalFilters(new ProblemDetailsFilter());
 
   // Apply global interceptors for logging and response transformation
   app.useGlobalInterceptors(new LoggingInterceptor());
@@ -50,7 +60,13 @@ export function configureApp(app: INestApplication): string {
   // every other parameter alone. 0.3.2 moves the routes onto schemas and
   // retires the class-validator pipes below, leaving this one mechanism.
   app.useGlobalPipes(
-    new StandardSchemaValidationPipe(),
+    new StandardSchemaValidationPipe({
+      exceptionFactory: (issues) =>
+        new ValidationFailedError(
+          'The input does not match its schema',
+          fieldIssuesOf(issues),
+        ),
+    }),
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,

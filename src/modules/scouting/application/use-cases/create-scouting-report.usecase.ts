@@ -4,6 +4,7 @@ import {
   CreateScoutingReportInput,
 } from '../../infrastructure/repositories/scouting-report.repository';
 import { WatchlistRepository } from '../../infrastructure/repositories/watchlist.repository';
+import { ValidationFailedError } from '../../../../common/errors/domain-error';
 
 @Injectable()
 export class CreateScoutingReportUseCase {
@@ -18,25 +19,36 @@ export class CreateScoutingReportUseCase {
       input.technicalScore &&
       (input.technicalScore < 1 || input.technicalScore > 10)
     ) {
-      throw new Error('Technical score must be between 1 and 10');
+      throw new ValidationFailedError(
+        'Technical score must be between 1 and 10',
+        [{ field: '/technicalScore', code: 'OUT_OF_RANGE' }],
+      );
     }
     if (
       input.physicalScore &&
       (input.physicalScore < 1 || input.physicalScore > 10)
     ) {
-      throw new Error('Physical score must be between 1 and 10');
+      throw new ValidationFailedError(
+        'Physical score must be between 1 and 10',
+        [{ field: '/physicalScore', code: 'OUT_OF_RANGE' }],
+      );
     }
     if (
       input.tacticalScore &&
       (input.tacticalScore < 1 || input.tacticalScore > 10)
     ) {
-      throw new Error('Tactical score must be between 1 and 10');
+      throw new ValidationFailedError(
+        'Tactical score must be between 1 and 10',
+        [{ field: '/tacticalScore', code: 'OUT_OF_RANGE' }],
+      );
     }
     if (
       input.mentalScore &&
       (input.mentalScore < 1 || input.mentalScore > 10)
     ) {
-      throw new Error('Mental score must be between 1 and 10');
+      throw new ValidationFailedError('Mental score must be between 1 and 10', [
+        { field: '/mentalScore', code: 'OUT_OF_RANGE' },
+      ]);
     }
 
     // Calculate overall rating if all scores provided
