@@ -87,6 +87,12 @@ jobs:
       - name: Type-check everything, tests included
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: npx --no-install tsc --noEmit -p tsconfig.json
+      # Independent of the linter: presentation → application → domain, adapters
+      # wired only by composition roots, modules meeting through their
+      # application services (.dependency-cruiser.cjs).
+      - name: Module boundaries — no new violation, no stale baseline entry
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: node scripts/check-boundaries.mjs
       - name: Unit tests
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: npx --no-install vitest run --project unit

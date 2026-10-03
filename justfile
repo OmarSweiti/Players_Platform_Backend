@@ -59,6 +59,14 @@ prisma:
 build:
     npm run build
 
+# Module boundaries (dependency-cruiser): a new violation fails, and so does a recorded one that is fixed
+boundaries:
+    node scripts/check-boundaries.mjs
+
+# After fixing recorded boundary violations: drop them from the baseline
+boundaries-prune:
+    node scripts/check-boundaries.mjs --prune
+
 # Type-check everything the build leaves out too: tests, the harness, the tool configs
 # (SWC strips types when Vitest runs them, so this is the only place a test is type-checked)
 typecheck:
@@ -87,7 +95,7 @@ test-e2e *$args:
     npx --no-install vitest run --project e2e "$@"
 
 # CI's required `test` check, except the migration replay (that is `just migrations`)
-check: prisma lint build typecheck test
+check: prisma lint build typecheck boundaries test
 
 # CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database)
 migrations:
