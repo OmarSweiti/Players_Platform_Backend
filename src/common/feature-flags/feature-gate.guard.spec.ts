@@ -19,7 +19,10 @@ const httpContext = (controller: object): ExecutionContext =>
     getType: () => 'http',
     getClass: () => controller,
     switchToHttp: () => ({
-      getRequest: () => ({ method: 'GET', path: '/api/medical/records' }),
+      getRequest: () => ({
+        method: 'GET',
+        originalUrl: '/api/medical/records?token=never-echoed',
+      }),
     }),
   }) as unknown as ExecutionContext;
 

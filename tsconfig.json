@@ -13,13 +13,19 @@
     "target": "ES2023",
     "sourceMap": true,
     "outDir": "./dist",
-    "baseUrl": "./",
+    // The compilation root, so the output layout does not depend on which
+    // files the build includes (dist/src/main.js today; 0.2.6 moves it).
+    "rootDir": "./",
+    // Only Node's global types: no other @types package leaks globals in.
+    "types": ["node"],
+    // Strict, as TypeScript 6 is by default: decided, not inherited, and with
+    // no exception. The explicit `any`s of defect B-9 (scouting, medical) are
+    // ESLint's to refuse; eslint-suppressions.json holds them until those
+    // modules are rebuilt.
+    "strict": true,
     "incremental": true,
     "skipLibCheck": true,
-    "strictNullChecks": true,
     "forceConsistentCasingInFileNames": true,
-    "noImplicitAny": false,
-    "strictBindCallApply": false,
     "noFallthroughCasesInSwitch": false
   }
 }

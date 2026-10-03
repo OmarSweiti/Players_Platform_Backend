@@ -8,10 +8,10 @@ import {
 
 export class CreateMedicalRecordDto {
   @IsUUID()
-  playerId: string;
+  playerId!: string;
 
   @IsString()
-  injuryType: string;
+  injuryType!: string;
 
   @IsString()
   @IsOptional()

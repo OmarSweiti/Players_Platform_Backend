@@ -1,6 +1,6 @@
 # Sadara — backend
 
-The API, worker and realtime processes of the Sadara player-management platform: NestJS 11, Prisma 7,
+The API, worker and realtime processes of the Sadara player-management platform: NestJS 12, Prisma 7,
 PostgreSQL 18, S3-compatible object storage and Valkey. Part of
 [Players_Platform](https://github.com/OmarSweiti/Players_Platform), which holds the plan, the local stack
 and the progress record — **start there**.

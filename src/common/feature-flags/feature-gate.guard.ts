@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import type { Env } from '../../config/env.schema';
+import { requestPathOf } from '../logging/route-template';
 
 /** An unfinished module: off in every environment unless its flag is set. */
 export type Feature = 'medical' | 'scouting';
@@ -59,6 +60,8 @@ export class FeatureGateGuard implements CanActivate {
     if (this.config.get(FLAG_OF[feature], { infer: true })) return true;
 
     const request = context.switchToHttp().getRequest<Request>();
-    throw new NotFoundException(`Cannot ${request.method} ${request.path}`);
+    throw new NotFoundException(
+      `Cannot ${request.method} ${requestPathOf(request)}`,
+    );
   }
 }

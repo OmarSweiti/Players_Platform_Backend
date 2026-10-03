@@ -11,14 +11,14 @@ import {
 
 export class CreateTreatmentSessionDto {
   @IsUUID()
-  playerId: string;
+  playerId!: string;
 
   @IsUUID()
   @IsOptional()
   medicalRecordId?: string;
 
   @IsDateString()
-  sessionDate: string;
+  sessionDate!: string;
 
   @IsNumber()
   @IsOptional()
@@ -31,7 +31,7 @@ export class CreateTreatmentSessionDto {
   status?: string;
 
   @IsString()
-  treatmentType: string;
+  treatmentType!: string;
 
   @IsString()
   @IsOptional()
