@@ -10,12 +10,13 @@ import type { Env } from '../../config/env.schema';
     EventEmitterModule.forRoot(),
     BullModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (config: ConfigService<Env, true>) => ({
-        connection: {
-          host: config.get('REDIS_HOST', { infer: true }),
-          port: config.get('REDIS_PORT', { infer: true }),
-        },
-      }),
+      useFactory: (config: ConfigService<Env, true>) => {
+        // Read first: inside the literal, BullMQ 6's connection union would
+        // infer `get`'s result as any.
+        const host = config.get('REDIS_HOST', { infer: true });
+        const port = config.get('REDIS_PORT', { infer: true });
+        return { connection: { host, port } };
+      },
       inject: [ConfigService],
     }),
     BullModule.registerQueue({ name: 'notifications' }, { name: 'audit-logs' }),

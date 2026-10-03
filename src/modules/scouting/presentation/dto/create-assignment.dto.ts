@@ -12,7 +12,7 @@ import { PlayerPosition } from '@prisma/client';
 
 export class CreateAssignmentDto {
   @IsUUID()
-  assignedToId: string;
+  assignedToId!: string;
 
   @IsString()
   @IsOptional()

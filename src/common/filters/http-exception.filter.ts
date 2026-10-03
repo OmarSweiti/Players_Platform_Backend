@@ -8,7 +8,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { describeError, stackFramesOf } from '../logging/describe-error';
-import { routeTemplateOf } from '../logging/route-template';
+import { requestPathOf, routeTemplateOf } from '../logging/route-template';
 
 export interface ErrorResponse {
   statusCode: number;
@@ -26,10 +26,11 @@ function withoutQuery(
   message: string | string[],
   request: Request,
 ): string | string[] {
+  const path = requestPathOf(request);
   const strip = (text: string) =>
-    request.originalUrl === request.path
+    request.originalUrl === path
       ? text
-      : text.split(request.originalUrl).join(request.path);
+      : text.split(request.originalUrl).join(path);
   return Array.isArray(message) ? message.map(strip) : strip(message);
 }
 
@@ -76,7 +77,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message: withoutQuery(message, request),
       error,
       timestamp: new Date().toISOString(),
-      path: request.path, // never request.url: the query can carry a token
+      path: requestPathOf(request), // never the URL: the query can carry a token
     };
 
     response.status(statusCode).json(errorResponse);

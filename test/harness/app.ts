@@ -1,6 +1,6 @@
 import type { Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import type { INestApplication, LoggerService } from '@nestjs/common';
+import type { INestApplication, LoggerService, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
@@ -19,9 +19,17 @@ export interface BootedApp {
  * environment). One app per test file; close it in `afterAll`.
  */
 export async function bootApp(
-  opts: { logger?: LoggerService; testSessions?: boolean } = {},
+  opts: {
+    logger?: LoggerService;
+    testSessions?: boolean;
+    /** Test-only routes, served through the same pipeline as the app's. */
+    controllers?: Type[];
+  } = {},
 ): Promise<BootedApp> {
-  const builder = Test.createTestingModule({ imports: [AppModule] });
+  const builder = Test.createTestingModule({
+    imports: [AppModule],
+    controllers: opts.controllers,
+  });
   // Nest's testing logger drops everything but errors; a test that inspects
   // the log passes its own (test/harness/log-capture.ts).
   if (opts.logger) builder.setLogger(opts.logger);
