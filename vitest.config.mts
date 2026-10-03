@@ -11,8 +11,6 @@ const compile = () => swc.vite({ module: { type: 'es6' } });
 // the run's own schema, set by test/harness/setup-env.ts.
 const testEnv = {
   NODE_ENV: 'test',
-  JWT_SECRET: 'test-only-signing-value-for-the-test-run',
-  JWT_REFRESH_SECRET: 'test-only-refresh-value-for-the-test-run',
   REDIS_HOST: '127.0.0.1',
   REDIS_PORT: '6379',
   CORS_ORIGIN: 'https://app.agency.test',

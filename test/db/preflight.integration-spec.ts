@@ -51,7 +51,6 @@ const PERSONAL = {
   injury: 'Anterior cruciate ligament tear',
   fileName: 'passport-scan-yousef.pdf',
   notification: 'Your contract expires in 30 days',
-  secret: 'JBSWY3DPEHPK3PXP',
   salary: '123456.78',
 };
 
@@ -82,7 +81,6 @@ async function seedCounterExamples(
       data: {
         tenantId,
         email,
-        passwordHash: 'not-a-password-hash',
         role: 'COACH',
       },
     });
@@ -90,10 +88,6 @@ async function seedCounterExamples(
   const memberB = await member(b.id, PERSONAL.otherTenantEmail);
   const duplicate = await member(a.id, PERSONAL.duplicateEmail);
   const realAccount = await member(a.id, PERSONAL.realLookingEmail);
-  await prisma.user.update({
-    where: { id: realAccount.id },
-    data: { twoFASecret: PERSONAL.secret },
-  });
 
   const seasonB = await prisma.season.create({
     data: {
@@ -396,7 +390,10 @@ describe('the preflight report', () => {
     expect(
       unknown('money_currency_unknown', 'enrollments', 'paidAmount')?.count,
     ).toBe(1);
-    expect(unknown('secret_material', 'users', 'twoFASecret')?.count).toBe(1);
+    // The credential columns are gone (0.1.6): no secret material is left to find.
+    expect(report.unknowns.filter((u) => u.rule === 'secret_material')).toEqual(
+      [],
+    );
     expect(unknown('timestamp_provenance', 'users', 'createdAt')?.count).toBe(
       4,
     );

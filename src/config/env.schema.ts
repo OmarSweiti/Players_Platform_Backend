@@ -6,7 +6,6 @@ import { z } from 'zod';
 // anyone could guess. This schema is where later settings — identity,
 // sessions, storage — join. Every variable is described in .env.example.
 
-const secret = z.string().min(32);
 const port = z.coerce.number().int().min(1).max(65535);
 // Exactly `true` or `false`: a typo refuses to boot rather than guess.
 const flag = z.enum(['true', 'false']).transform((value) => value === 'true');
@@ -19,9 +18,6 @@ export const Env = z.object({
     .regex(/^[a-z0-9-]+$/)
     .default('api'),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
-  JWT_SECRET: secret,
-  JWT_EXPIRES_IN: z.string().min(1).default('15m'),
-  JWT_REFRESH_SECRET: secret,
   REDIS_HOST: z.string().min(1).default('localhost'),
   REDIS_PORT: port.default(6379),
   // The web app's origin: CORS allows it, and links in emails point to it.

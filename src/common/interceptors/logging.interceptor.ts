@@ -26,7 +26,7 @@ export class LoggingInterceptor implements NestInterceptor {
 
     const method = request.method;
     const route = routeTemplateOf(request);
-    const tenantId = request.tenantId ?? 'N/A'; // TenantGuard sets it from the session
+    const tenantId = request.tenantId ?? 'N/A'; // only ever from the session (0.5.6)
 
     const now = Date.now();
     const requestId = this.generateRequestId();

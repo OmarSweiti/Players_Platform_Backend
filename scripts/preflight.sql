@@ -158,19 +158,21 @@ SELECT 'enrollments' AS table_name, 'paidAmount' AS column_name, count(*) AS cou
 FROM enrollments WHERE "paidAmount" IS NOT NULL
 HAVING count(*) > 0;
 
--- unknowns: secret_material
--- Raw tokens and second-factor secrets the local credential system stored;
--- 0.1.6 drops their columns.
-SELECT 'users' AS table_name, c.column_name, c.count,
-       'users.' || c.column_name || ' holds secret material in plain text' AS reason
-FROM (
-  SELECT 'passwordResetToken' AS column_name, count(*) FILTER (WHERE "passwordResetToken" IS NOT NULL) AS count FROM users
-  UNION ALL
-  SELECT 'emailVerificationToken', count(*) FILTER (WHERE "emailVerificationToken" IS NOT NULL) FROM users
-  UNION ALL
-  SELECT 'twoFASecret', count(*) FILTER (WHERE "twoFASecret" IS NOT NULL) FROM users
-) c
-WHERE c.count > 0;
+-- generate unknowns: secret_material
+-- Raw tokens and second-factor secrets the local credential system stored,
+-- wherever those columns still exist (0.1.6 drops them).
+SELECT format(
+  'SELECT %L AS table_name, %L AS column_name, count(%I) AS count, %L AS reason '
+  'FROM %I HAVING count(%I) > 0',
+  c.table_name, c.column_name, c.column_name,
+  format('%s.%s holds secret material in plain text', c.table_name, c.column_name),
+  c.table_name, c.column_name
+) AS sql
+FROM information_schema.columns c
+WHERE c.table_schema = current_schema()
+  AND c.table_name = 'users'
+  AND c.column_name IN ('passwordResetToken', 'emailVerificationToken', 'twoFASecret')
+ORDER BY c.column_name;
 
 -- generate unknowns: timestamp_provenance
 -- A timestamp without time zone does not say which zone it was written in:

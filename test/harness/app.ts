@@ -5,6 +5,8 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { configureApp } from '../../src/app.setup';
+import { SessionGuard } from '../../src/common/guards/session.guard';
+import { TestSessionGuard } from './session';
 
 export interface BootedApp {
   app: INestApplication;
@@ -17,12 +19,16 @@ export interface BootedApp {
  * environment). One app per test file; close it in `afterAll`.
  */
 export async function bootApp(
-  opts: { logger?: LoggerService } = {},
+  opts: { logger?: LoggerService; testSessions?: boolean } = {},
 ): Promise<BootedApp> {
   const builder = Test.createTestingModule({ imports: [AppModule] });
   // Nest's testing logger drops everything but errors; a test that inspects
   // the log passes its own (test/harness/log-capture.ts).
   if (opts.logger) builder.setLogger(opts.logger);
+  // Signed-in requests, until real sessions exist (test/harness/session.ts).
+  if (opts.testSessions) {
+    builder.overrideProvider(SessionGuard).useClass(TestSessionGuard);
+  }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
