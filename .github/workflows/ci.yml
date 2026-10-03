@@ -47,6 +47,17 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+      # The queue store, for the API tests, which boot the whole application.
+      # The local stack's image and digest (umbrella infra/compose.yaml); move
+      # them together.
+      valkey:
+        image: valkey/valkey:9.1.2-alpine@sha256:48332870af354a799964c0012ae1194a0bf2bf894eb508f945810596dc2d8d11 # 9.1.2
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "valkey-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci # prisma.config.ts reads it
     steps:
@@ -79,6 +90,19 @@ jobs:
       - name: Unit tests
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
         run: npx --no-install vitest run --project unit
+      # Each run migrates a schema of its own, sadara_test_<random>, in the
+      # service database, and drops it afterwards: the migration replay below
+      # keeps the public schema to itself.
+      - name: Integration tests on PostgreSQL 18
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
+        env:
+          DATABASE_URL_TEST: postgresql://ci:ci@localhost:5432/ci
+        run: npx --no-install vitest run --project integration
+      - name: API tests through HTTP, on PostgreSQL 18 and Valkey
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
+        env:
+          DATABASE_URL_TEST: postgresql://ci:ci@localhost:5432/ci
+        run: npx --no-install vitest run --project e2e
       # Forward-only history is only worth something if it replays: every
       # migration applies to an empty database, and the database it produces is
       # exactly schema.prisma — a schema edit without its migration is red here.
