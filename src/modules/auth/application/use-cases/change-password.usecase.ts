@@ -40,7 +40,7 @@ export class ChangePasswordUseCase {
 
     if (!isValid) {
       this.logger.warn(
-        `Failed password change attempt for user: ${user.email} (incorrect current password)`,
+        `Failed password change attempt for user ${user.id} (incorrect current password)`,
       );
       throw new UnauthorizedException('Current password is incorrect');
     }
@@ -55,7 +55,7 @@ export class ChangePasswordUseCase {
     );
     if (isSamePassword) {
       this.logger.warn(
-        `Password change failed for user: ${user.email} (new password same as current)`,
+        `Password change failed for user ${user.id} (new password same as current)`,
       );
       throw new BadRequestException(
         'New password must be different from current password',
@@ -69,7 +69,7 @@ export class ChangePasswordUseCase {
       passwordChangedAt: new Date(),
     });
 
-    this.logger.log(`Password changed successfully for user: ${user.email}`);
+    this.logger.log(`Password changed successfully for user ${user.id}`);
 
     return { message: 'Password changed successfully' };
   }

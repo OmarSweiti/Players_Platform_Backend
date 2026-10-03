@@ -14,13 +14,11 @@ export class MailService {
   /**
    * Send email (placeholder - integrate with actual email provider)
    */
-  sendEmail(to: string, subject: string, html: string): Promise<void> {
-    this.logger.log(`Sending email to ${to} with subject: ${subject}`);
-
-    // TODO: Integrate with actual email service (SendGrid, AWS SES, etc.)
-    // For now, just log the email
-    this.logger.debug(`From: ${this.mailFrom}, To: ${to}, Subject: ${subject}`);
-    this.logger.debug(`HTML: ${html}`);
+  sendEmail(_to: string, subject: string, _html: string): Promise<void> {
+    // No provider is integrated yet, so nothing is delivered — and the log
+    // says only that: never the address, never the body, whose links carry
+    // single-use tokens.
+    this.logger.log(`Not delivered (no mail provider configured): ${subject}`);
     return Promise.resolve();
   }
 

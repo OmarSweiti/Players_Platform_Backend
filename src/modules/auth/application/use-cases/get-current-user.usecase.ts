@@ -25,7 +25,7 @@ export class GetCurrentUserUseCase {
       throw new UnauthorizedException('User not found');
     }
 
-    this.logger.debug(`Current user profile retrieved: ${user.email}`);
+    this.logger.debug(`Current user profile retrieved: ${user.id}`);
 
     return {
       id: user.id,

@@ -9,6 +9,10 @@ import { UserRepository } from '../../infrastructure/repositories/user.repositor
 import { PasswordService } from '../services/password.service';
 import { MailService } from '../../../../infrastructure/mail/mail.service';
 import { RegisterDto } from '../../presentation/dto/register.dto';
+import {
+  describeError,
+  stackFramesOf,
+} from '../../../../common/logging/describe-error';
 
 @Injectable()
 export class RegisterUseCase {
@@ -32,7 +36,7 @@ export class RegisterUseCase {
 
       if (existingUser) {
         this.logger.warn(
-          `Registration attempt with existing email: ${dto.email}`,
+          'Registration refused: the address is already registered',
         );
         throw new ConflictException('User with this email already exists');
       }
@@ -69,7 +73,7 @@ export class RegisterUseCase {
 
       const duration = Date.now() - startTime;
       this.logger.log(
-        `New user registered: ${user.email} (tenant: ${tenantId}, role: ${user.role}, duration: ${duration}ms)`,
+        `New user registered: ${user.id} (tenant: ${tenantId}, role: ${user.role}, duration: ${duration}ms)`,
       );
 
       return {
@@ -82,8 +86,8 @@ export class RegisterUseCase {
       };
     } catch (error) {
       this.logger.error(
-        `Registration failed for ${dto.email}: ${error.message}`,
-        error.stack,
+        `Registration failed: ${describeError(error)}`,
+        stackFramesOf(error),
       );
       throw error;
     }

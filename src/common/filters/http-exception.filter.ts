@@ -4,8 +4,11 @@ import {
   ArgumentsHost,
   HttpException,
   HttpStatus,
+  Logger,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { describeError, stackFramesOf } from '../logging/describe-error';
+import { routeTemplateOf } from '../logging/route-template';
 
 export interface ErrorResponse {
   statusCode: number;
@@ -17,6 +20,8 @@ export interface ErrorResponse {
 
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(HttpExceptionFilter.name);
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -43,8 +48,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message = 'Internal server error';
       error = 'Internal Server Error';
 
-      // Log the actual error for debugging
-      console.error('Unhandled exception:', exception);
+      // The class and the frames, never the message: it can carry the
+      // values that caused the error (describe-error.ts).
+      this.logger.error(
+        `Unhandled ${describeError(exception)} on ${request.method} ${routeTemplateOf(request)}`,
+        stackFramesOf(exception),
+      );
     }
 
     const errorResponse: ErrorResponse = {
@@ -52,7 +61,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
       message,
       error,
       timestamp: new Date().toISOString(),
-      path: request.url,
+      path: request.path, // never request.url: the query can carry a token
     };
 
     response.status(statusCode).json(errorResponse);

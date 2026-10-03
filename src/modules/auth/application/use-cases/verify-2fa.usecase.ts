@@ -20,7 +20,7 @@ export class Verify2FAUseCase {
 
     if (user.is2FAEnabled) {
       this.logger.warn(
-        `2FA verification attempted but already enabled for user: ${user.email}`,
+        `2FA verification attempted but already enabled for user ${user.id}`,
       );
       throw new BadRequestException('2FA is already enabled');
     }
@@ -34,7 +34,7 @@ export class Verify2FAUseCase {
     });
 
     if (!verified) {
-      this.logger.warn(`Invalid 2FA code provided for user: ${user.email}`);
+      this.logger.warn(`Invalid 2FA code provided for user ${user.id}`);
       throw new BadRequestException('Invalid 2FA code');
     }
 
@@ -43,7 +43,7 @@ export class Verify2FAUseCase {
       is2FAEnabled: true,
     });
 
-    this.logger.log(`2FA enabled successfully for user: ${user.email}`);
+    this.logger.log(`2FA enabled successfully for user ${user.id}`);
 
     return {
       message: '2FA enabled successfully',

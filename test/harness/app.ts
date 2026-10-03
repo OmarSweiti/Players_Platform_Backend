@@ -1,4 +1,4 @@
-import type { INestApplication } from '@nestjs/common';
+import type { INestApplication, LoggerService } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { inject } from 'vitest';
@@ -15,11 +15,15 @@ export interface BootedApp {
  * `main.ts` — against this run's isolated schema. One app per test file; close
  * it in `afterAll`.
  */
-export async function bootApp(): Promise<BootedApp> {
+export async function bootApp(
+  opts: { logger?: LoggerService } = {},
+): Promise<BootedApp> {
   process.env.DATABASE_URL = inject('databaseUrl');
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-  }).compile();
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  // Nest's testing logger drops everything but errors; a test that inspects
+  // the log passes its own (test/harness/log-capture.ts).
+  if (opts.logger) builder.setLogger(opts.logger);
+  const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
   await app.init();

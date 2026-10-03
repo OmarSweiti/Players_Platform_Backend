@@ -10,6 +10,10 @@ import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
 import { AsyncLocalStorage } from 'async_hooks';
 import { databaseConnectionOf } from './database-url';
+import {
+  describeError,
+  stackFramesOf,
+} from '../../common/logging/describe-error';
 
 export interface TenantContext {
   tenantId: string;
@@ -47,16 +51,15 @@ export class PrismaService
     const adapter = new PrismaPg(pool, schema ? { schema } : undefined);
 
     // Initialize PrismaClient with the adapter - super() must be called first
+    // No `error` level: Prisma's error log prints the failing call and the
+    // values it was given. An error reaches its caller as an exception, and
+    // the exception filter logs that without its message.
     super({
       adapter,
       log: [
         {
           emit: 'event',
           level: 'query',
-        },
-        {
-          emit: 'stdout',
-          level: 'error',
         },
         {
           emit: 'stdout',
@@ -89,7 +92,10 @@ export class PrismaService
       // Tenant isolation should be handled at the application/service layer
       // using the runWithTenant method and explicit tenantId filtering
     } catch (error) {
-      this.logger.error('Failed to connect to database', error);
+      this.logger.error(
+        `Failed to connect to database: ${describeError(error)}`,
+        stackFramesOf(error),
+      );
       throw error;
     }
   }
@@ -100,7 +106,10 @@ export class PrismaService
       await this.pool.end();
       this.logger.log('Successfully disconnected from database');
     } catch (error) {
-      this.logger.error('Error during database disconnection', error);
+      this.logger.error(
+        `Error during database disconnection: ${describeError(error)}`,
+        stackFramesOf(error),
+      );
     }
   }
 
