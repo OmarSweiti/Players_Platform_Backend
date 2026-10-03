@@ -17,10 +17,10 @@ import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
 import { CreateTreatmentSessionDto } from './dto/create-treatment-session.dto';
 import { UpdateTreatmentSessionDto } from './dto/update-treatment-session.dto';
-import { CreateMedicalRecordUseCase } from '../application/use-cases/create-medical-record.use-case';
-import { UpdateMedicalRecordUseCase } from '../application/use-cases/update-medical-record.use-case';
-import { CreateTreatmentSessionUseCase } from '../application/use-cases/create-treatment-session.use-case';
-import { UpdateTreatmentSessionUseCase } from '../application/use-cases/update-treatment-session.use-case';
+import { CreateMedicalRecordUseCase } from '../application/use-cases/create-medical-record.usecase';
+import { UpdateMedicalRecordUseCase } from '../application/use-cases/update-medical-record.usecase';
+import { CreateTreatmentSessionUseCase } from '../application/use-cases/create-treatment-session.usecase';
+import { UpdateTreatmentSessionUseCase } from '../application/use-cases/update-treatment-session.usecase';
 import { MedicalRecordRepository } from '../infrastructure/repositories/medical-record.repository';
 import { TreatmentSessionRepository } from '../infrastructure/repositories/treatment-session.repository';
 
