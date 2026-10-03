@@ -24,6 +24,12 @@ import { QueryScoutingReportsDto } from './dto/query-scouting-reports.dto';
 import { AddToWatchlistDto } from './dto/add-to-watchlist.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
+import { ApproveScoutingReportDto } from './dto/update-scouting-report.dto';
+import {
+  AssignmentStatusDto,
+  AssignmentsQuery,
+} from './dto/update-assignment.dto';
+import { IdParams, PlayerIdParams } from '../../../common/validation/schemas';
 import { CreateScoutingReportUseCase } from '../application/use-cases/create-scouting-report.usecase';
 import { UpdateScoutingReportUseCase } from '../application/use-cases/update-scouting-report.usecase';
 import { SubmitScoutingReportUseCase } from '../application/use-cases/submit-scouting-report.usecase';
@@ -59,7 +65,7 @@ export class ScoutingController {
   })
   async createReport(
     @CurrentUser() user: any,
-    @Body() dto: CreateScoutingReportDto,
+    @Body({ schema: CreateScoutingReportDto }) dto: CreateScoutingReportDto,
   ) {
     const report = await this.createReportUseCase.execute({
       ...dto,
@@ -82,17 +88,16 @@ export class ScoutingController {
   })
   async getReports(
     @CurrentUser() user: any,
-    @Query() query: QueryScoutingReportsDto,
+    @Query({ schema: QueryScoutingReportsDto }) query: QueryScoutingReportsDto,
   ) {
-    const page = query.page || 1;
-    const limit = query.limit || 20;
+    const { page, limit } = query;
     const skip = (page - 1) * limit;
 
     const filters = {
-      status: query.status as any,
+      status: query.status,
       scoutId: query.scoutId,
       playerId: query.playerId,
-      recommendation: query.recommendation as any,
+      recommendation: query.recommendation,
       dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
     };
@@ -122,7 +127,10 @@ export class ScoutingController {
     status: HttpStatus.OK,
     description: 'Scouting report details',
   })
-  async getReport(@CurrentUser() user: any, @Param('id') id: string) {
+  async getReport(
+    @CurrentUser() user: any,
+    @Param({ schema: IdParams }) { id }: IdParams,
+  ) {
     const report = await this.scoutingReportRepo.findById(id, user.tenantId);
 
     if (!report) {
@@ -147,15 +155,15 @@ export class ScoutingController {
   })
   async updateReport(
     @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: UpdateScoutingReportDto,
+    @Param({ schema: IdParams }) { id }: IdParams,
+    @Body({ schema: UpdateScoutingReportDto }) dto: UpdateScoutingReportDto,
   ) {
     const report = await this.updateReportUseCase.execute(
       id,
       user.tenantId,
       {
         ...dto,
-        status: dto.status ? (dto.status as any) : undefined,
+        status: dto.status,
       },
       user.id,
     );
@@ -174,7 +182,10 @@ export class ScoutingController {
     status: HttpStatus.OK,
     description: 'Report submitted successfully',
   })
-  async submitReport(@CurrentUser() user: any, @Param('id') id: string) {
+  async submitReport(
+    @CurrentUser() user: any,
+    @Param({ schema: IdParams }) { id }: IdParams,
+  ) {
     const report = await this.submitReportUseCase.execute(
       id,
       user.tenantId,
@@ -197,13 +208,14 @@ export class ScoutingController {
   })
   async approveReport(
     @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body('recommendation') recommendation: string,
+    @Param({ schema: IdParams }) { id }: IdParams,
+    @Body({ schema: ApproveScoutingReportDto })
+    { recommendation }: ApproveScoutingReportDto,
   ) {
     const report = await this.approveReportUseCase.execute(
       id,
       user.tenantId,
-      recommendation as any,
+      recommendation,
     );
 
     return {
@@ -220,7 +232,10 @@ export class ScoutingController {
     status: HttpStatus.OK,
     description: 'Report rejected successfully',
   })
-  async rejectReport(@CurrentUser() user: any, @Param('id') id: string) {
+  async rejectReport(
+    @CurrentUser() user: any,
+    @Param({ schema: IdParams }) { id }: IdParams,
+  ) {
     const report = await this.rejectReportUseCase.execute(id, user.tenantId);
 
     return {
@@ -237,7 +252,10 @@ export class ScoutingController {
     status: HttpStatus.OK,
     description: 'Report deleted successfully',
   })
-  async deleteReport(@CurrentUser() user: any, @Param('id') id: string) {
+  async deleteReport(
+    @CurrentUser() user: any,
+    @Param({ schema: IdParams }) { id }: IdParams,
+  ) {
     await this.scoutingReportRepo.softDelete(id, user.tenantId);
 
     return {
@@ -273,7 +291,7 @@ export class ScoutingController {
   })
   async addToWatchlist(
     @CurrentUser() user: any,
-    @Body() dto: AddToWatchlistDto,
+    @Body({ schema: AddToWatchlistDto }) dto: AddToWatchlistDto,
   ) {
     const entry = await this.manageWatchlistUseCase.addToWatchlist(
       user.id,
@@ -318,7 +336,7 @@ export class ScoutingController {
   })
   async removeFromWatchlist(
     @CurrentUser() user: any,
-    @Param('playerId') playerId: string,
+    @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ) {
     await this.manageWatchlistUseCase.removeFromWatchlist(
       user.id,
@@ -338,7 +356,7 @@ export class ScoutingController {
   @ApiResponse({ status: HttpStatus.OK, description: 'Watchlist check result' })
   async checkWatchlist(
     @CurrentUser() user: any,
-    @Param('playerId') playerId: string,
+    @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ) {
     const isInWatchlist = await this.manageWatchlistUseCase.isInWatchlist(
       user.id,
@@ -363,7 +381,7 @@ export class ScoutingController {
   })
   async createAssignment(
     @CurrentUser() user: any,
-    @Body() dto: CreateAssignmentDto,
+    @Body({ schema: CreateAssignmentDto }) dto: CreateAssignmentDto,
   ) {
     const assignment = await this.manageAssignmentUseCase.createAssignment({
       ...dto,
@@ -385,7 +403,7 @@ export class ScoutingController {
   @ApiResponse({ status: HttpStatus.OK, description: 'List of assignments' })
   async getMyAssignments(
     @CurrentUser() user: any,
-    @Query('status') status?: string,
+    @Query({ schema: AssignmentsQuery }) { status }: AssignmentsQuery,
   ) {
     const assignments =
       await this.manageAssignmentUseCase.getAssignmentsByScout(
@@ -406,7 +424,7 @@ export class ScoutingController {
   @ApiResponse({ status: HttpStatus.OK, description: 'List of assignments' })
   async getDirectorAssignments(
     @CurrentUser() user: any,
-    @Query('status') status?: string,
+    @Query({ schema: AssignmentsQuery }) { status }: AssignmentsQuery,
   ) {
     const assignments =
       await this.manageAssignmentUseCase.getAssignmentsByDirector(
@@ -430,8 +448,8 @@ export class ScoutingController {
   })
   async updateAssignment(
     @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body() dto: UpdateAssignmentDto,
+    @Param({ schema: IdParams }) { id }: IdParams,
+    @Body({ schema: UpdateAssignmentDto }) dto: UpdateAssignmentDto,
   ) {
     const assignment = await this.manageAssignmentUseCase.updateAssignment(
       id,
@@ -460,8 +478,8 @@ export class ScoutingController {
   })
   async updateAssignmentStatus(
     @CurrentUser() user: any,
-    @Param('id') id: string,
-    @Body('status') status: string,
+    @Param({ schema: IdParams }) { id }: IdParams,
+    @Body({ schema: AssignmentStatusDto }) { status }: AssignmentStatusDto,
   ) {
     const assignment = await this.manageAssignmentUseCase.updateStatus(
       id,
@@ -485,7 +503,10 @@ export class ScoutingController {
     status: HttpStatus.OK,
     description: 'Assignment deleted successfully',
   })
-  async deleteAssignment(@CurrentUser() user: any, @Param('id') id: string) {
+  async deleteAssignment(
+    @CurrentUser() user: any,
+    @Param({ schema: IdParams }) { id }: IdParams,
+  ) {
     await this.manageAssignmentUseCase.deleteAssignment(
       id,
       user.tenantId,

@@ -1,33 +1,19 @@
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { z } from 'zod';
+import {
+  dayOrInstant,
+  id,
+  paging,
+} from '../../../../common/validation/schemas';
+import { Recommendation } from './create-scouting-report.dto';
+import { ScoutingReportStatus } from './update-scouting-report.dto';
 
-export class QueryScoutingReportsDto {
-  @IsEnum(['DRAFT', 'SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED'])
-  @IsOptional()
-  status?: string;
-
-  @IsUUID()
-  @IsOptional()
-  scoutId?: string;
-
-  @IsUUID()
-  @IsOptional()
-  playerId?: string;
-
-  @IsEnum(['STRONG_SIGN', 'SIGN', 'MONITOR', 'NOT_SUITABLE'])
-  @IsOptional()
-  recommendation?: string;
-
-  @IsString()
-  @IsOptional()
-  dateFrom?: string;
-
-  @IsString()
-  @IsOptional()
-  dateTo?: string;
-
-  @IsOptional()
-  page?: number = 1;
-
-  @IsOptional()
-  limit?: number = 20;
-}
+export const QueryScoutingReportsDto = z.strictObject({
+  ...paging,
+  status: ScoutingReportStatus.optional(),
+  scoutId: id.optional(),
+  playerId: id.optional(),
+  recommendation: Recommendation.optional(),
+  dateFrom: dayOrInstant.optional(),
+  dateTo: dayOrInstant.optional(),
+});
+export type QueryScoutingReportsDto = z.infer<typeof QueryScoutingReportsDto>;

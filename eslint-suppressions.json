@@ -38,13 +38,13 @@
   },
   "src/modules/medical/presentation/medical.controller.ts": {
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 21
+      "count": 18
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 30
+      "count": 8
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 41
+      "count": 22
     }
   },
   "src/modules/scouting/infrastructure/repositories/assignment.repository.ts": {
@@ -65,10 +65,10 @@
   },
   "src/modules/scouting/presentation/scouting.controller.ts": {
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 31
+      "count": 30
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 9
+      "count": 6
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 34

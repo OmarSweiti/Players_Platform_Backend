@@ -1,47 +1,16 @@
-import {
-  IsString,
-  IsOptional,
-  IsBoolean,
-  IsUUID,
-  IsDateString,
-} from 'class-validator';
+import { z } from 'zod';
+import { day, id, line, prose } from '../../../../common/validation/schemas';
 
-export class CreateMedicalRecordDto {
-  @IsUUID()
-  playerId!: string;
-
-  @IsString()
-  injuryType!: string;
-
-  @IsString()
-  @IsOptional()
-  bodyPart?: string;
-
-  @IsString()
-  @IsOptional()
-  severity?: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsString()
-  @IsOptional()
-  treatment?: string;
-
-  @IsDateString()
-  @IsOptional()
-  injuryDate?: string;
-
-  @IsDateString()
-  @IsOptional()
-  recoveryDate?: string;
-
-  @IsDateString()
-  @IsOptional()
-  returnToPlayDate?: string;
-
-  @IsBoolean()
-  @IsOptional()
-  isConfidential?: boolean;
-}
+export const CreateMedicalRecordDto = z.strictObject({
+  playerId: id,
+  injuryType: line(255),
+  bodyPart: line(100).optional(),
+  severity: line(50).optional(),
+  description: prose().optional(),
+  treatment: prose().optional(),
+  injuryDate: day.optional(),
+  recoveryDate: day.optional(),
+  returnToPlayDate: day.optional(),
+  isConfidential: z.boolean().optional(),
+});
+export type CreateMedicalRecordDto = z.infer<typeof CreateMedicalRecordDto>;

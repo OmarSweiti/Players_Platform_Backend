@@ -1,8 +1,4 @@
-import {
-  INestApplication,
-  StandardSchemaValidationPipe,
-  ValidationPipe,
-} from '@nestjs/common';
+import { INestApplication, StandardSchemaValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -54,11 +50,11 @@ export function configureApp(app: INestApplication): string {
   const apiPrefix = config.get('API_PREFIX', { infer: true });
   app.setGlobalPrefix(apiPrefix);
 
-  // Validation. A parameter that declares a Standard Schema — a Zod 4 schema
-  // in `@Body({ schema })`, `@Query({ schema })` or `@Param` (ADR-0024) — is
-  // validated against it and receives the schema's output; the pipe leaves
-  // every other parameter alone. 0.3.2 moves the routes onto schemas and
-  // retires the class-validator pipes below, leaving this one mechanism.
+  // Validation, the one mechanism (ADR-0024): every body, query and path
+  // parameter declares a Zod 4 schema — `@Body({ schema })`, `@Query({ schema
+  // })`, `@Param({ schema })`, built from src/common/validation/schemas.ts —
+  // and receives the schema's output. A failure is VALIDATION_FAILED, naming
+  // its fields.
   app.useGlobalPipes(
     new StandardSchemaValidationPipe({
       exceptionFactory: (issues) =>
@@ -66,13 +62,6 @@ export function configureApp(app: INestApplication): string {
           'The input does not match its schema',
           fieldIssuesOf(issues),
         ),
-    }),
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-      disableErrorMessages:
-        config.get('NODE_ENV', { infer: true }) === 'production',
     }),
   );
 

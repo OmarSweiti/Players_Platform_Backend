@@ -1,97 +1,35 @@
-import {
-  IsString,
-  IsOptional,
-  IsNumber,
-  IsUUID,
-  Min,
-  Max,
-  IsEnum,
-} from 'class-validator';
 import { PlayerPosition } from '@prisma/client';
+import { z } from 'zod';
+import { id, line, prose } from '../../../../common/validation/schemas';
 
-export class CreateScoutingReportDto {
-  @IsUUID()
-  playerId?: string;
+export const Recommendation = z.enum([
+  'STRONG_SIGN',
+  'SIGN',
+  'MONITOR',
+  'NOT_SUITABLE',
+]);
 
-  @IsString()
-  @IsOptional()
-  prospectName?: string;
+/** A score from 1 to 10, to one decimal place. */
+const score = z.number().min(1).max(10).multipleOf(0.1);
 
-  @IsNumber()
-  @IsOptional()
-  @Min(15)
-  @Max(40)
-  prospectAge?: number;
-
-  @IsString()
-  @IsOptional()
-  prospectClub?: string;
-
-  @IsEnum(PlayerPosition)
-  @IsOptional()
-  prospectPosition?: PlayerPosition;
-
-  @IsString()
-  @IsOptional()
-  prospectNationality?: string;
-
-  @IsEnum(['STRONG_SIGN', 'SIGN', 'MONITOR', 'NOT_SUITABLE'])
-  @IsOptional()
-  recommendation?: string;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @IsOptional()
-  @Min(1)
-  @Max(10)
-  technicalScore?: number;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @IsOptional()
-  @Min(1)
-  @Max(10)
-  physicalScore?: number;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @IsOptional()
-  @Min(1)
-  @Max(10)
-  tacticalScore?: number;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @IsOptional()
-  @Min(1)
-  @Max(10)
-  mentalScore?: number;
-
-  @IsString()
-  @IsOptional()
-  strengths?: string;
-
-  @IsString()
-  @IsOptional()
-  weaknesses?: string;
-
-  @IsString()
-  @IsOptional()
-  personalityNotes?: string;
-
-  @IsString()
-  @IsOptional()
-  tacticalFit?: string;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @IsOptional()
-  @Min(1)
-  @Max(10)
-  overallRating?: number;
-
-  @IsNumber({ maxDecimalPlaces: 1 })
-  @IsOptional()
-  @Min(1)
-  @Max(10)
-  potentialRating?: number;
-
-  @IsString()
-  @IsOptional()
-  matchObserved?: string;
-}
+export const CreateScoutingReportDto = z.strictObject({
+  playerId: id.optional(), // none for an external prospect
+  prospectName: line(255).optional(),
+  prospectAge: z.number().int().min(15).max(40).optional(),
+  prospectClub: line(255).optional(),
+  prospectPosition: z.enum(PlayerPosition).optional(),
+  prospectNationality: line(100).optional(),
+  recommendation: Recommendation.optional(),
+  technicalScore: score.optional(),
+  physicalScore: score.optional(),
+  tacticalScore: score.optional(),
+  mentalScore: score.optional(),
+  strengths: prose().optional(),
+  weaknesses: prose().optional(),
+  personalityNotes: prose().optional(),
+  tacticalFit: prose().optional(),
+  overallRating: score.optional(),
+  potentialRating: score.optional(),
+  matchObserved: line(255).optional(),
+});
+export type CreateScoutingReportDto = z.infer<typeof CreateScoutingReportDto>;

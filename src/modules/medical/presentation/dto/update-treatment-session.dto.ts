@@ -1,11 +1,20 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateTreatmentSessionDto } from './create-treatment-session.dto';
-import { IsEnum, IsOptional } from 'class-validator';
-
-export class UpdateTreatmentSessionDto extends PartialType(
+import { z } from 'zod';
+import { nonEmpty } from '../../../../common/validation/schemas';
+import {
   CreateTreatmentSessionDto,
-) {
-  @IsEnum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'])
-  @IsOptional()
-  status?: string;
-}
+  TreatmentSessionStatus,
+} from './create-treatment-session.dto';
+
+export const UpdateTreatmentSessionDto = nonEmpty(
+  CreateTreatmentSessionDto.partial(),
+);
+export type UpdateTreatmentSessionDto = z.infer<
+  typeof UpdateTreatmentSessionDto
+>;
+
+export const TreatmentSessionStatusDto = z.strictObject({
+  status: TreatmentSessionStatus,
+});
+export type TreatmentSessionStatusDto = z.infer<
+  typeof TreatmentSessionStatusDto
+>;
