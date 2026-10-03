@@ -13,12 +13,11 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage",
-    "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts"
+    "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
+    "test": "vitest run --project unit",
+    "test:int": "vitest run --project integration",
+    "test:e2e": "vitest run --project e2e",
+    "test:watch": "vitest --project unit"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.5",
@@ -66,8 +65,9 @@
     "@nestjs/cli": "^11.0.24",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.2.6",
+    "@swc/core": "^1.16.2",
+    "@types/compression": "^1.8.1",
     "@types/express": "^5.0.0",
-    "@types/jest": "^30.0.0",
     "@types/multer": "^2.2.0",
     "@types/node": "^24.13.6",
     "@types/passport-jwt": "^4.0.1",
@@ -78,34 +78,17 @@
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.5.6",
     "globals": "^17.12.0",
-    "jest": "^30.5.2",
     "prettier": "^3.9.8",
     "prisma": "^7.8.0",
     "source-map-support": "^0.5.21",
     "supertest": "^7.3.0",
-    "ts-jest": "^29.4.12",
     "ts-loader": "^9.6.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "^5.7.3",
-    "typescript-eslint": "^8.70.1"
-  },
-  "jest": {
-    "moduleFileExtensions": [
-      "js",
-      "json",
-      "ts"
-    ],
-    "rootDir": "src",
-    "testRegex": ".*\\.spec\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
-    "collectCoverageFrom": [
-      "**/*.(t|j)s"
-    ],
-    "coverageDirectory": "../coverage",
-    "testEnvironment": "node"
+    "typescript-eslint": "^8.70.1",
+    "unplugin-swc": "^2.0.0",
+    "vitest": "^5.0.2"
   },
   "overrides": {
     "mysql2": "^3.24.4",
