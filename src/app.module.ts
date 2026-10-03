@@ -6,7 +6,6 @@ import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { EventsModule } from './infrastructure/events/events.module';
 import { MailModule } from './infrastructure/mail/mail.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
-import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { PlayersModule } from './modules/players/players.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
@@ -18,7 +17,7 @@ import { ScoutingModule } from './modules/scouting/scouting.module';
 import { MedicalModule } from './modules/medical/medical.module';
 import { HealthController } from './health/health.controller';
 import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
-import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { SessionGuard } from './common/guards/session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -33,7 +32,6 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
     EventsModule,
     MailModule,
     StorageModule,
-    AuthModule,
     UsersModule,
     PlayersModule,
     ContractsModule,
@@ -49,7 +47,9 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
     // Global guards run in this order. The feature gate is first: a disabled
     // module's routes answer 404 before authentication can answer 401.
     { provide: APP_GUARD, useClass: FeatureGateGuard },
-    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    // useExisting, so a test can stand in for sessions (overrideProvider)
+    SessionGuard,
+    { provide: APP_GUARD, useExisting: SessionGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

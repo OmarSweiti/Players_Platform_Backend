@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { RequestMethod, type Type } from '@nestjs/common';
 import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { JwtService } from '@nestjs/jwt';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MedicalRecordRepository } from '../../src/modules/medical/infrastructure/repositories/medical-record.repository';
 import { TreatmentSessionRepository } from '../../src/modules/medical/infrastructure/repositories/treatment-session.repository';
@@ -12,6 +11,7 @@ import { WatchlistRepository } from '../../src/modules/scouting/infrastructure/r
 import { ScoutingController } from '../../src/modules/scouting/presentation/scouting.controller';
 import { PermissionService } from '../../src/modules/users/application/services/permission.service';
 import { bootApp, type BootedApp } from '../harness/app';
+import { TEST_MEMBER_HEADER } from '../harness/session';
 import { createMember, createTenant } from '../harness/fixtures';
 
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -47,18 +47,15 @@ const REPOSITORIES: Type[] = [
 
 describe('unfinished modules stay behind their flags', () => {
   let booted: BootedApp;
-  let token: string;
+  let memberId: string;
 
   beforeAll(async () => {
-    booted = await bootApp(); // FEATURE_MEDICAL and FEATURE_SCOUTING unset
+    // FEATURE_MEDICAL and FEATURE_SCOUTING unset; signed-in requests through
+    // the stand-in for sessions (test/harness/session.ts)
+    booted = await bootApp({ testSessions: true });
     const tenant = await createTenant();
     const member = await createMember(tenant, 'SUPER_ADMIN');
-    token = booted.app.get(JwtService).sign({
-      sub: member.id,
-      email: member.email,
-      role: member.role,
-      tenantId: tenant.id,
-    });
+    memberId = member.id;
   });
 
   afterAll(async () => {
@@ -70,7 +67,7 @@ describe('unfinished modules stay behind their flags', () => {
     const routes = routesOf(controller);
     expect(routes.length).toBeGreaterThan(0);
     for (const { method, path } of routes) {
-      for (const headers of [{}, { Authorization: `Bearer ${token}` }]) {
+      for (const headers of [{}, { [TEST_MEMBER_HEADER]: memberId }]) {
         const response = await booted.http[method](path).set(headers);
         expect([method, path, response.status]).toEqual([method, path, 404]);
         expect(response.body).toMatchObject({

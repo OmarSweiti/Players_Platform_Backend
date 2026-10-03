@@ -7,8 +7,6 @@ const valid = {
   NODE_ENV: 'production',
   DATABASE_URL:
     'postgresql://sadara_app:not-a-real-password@db.agency.test:5432/sadara',
-  JWT_SECRET: 'test-only-signing-value-for-the-schema-spec',
-  JWT_REFRESH_SECRET: 'test-only-refresh-value-for-the-schema-spec',
   CORS_ORIGIN: 'https://app.agency.test',
   MAIL_FROM: 'no-reply@agency.test',
 } as const;
@@ -32,28 +30,31 @@ describe('the environment schema', () => {
     });
   });
 
+  // DATABASE_URL carries the database password: the one secret the API reads
+  // until sessions add theirs (0.5.6).
   it('boot_fails_without_a_required_secret', async () => {
-    for (const name of ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'DATABASE_URL']) {
-      const { [name as keyof typeof valid]: _omitted, ...rest } = valid;
-      expect(failureOf(rest)).toContain(`${name} is missing`);
-      expect(failureOf({ ...rest, [name]: '' })).toContain(
-        `${name} is missing`,
-      );
-    }
+    const { DATABASE_URL: _omitted, ...rest } = valid;
+    expect(failureOf(rest)).toContain('DATABASE_URL is missing');
+    expect(failureOf({ ...rest, DATABASE_URL: '' })).toContain(
+      'DATABASE_URL is missing',
+    );
 
     // The module the application boots with refuses too, before anything starts.
     for (const [name, value] of Object.entries(valid)) vi.stubEnv(name, value);
-    vi.stubEnv('JWT_SECRET', undefined);
+    vi.stubEnv('DATABASE_URL', undefined);
     await expect(
       ConfigModule.forRoot({ ...configOptions, ignoreEnvFile: true }),
-    ).rejects.toThrow('JWT_SECRET is missing');
+    ).rejects.toThrow('DATABASE_URL is missing');
     vi.unstubAllEnvs();
   });
 
-  it('refuses a weak secret and an unknown NODE_ENV', () => {
+  it('refuses a database that is not PostgreSQL and an unknown NODE_ENV', () => {
     expect(
-      failureOf({ ...valid, JWT_SECRET: 'change-me-placeholder' }),
-    ).toContain('JWT_SECRET must be at least 32 characters');
+      failureOf({
+        ...valid,
+        DATABASE_URL: 'mysql://app@db.agency.test/sadara',
+      }),
+    ).toContain('DATABASE_URL must be a valid url');
     expect(failureOf({ ...valid, NODE_ENV: undefined })).toContain(
       'NODE_ENV is missing',
     );
@@ -84,7 +85,6 @@ describe('the environment schema', () => {
     const message = failureOf({
       ...valid,
       NODE_ENV: canary,
-      JWT_SECRET: canary,
       DATABASE_URL: `postgresql://user:${canary}@`,
       CORS_ORIGIN: canary,
       MAIL_FROM: canary,
@@ -93,7 +93,6 @@ describe('the environment schema', () => {
 
     for (const name of [
       'NODE_ENV',
-      'JWT_SECRET',
       'DATABASE_URL',
       'CORS_ORIGIN',
       'MAIL_FROM',

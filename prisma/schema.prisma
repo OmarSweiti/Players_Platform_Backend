@@ -323,9 +323,9 @@ model User {
   tenantId              String    @db.Uuid
 
   email                 String    @db.VarChar(255)
-  /// Argon2id / bcrypt hash only — never store plaintext.
-  /// Enforce hashing in the application layer before Prisma operations.
-  passwordHash          String    @db.VarChar(255)
+  // No credential is stored here: passwords, second factors, reset and
+  // verification tokens and lockouts belong to the identity provider
+  // (ADR-0002); the local credential columns were dropped in 0.1.6.
 
   role                  UserRole
 
@@ -335,23 +335,8 @@ model User {
   phone                 String?   @db.VarChar(20)
 
   lastLoginAt           DateTime?
-  passwordChangedAt     DateTime?
-  emailVerifiedAt       DateTime?
-
-  failedLoginAttempts   Int       @default(0)
-  lockedUntil           DateTime?
-
-  // Password reset fields
-  passwordResetToken    String?   @db.VarChar(255)
-  passwordResetExpiry   DateTime?
-
-  // Email verification fields
-  emailVerificationToken     String?   @db.VarChar(255)
-  emailVerificationExpiry    DateTime?
 
   isActive              Boolean   @default(true)
-  is2FAEnabled          Boolean   @default(false)
-  twoFASecret           String?   @db.VarChar(255)
 
   /// Extra per-user preferences (UI theme, language, notification prefs, etc.)
   preferences           Json?

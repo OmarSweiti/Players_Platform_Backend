@@ -41,8 +41,6 @@ export function createMember(
     data: {
       tenantId: tenant.id,
       email: `${handle}@${tenant.slug}.test`,
-      // The local credential columns retire with 0.1.6; nothing can sign in with this value.
-      passwordHash: 'not-a-password-hash',
       role,
     },
   });
