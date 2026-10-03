@@ -1,3 +1,5 @@
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import type { INestApplication, LoggerService } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -24,8 +26,11 @@ export async function bootApp(
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
-  await app.init();
-  // Nest types its HTTP server as `any`; supertest wants a Node server.
-  const server = app.getHttpServer() as Parameters<typeof request>[0];
-  return { app, http: request(server) };
+  // Listen on 127.0.0.1 itself, on a port free there. Handed the server,
+  // supertest would listen on every interface and then connect to 127.0.0.1,
+  // where another process — an editor helper, a VM's port forward — may hold
+  // the same port: on macOS both binds succeed, and that process answers.
+  await app.listen(0, '127.0.0.1');
+  const { port } = (app.getHttpServer() as Server).address() as AddressInfo;
+  return { app, http: request(`http://127.0.0.1:${port}`) };
 }
