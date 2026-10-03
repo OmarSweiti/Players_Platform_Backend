@@ -1,62 +1,62 @@
 [
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/medical/application/use-cases/create-medical-record.use-case.ts",
+    "from": "src/modules/medical/application/use-cases/create-medical-record.usecase.ts",
     "to": "src/modules/medical/infrastructure/repositories/medical-record.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/medical/application/use-cases/create-treatment-session.use-case.ts",
+    "from": "src/modules/medical/application/use-cases/create-treatment-session.usecase.ts",
     "to": "src/modules/medical/infrastructure/repositories/treatment-session.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/medical/application/use-cases/update-medical-record.use-case.ts",
+    "from": "src/modules/medical/application/use-cases/update-medical-record.usecase.ts",
     "to": "src/modules/medical/infrastructure/repositories/medical-record.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/medical/application/use-cases/update-treatment-session.use-case.ts",
+    "from": "src/modules/medical/application/use-cases/update-treatment-session.usecase.ts",
     "to": "src/modules/medical/infrastructure/repositories/treatment-session.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/approve-scouting-report.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/approve-scouting-report.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/scouting-report.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/create-scouting-report.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/create-scouting-report.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/scouting-report.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/create-scouting-report.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/create-scouting-report.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/watchlist.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/manage-assignment.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/manage-assignment.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/assignment.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/manage-watchlist.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/manage-watchlist.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/watchlist.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/reject-scouting-report.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/reject-scouting-report.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/scouting-report.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/submit-scouting-report.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/submit-scouting-report.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/scouting-report.repository.ts"
   },
   {
     "rule": "adapters-are-wired-by-composition-roots",
-    "from": "src/modules/scouting/application/use-cases/update-scouting-report.use-case.ts",
+    "from": "src/modules/scouting/application/use-cases/update-scouting-report.usecase.ts",
     "to": "src/modules/scouting/infrastructure/repositories/scouting-report.repository.ts"
   },
   {

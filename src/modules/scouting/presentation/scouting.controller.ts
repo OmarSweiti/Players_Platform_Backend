@@ -24,13 +24,13 @@ import { QueryScoutingReportsDto } from './dto/query-scouting-reports.dto';
 import { AddToWatchlistDto } from './dto/add-to-watchlist.dto';
 import { CreateAssignmentDto } from './dto/create-assignment.dto';
 import { UpdateAssignmentDto } from './dto/update-assignment.dto';
-import { CreateScoutingReportUseCase } from '../application/use-cases/create-scouting-report.use-case';
-import { UpdateScoutingReportUseCase } from '../application/use-cases/update-scouting-report.use-case';
-import { SubmitScoutingReportUseCase } from '../application/use-cases/submit-scouting-report.use-case';
-import { ApproveScoutingReportUseCase } from '../application/use-cases/approve-scouting-report.use-case';
-import { RejectScoutingReportUseCase } from '../application/use-cases/reject-scouting-report.use-case';
-import { ManageWatchlistUseCase } from '../application/use-cases/manage-watchlist.use-case';
-import { ManageAssignmentUseCase } from '../application/use-cases/manage-assignment.use-case';
+import { CreateScoutingReportUseCase } from '../application/use-cases/create-scouting-report.usecase';
+import { UpdateScoutingReportUseCase } from '../application/use-cases/update-scouting-report.usecase';
+import { SubmitScoutingReportUseCase } from '../application/use-cases/submit-scouting-report.usecase';
+import { ApproveScoutingReportUseCase } from '../application/use-cases/approve-scouting-report.usecase';
+import { RejectScoutingReportUseCase } from '../application/use-cases/reject-scouting-report.usecase';
+import { ManageWatchlistUseCase } from '../application/use-cases/manage-watchlist.usecase';
+import { ManageAssignmentUseCase } from '../application/use-cases/manage-assignment.usecase';
 import { ScoutingReportRepository } from '../infrastructure/repositories/scouting-report.repository';
 
 @ApiTags('Scouting')
