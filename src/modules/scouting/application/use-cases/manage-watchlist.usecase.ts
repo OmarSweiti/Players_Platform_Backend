@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { WatchlistRepository } from '../../infrastructure/repositories/watchlist.repository';
+import { ValidationFailedError } from '../../../../common/errors/domain-error';
 
 @Injectable()
 export class ManageWatchlistUseCase {
@@ -17,7 +18,9 @@ export class ManageWatchlistUseCase {
   ) {
     // Validate priority if provided
     if (priority && !['HIGH', 'MEDIUM', 'LOW'].includes(priority)) {
-      throw new Error('Priority must be HIGH, MEDIUM, or LOW');
+      throw new ValidationFailedError('Priority must be HIGH, MEDIUM, or LOW', [
+        { field: '/priority', code: 'INVALID_VALUE' },
+      ]);
     }
 
     return await this.watchlistRepo.addToWatchlist(

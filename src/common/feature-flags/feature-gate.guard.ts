@@ -8,9 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import type { Request } from 'express';
 import type { Env } from '../../config/env.schema';
-import { requestPathOf } from '../logging/route-template';
 
 /** An unfinished module: off in every environment unless its flag is set. */
 export type Feature = 'medical' | 'scouting';
@@ -59,9 +57,8 @@ export class FeatureGateGuard implements CanActivate {
     if (feature === undefined) return true;
     if (this.config.get(FLAG_OF[feature], { infer: true })) return true;
 
-    const request = context.switchToHttp().getRequest<Request>();
-    throw new NotFoundException(
-      `Cannot ${request.method} ${requestPathOf(request)}`,
-    );
+    // Exactly what an unknown route answers: the problem filter turns every
+    // NotFoundException into the same NOT_FOUND problem.
+    throw new NotFoundException();
   }
 }

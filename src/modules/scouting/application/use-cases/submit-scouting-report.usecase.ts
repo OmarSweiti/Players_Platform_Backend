@@ -1,5 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { ScoutingReportRepository } from '../../infrastructure/repositories/scouting-report.repository';
+import {
+  ForbiddenError,
+  InvalidTransitionError,
+  NotFoundError,
+  ValidationFailedError,
+} from '../../../../common/errors/domain-error';
 
 @Injectable()
 export class SubmitScoutingReportUseCase {
@@ -9,25 +15,35 @@ export class SubmitScoutingReportUseCase {
     const report = await this.scoutingReportRepo.findById(id, tenantId);
 
     if (!report) {
-      throw new Error('Scouting report not found');
+      throw new NotFoundError('Scouting report not found');
     }
 
     if (report.scoutId !== scoutId) {
-      throw new Error('Only the assigned scout can submit this report');
+      throw new ForbiddenError(
+        'Only the assigned scout can submit this report',
+      );
     }
 
     if (report.status !== 'DRAFT') {
-      throw new Error('Report must be in DRAFT status to submit');
+      throw new InvalidTransitionError(
+        'Report must be in DRAFT status to submit',
+      );
     }
 
     // Validate required fields before submission
     if (!report.overallRating) {
-      throw new Error('Overall rating is required before submission');
+      throw new ValidationFailedError(
+        'Overall rating is required before submission',
+        [{ field: '/overallRating', code: 'REQUIRED' }],
+      );
     }
 
     if (!report.strengths || !report.weaknesses) {
-      throw new Error(
+      throw new ValidationFailedError(
         'Strengths and weaknesses are required before submission',
+        (['strengths', 'weaknesses'] as const)
+          .filter((field) => !report[field])
+          .map((field) => ({ field: `/${field}`, code: 'REQUIRED' as const })),
       );
     }
 

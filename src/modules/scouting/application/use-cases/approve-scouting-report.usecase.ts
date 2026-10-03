@@ -1,6 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { ScoutingReportRepository } from '../../infrastructure/repositories/scouting-report.repository';
 import { RecommendationLevel } from '@prisma/client';
+import {
+  InvalidTransitionError,
+  NotFoundError,
+} from '../../../../common/errors/domain-error';
 
 @Injectable()
 export class ApproveScoutingReportUseCase {
@@ -14,11 +18,13 @@ export class ApproveScoutingReportUseCase {
     const report = await this.scoutingReportRepo.findById(id, tenantId);
 
     if (!report) {
-      throw new Error('Scouting report not found');
+      throw new NotFoundError('Scouting report not found');
     }
 
     if (report.status !== 'SUBMITTED') {
-      throw new Error('Only SUBMITTED reports can be approved');
+      throw new InvalidTransitionError(
+        'Only SUBMITTED reports can be approved',
+      );
     }
 
     return await this.scoutingReportRepo.approveReport(

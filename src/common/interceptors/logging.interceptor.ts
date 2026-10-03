@@ -8,7 +8,10 @@ import {
 import type { Request, Response } from 'express';
 import { Observable } from 'rxjs';
 import { tap, catchError } from 'rxjs/operators';
+import { PROBLEMS } from '../errors/error-codes';
+import { classify } from '../filters/problem-details.filter';
 import { describeError } from '../logging/describe-error';
+import { requestIdOf } from '../logging/request-id';
 import { routeTemplateOf } from '../logging/route-template';
 
 // An access log line holds the method, the route template, the status, the
@@ -29,7 +32,7 @@ export class LoggingInterceptor implements NestInterceptor {
     const tenantId = request.tenantId ?? 'N/A'; // only ever from the session (0.5.6)
 
     const now = Date.now();
-    const requestId = this.generateRequestId();
+    const requestId = requestIdOf(request) ?? '-'; // as its response and any problem carry it
 
     // Log incoming request
     this.logger.log(`[${requestId}] ${method} ${route} | Tenant: ${tenantId}`);
@@ -53,8 +56,8 @@ export class LoggingInterceptor implements NestInterceptor {
       }),
       catchError((error: unknown) => {
         const responseTime = Date.now() - now;
-        const status = (error as { status?: unknown }).status;
-        const statusCode = typeof status === 'number' ? status : 500;
+        // The status the problem filter answers with.
+        const statusCode = PROBLEMS[classify(error).code].status;
 
         // The class only: the exception filter logs an unhandled error's frames
         this.logger.error(
@@ -63,12 +66,6 @@ export class LoggingInterceptor implements NestInterceptor {
 
         throw error;
       }),
-    );
-  }
-
-  private generateRequestId(): string {
-    return (
-      Math.random().toString(36).substring(2, 15) + Date.now().toString(36)
     );
   }
 }

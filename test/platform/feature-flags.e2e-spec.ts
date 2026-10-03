@@ -16,6 +16,13 @@ import { createMember, createTenant } from '../harness/fixtures';
 
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
+/** A problem without what differs between occurrences: its request id. */
+function problemShape(body: unknown): Record<string, unknown> {
+  const { requestId, instance, ...shape } = body as Record<string, unknown>;
+  expect(instance).toBe(`urn:uuid:${String(requestId)}`);
+  return shape;
+}
+
 /** Every route a controller declares, with its parameters filled in. */
 function routesOf(controller: Type): { method: Method; path: string }[] {
   const base = Reflect.getMetadata(PATH_METADATA, controller) as string;
@@ -64,18 +71,17 @@ describe('unfinished modules stay behind their flags', () => {
 
   /** Each route, anonymous and signed in, answers exactly what an unknown route does. */
   async function expectNotFound(controller: Type): Promise<number> {
+    const unknownRoute = await booted.http.get('/api/no-such-route');
+    expect(unknownRoute.body).toMatchObject({ code: 'NOT_FOUND' });
+    const notFound = problemShape(unknownRoute.body);
+
     const routes = routesOf(controller);
     expect(routes.length).toBeGreaterThan(0);
     for (const { method, path } of routes) {
       for (const headers of [{}, { [TEST_MEMBER_HEADER]: memberId }]) {
         const response = await booted.http[method](path).set(headers);
         expect([method, path, response.status]).toEqual([method, path, 404]);
-        expect(response.body).toMatchObject({
-          statusCode: 404,
-          error: 'Not Found',
-          message: `Cannot ${method.toUpperCase()} ${path}`,
-          path,
-        });
+        expect(problemShape(response.body)).toEqual(notFound);
       }
     }
     return routes.length;

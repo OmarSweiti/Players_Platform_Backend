@@ -66,17 +66,15 @@ describe('secrets and personal data stay out of logs and error responses', () =>
   });
 
   it('unmatched_routes_never_echo_the_query_string', async () => {
-    // Nest's own not-found message quotes the request's original URL.
+    // Nest's own not-found message quotes the request's original URL; the
+    // problem filter never passes it on.
     const response = await booted.http
       .get('/api/no-such-route')
       .query({ token: TOKEN });
 
     expect(response.status).toBe(404);
     expect(JSON.stringify(response.body)).not.toContain(TOKEN);
-    expect(response.body).toMatchObject({
-      message: 'Cannot GET /api/no-such-route',
-      path: '/api/no-such-route',
-    });
+    expect(response.body).toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('error_responses_never_echo_the_query_string', async () => {
@@ -87,6 +85,6 @@ describe('secrets and personal data stay out of logs and error responses', () =>
 
     expect(response.status).toBe(404);
     expect(JSON.stringify(response.body)).not.toContain(TOKEN);
-    expect(response.body).toMatchObject({ path: '/api/medical/records' });
+    expect(response.body).toMatchObject({ code: 'NOT_FOUND' });
   });
 });
