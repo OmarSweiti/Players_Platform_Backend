@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { configOptions } from './config/env.schema';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { EventsModule } from './infrastructure/events/events.module';
@@ -20,7 +20,6 @@ import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
-import { ValidationPipe } from './common/pipes/validation.pipe';
 
 @Module({
   imports: [
@@ -51,7 +50,6 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
     { provide: APP_GUARD, useExisting: SessionGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },
-    { provide: APP_PIPE, useClass: ValidationPipe },
   ],
 })
 export class AppModule {}

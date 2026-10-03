@@ -1,47 +1,29 @@
+import { z } from 'zod';
 import {
-  IsString,
-  IsOptional,
-  IsUUID,
-  IsDateString,
-  IsEnum,
-  IsNumber,
-  Min,
-  Max,
-} from 'class-validator';
+  id,
+  instant,
+  line,
+  prose,
+} from '../../../../common/validation/schemas';
 
-export class CreateTreatmentSessionDto {
-  @IsUUID()
-  playerId!: string;
+export const TreatmentSessionStatus = z.enum([
+  'SCHEDULED',
+  'IN_PROGRESS',
+  'COMPLETED',
+  'CANCELLED',
+]);
 
-  @IsUUID()
-  @IsOptional()
-  medicalRecordId?: string;
-
-  @IsDateString()
-  sessionDate!: string;
-
-  @IsNumber()
-  @IsOptional()
-  @Min(15)
-  @Max(480)
-  duration?: number;
-
-  @IsEnum(['SCHEDULED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'])
-  @IsOptional()
-  status?: string;
-
-  @IsString()
-  treatmentType!: string;
-
-  @IsString()
-  @IsOptional()
-  description?: string;
-
-  @IsString()
-  @IsOptional()
-  exercises?: string;
-
-  @IsString()
-  @IsOptional()
-  progressNotes?: string;
-}
+export const CreateTreatmentSessionDto = z.strictObject({
+  playerId: id,
+  medicalRecordId: id.optional(),
+  sessionDate: instant,
+  duration: z.number().int().min(15).max(480).optional(), // minutes
+  status: TreatmentSessionStatus.optional(),
+  treatmentType: line(100),
+  description: prose().optional(),
+  exercises: prose().optional(),
+  progressNotes: prose().optional(),
+});
+export type CreateTreatmentSessionDto = z.infer<
+  typeof CreateTreatmentSessionDto
+>;

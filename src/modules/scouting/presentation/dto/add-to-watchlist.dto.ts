@@ -1,14 +1,9 @@
-import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
+import { z } from 'zod';
+import { id, prose } from '../../../../common/validation/schemas';
 
-export class AddToWatchlistDto {
-  @IsUUID()
-  playerId!: string;
-
-  @IsEnum(['HIGH', 'MEDIUM', 'LOW'])
-  @IsOptional()
-  priority?: string;
-
-  @IsString()
-  @IsOptional()
-  notes?: string;
-}
+export const AddToWatchlistDto = z.strictObject({
+  playerId: id,
+  priority: z.enum(['HIGH', 'MEDIUM', 'LOW']).optional(),
+  notes: prose().optional(),
+});
+export type AddToWatchlistDto = z.infer<typeof AddToWatchlistDto>;
