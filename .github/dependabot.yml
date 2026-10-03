@@ -78,3 +78,9 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "@eslint/*"
         update-types: ["version-update:semver-major"]
+      # Prisma 8 is a release candidate, and npm's `latest` tag for `prisma` points at it (3 October 2026).
+      # A release candidate never ships (ADR-0022); move to 8 deliberately, as a planned step, once stable.
+      - dependency-name: "prisma"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@prisma/*"
+        update-types: ["version-update:semver-major"]
