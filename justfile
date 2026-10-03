@@ -43,12 +43,12 @@ guards:
 
 # Lint (zero warnings, against eslint-suppressions.json) and format — CI gates
 lint:
-    npx --no-install eslint --max-warnings=0 "{src,apps,libs,test}/**/*.ts"
-    npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts"
+    npx --no-install eslint --max-warnings=0 "{src,apps,libs,test,scripts}/**/*.ts"
+    npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts" "scripts/**/*.ts"
 
 # After fixing or deleting baselined code: drop the suppressions that no longer occur
 lint-prune:
-    npx --no-install eslint "{src,apps,libs,test}/**/*.ts" --prune-suppressions
+    npx --no-install eslint "{src,apps,libs,test,scripts}/**/*.ts" --prune-suppressions
 
 # The Prisma schema is valid, and the client generates from it (neither connects)
 prisma:
@@ -96,6 +96,13 @@ test-e2e *$args:
 
 # CI's required `test` check, except the migration replay (that is `just migrations`)
 check: prisma lint build typecheck boundaries test
+
+# Read-only integrity report on DATABASE_URL (or .env): exits 1 on any violation — run before every constraint or data migration
+preflight:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then set -a; source ./.env; set +a; fi
+    npx --no-install ts-node --transpile-only scripts/preflight.ts
 
 # CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database)
 migrations:

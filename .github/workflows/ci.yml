@@ -123,10 +123,10 @@ jobs:
       # until `just lint-prune` removes it, so the baseline only shrinks.
       - name: Lint — ESLint with no warnings, against the recorded baseline
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
-        run: npx --no-install eslint --max-warnings=0 "{src,apps,libs,test}/**/*.ts"
+        run: npx --no-install eslint --max-warnings=0 "{src,apps,libs,test,scripts}/**/*.ts"
       - name: Format — every file is Prettier-formatted
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        run: npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts"
+        run: npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts" "scripts/**/*.ts"
 
   # REQUIRED CHECK. The policy scripts and the git hooks prove they still refuse.
   guards:
