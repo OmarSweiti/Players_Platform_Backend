@@ -38,10 +38,10 @@ describe('secrets and personal data stay out of logs and error responses', () =>
     await http
       .post('/api/health')
       .send({ email, password: PASSWORD, token: TOKEN });
-    await http.get('/api/auth/verify-email').query({ token: TOKEN });
-    await http.post('/api/auth/login').send({ email, password: PASSWORD });
+    await http.get('/api/v1/auth/verify-email').query({ token: TOKEN });
+    await http.post('/api/v1/auth/login').send({ email, password: PASSWORD });
     await http
-      .post('/api/auth/reset-password')
+      .post('/api/v1/auth/reset-password')
       .send({ token: TOKEN, newPassword: PASSWORD });
 
     expect(capture.lines.length).toBeGreaterThan(0); // the log really was captured
@@ -80,7 +80,7 @@ describe('secrets and personal data stay out of logs and error responses', () =>
   it('error_responses_never_echo_the_query_string', async () => {
     // A matched route's refusal: the quarantine of 0.1.8 answers 404.
     const response = await booted.http
-      .get('/api/medical/records')
+      .get('/api/v1/medical/records')
       .query({ token: TOKEN });
 
     expect(response.status).toBe(404);

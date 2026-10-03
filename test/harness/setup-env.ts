@@ -1,3 +1,7 @@
+// Nest's decorators read the Reflect metadata API as their modules load. The
+// package roots install it; a test whose first Nest import is another entry
+// point (`@nestjs/common/internal`) would load before it, so it comes first.
+import 'reflect-metadata';
 import { inject } from 'vitest';
 
 // The application validates its environment as AppModule loads

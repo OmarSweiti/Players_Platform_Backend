@@ -115,7 +115,7 @@ describe('one error format: RFC 9457 problem details', () => {
 
   it('validation_errors_list_their_fields', async () => {
     const invalid = await booted.http
-      .post('/api/probe/errors/members')
+      .post('/api/v1/probe/errors/members')
       .send({ name: '   ', age: 12, tenantId: CANARY });
 
     expect(expectProblem(invalid, 'VALIDATION_FAILED').fieldErrors).toEqual([
@@ -138,7 +138,7 @@ describe('one error format: RFC 9457 problem details', () => {
     expect(JSON.stringify(invalid.body)).not.toContain(CANARY);
 
     const incomplete = await booted.http
-      .post('/api/probe/errors/members')
+      .post('/api/v1/probe/errors/members')
       .send({ age: 30 });
     expect(expectProblem(incomplete, 'VALIDATION_FAILED').fieldErrors).toEqual([
       { field: '/name', code: 'REQUIRED', message: FIELD_PROBLEMS.REQUIRED.en },
@@ -146,7 +146,7 @@ describe('one error format: RFC 9457 problem details', () => {
   });
 
   it('unknown_errors_leak_nothing', async () => {
-    const response = await booted.http.get('/api/probe/errors/boom');
+    const response = await booted.http.get('/api/v1/probe/errors/boom');
 
     const problem = expectProblem(response, 'INTERNAL_ERROR');
     expect(problem.fieldErrors).toEqual([]);
@@ -157,7 +157,7 @@ describe('one error format: RFC 9457 problem details', () => {
 
     // The log names the class, the route and the request, never the message.
     expect(capture.lines.join('\n')).toContain(
-      `Unhandled Error on GET /api/probe/errors/boom [${problem.requestId}]`,
+      `Unhandled Error on GET /api/v1/probe/errors/boom [${problem.requestId}]`,
     );
     for (const line of capture.lines) {
       expect(line).not.toContain('boom at');
@@ -169,13 +169,13 @@ describe('one error format: RFC 9457 problem details', () => {
     const { http } = booted;
     const responses = [
       await http.get('/api/no-such-route'), // Nest's own not-found
-      await http.get('/api/probe/errors/private'), // a guard's refusal
-      await http.post('/api/probe/errors/members').send({}), // a schema's
+      await http.get('/api/v1/probe/errors/private'), // a guard's refusal
+      await http.post('/api/v1/probe/errors/members').send({}), // a schema's
       await http
-        .post('/api/probe/errors/members')
+        .post('/api/v1/probe/errors/members')
         .set('Content-Type', 'application/json')
         .send('{"name": '), // the body parser's
-      await http.get('/api/probe/errors/boom'), // the unexpected
+      await http.get('/api/v1/probe/errors/boom'), // the unexpected
     ];
     expect(responses.map(({ status }) => status)).toEqual([
       404, 401, 400, 400, 500,
@@ -199,7 +199,7 @@ describe('one error format: RFC 9457 problem details', () => {
 
   it('a_missing_record_is_a_404_not_a_500', async () => {
     // Prisma's P2025: the record an update needs does not exist.
-    const response = await booted.http.post('/api/probe/errors/missing');
+    const response = await booted.http.post('/api/v1/probe/errors/missing');
     expectProblem(response, 'NOT_FOUND');
     expect(capture.lines.join('\n')).not.toContain('Unhandled');
   });
@@ -208,7 +208,7 @@ describe('one error format: RFC 9457 problem details', () => {
     for (const probe of ['duplicate', 'orphan']) {
       // P2002, then P2003
       expectProblem(
-        await booted.http.post(`/api/probe/errors/${probe}`),
+        await booted.http.post(`/api/v1/probe/errors/${probe}`),
         'CONFLICT',
       );
     }
@@ -216,21 +216,21 @@ describe('one error format: RFC 9457 problem details', () => {
 
   it('a_body_the_parser_refuses_is_a_problem_that_quotes_nothing', async () => {
     const malformed = await booted.http
-      .post('/api/probe/errors/members')
+      .post('/api/v1/probe/errors/members')
       .set('Content-Type', 'application/json')
       .send(`{"name": ${CANARY}}`);
     expectProblem(malformed, 'VALIDATION_FAILED');
     expect(JSON.stringify(malformed.body)).not.toContain(CANARY);
 
     const oversized = await booted.http
-      .post('/api/probe/errors/members')
+      .post('/api/v1/probe/errors/members')
       .send({ name: 'x'.repeat(2 * 1024 * 1024), age: 30 });
     expectProblem(oversized, 'PAYLOAD_TOO_LARGE');
   });
 
   it('a_problem_speaks_the_language_the_client_accepts', async () => {
     const response = await booted.http
-      .post('/api/probe/errors/members')
+      .post('/api/v1/probe/errors/members')
       .set('Accept-Language', 'ar-JO,ar;q=0.9,en;q=0.5')
       .send({ age: 30 });
 

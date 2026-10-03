@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { RequestMethod, type Type } from '@nestjs/common';
-import { METHOD_METADATA, PATH_METADATA } from '@nestjs/common/constants';
+import type { Type } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { MedicalRecordRepository } from '../../src/modules/medical/infrastructure/repositories/medical-record.repository';
 import { TreatmentSessionRepository } from '../../src/modules/medical/infrastructure/repositories/treatment-session.repository';
@@ -13,8 +12,7 @@ import { PermissionService } from '../../src/modules/users/application/services/
 import { bootApp, type BootedApp } from '../harness/app';
 import { TEST_MEMBER_HEADER } from '../harness/session';
 import { createMember, createTenant } from '../harness/fixtures';
-
-type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
+import { routesOf, withParams } from '../harness/routes';
 
 /** A problem without what differs between occurrences: its request id. */
 function problemShape(body: unknown): Record<string, unknown> {
@@ -24,25 +22,11 @@ function problemShape(body: unknown): Record<string, unknown> {
 }
 
 /** Every route a controller declares, with its parameters filled in. */
-function routesOf(controller: Type): { method: Method; path: string }[] {
-  const base = Reflect.getMetadata(PATH_METADATA, controller) as string;
-  const prototype = controller.prototype as Record<string, unknown>;
-  return Object.getOwnPropertyNames(prototype).flatMap((name) => {
-    const handler = prototype[name];
-    if (name === 'constructor' || typeof handler !== 'function') return [];
-    const path = Reflect.getMetadata(PATH_METADATA, handler) as
-      string | undefined;
-    const verb = Reflect.getMetadata(METHOD_METADATA, handler) as
-      RequestMethod | undefined;
-    if (path === undefined || verb === undefined) return [];
-    return [
-      {
-        method: RequestMethod[verb].toLowerCase() as Method,
-        path: `/api/${base}/${path}`.replace(/:\w+/g, randomUUID()),
-      },
-    ];
-  });
-}
+const routesWithParams = (controller: Type) =>
+  routesOf(controller).map(({ method, path }) => ({
+    method,
+    path: withParams(path, randomUUID),
+  }));
 
 const REPOSITORIES: Type[] = [
   MedicalRecordRepository,
@@ -75,7 +59,7 @@ describe('unfinished modules stay behind their flags', () => {
     expect(unknownRoute.body).toMatchObject({ code: 'NOT_FOUND' });
     const notFound = problemShape(unknownRoute.body);
 
-    const routes = routesOf(controller);
+    const routes = routesWithParams(controller);
     expect(routes.length).toBeGreaterThan(0);
     for (const { method, path } of routes) {
       for (const headers of [{}, { [TEST_MEMBER_HEADER]: memberId }]) {
