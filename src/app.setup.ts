@@ -50,7 +50,14 @@ export function configureApp(app: INestApplication): string {
     origin: config.get('CORS_ORIGIN', { infer: true }),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Tenant-ID'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-Tenant-ID',
+      'If-Match',
+    ],
+    // What a browser's script may read: entity tags (0.3.6) and request ids.
+    exposedHeaders: ['ETag', 'X-Request-Id'],
   });
 
   // Global prefix for API routes
