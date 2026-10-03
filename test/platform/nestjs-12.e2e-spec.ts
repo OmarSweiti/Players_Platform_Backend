@@ -89,14 +89,16 @@ describe('NestJS 12', () => {
   });
 
   it('a_route_schema_validates_and_transforms_its_parameter', async () => {
-    const valid = await booted.http.get('/api/probe/page').query({ page: '2' });
+    const valid = await booted.http
+      .get('/api/v1/probe/page')
+      .query({ page: '2' });
     expect(valid.status).toBe(200);
     // The schema's output, a number, whatever the envelope around it (two
     // today; 0.3.4 makes it `{ data }` once).
     expect(JSON.stringify(valid.body)).toContain('{"page":2}');
 
     const invalid = await booted.http
-      .get('/api/probe/page')
+      .get('/api/v1/probe/page')
       .query({ page: '0' });
     expect(invalid.status).toBe(400);
     expect(invalid.body).toMatchObject({
@@ -106,7 +108,7 @@ describe('NestJS 12', () => {
 
     // A strict schema refuses a property it does not name.
     const unknown = await booted.http
-      .get('/api/probe/page')
+      .get('/api/v1/probe/page')
       .query({ page: '2', tenantId: 'f7d6b7d2-1d4c-4c43-9a6f-0a1b2c3d4e5f' });
     expect(unknown.status).toBe(400);
   });

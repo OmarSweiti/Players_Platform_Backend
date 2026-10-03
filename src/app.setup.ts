@@ -1,4 +1,8 @@
-import { INestApplication, StandardSchemaValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  StandardSchemaValidationPipe,
+  VersioningType,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -10,6 +14,9 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
 import { assignRequestId } from './common/logging/request-id';
 import type { Env } from './config/env.schema';
+
+/** The API's version: every route is `/api/v1/…`, except the health checks. */
+export const API_VERSION = '1';
 
 /**
  * The HTTP pipeline: middleware, interceptors, CORS, the route prefix,
@@ -49,6 +56,11 @@ export function configureApp(app: INestApplication): string {
   // Global prefix for API routes
   const apiPrefix = config.get('API_PREFIX', { infer: true });
   app.setGlobalPrefix(apiPrefix);
+  // A breaking change gets a new version, beside the old (ADR-0010).
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: API_VERSION,
+  });
 
   // Validation, the one mechanism (ADR-0024): every body, query and path
   // parameter declares a Zod 4 schema — `@Body({ schema })`, `@Query({ schema

@@ -1,9 +1,10 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, VERSION_NEUTRAL } from '@nestjs/common';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 import { Public } from '../common/decorators/public.decorator';
 
 @ApiTags('Health')
-@Controller('health')
+// Unversioned: probes and the ingress check the process, not an API version.
+@Controller({ path: 'health', version: VERSION_NEUTRAL })
 export class HealthController {
   @Public()
   @Get()
