@@ -62,6 +62,23 @@ describe('the environment schema', () => {
     );
   });
 
+  it('keeps unfinished modules off unless a flag is exactly true', () => {
+    expect(parseEnv(valid)).toMatchObject({
+      FEATURE_MEDICAL: false,
+      FEATURE_SCOUTING: false,
+    });
+    expect(
+      parseEnv({
+        ...valid,
+        FEATURE_MEDICAL: 'true',
+        FEATURE_SCOUTING: 'false',
+      }),
+    ).toMatchObject({ FEATURE_MEDICAL: true, FEATURE_SCOUTING: false });
+    expect(failureOf({ ...valid, FEATURE_SCOUTING: 'yes' })).toContain(
+      'FEATURE_SCOUTING must be one of true, false',
+    );
+  });
+
   it('boot_errors_name_the_variable_but_not_its_value', () => {
     const canary = 'canary-value-9b2e';
     const message = failureOf({

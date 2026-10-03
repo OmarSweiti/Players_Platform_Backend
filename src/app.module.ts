@@ -17,6 +17,7 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ScoutingModule } from './modules/scouting/scouting.module';
 import { MedicalModule } from './modules/medical/medical.module';
 import { HealthController } from './health/health.controller';
+import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -45,6 +46,9 @@ import { ValidationPipe } from './common/pipes/validation.pipe';
   ],
   controllers: [HealthController],
   providers: [
+    // Global guards run in this order. The feature gate is first: a disabled
+    // module's routes answer 404 before authentication can answer 401.
+    { provide: APP_GUARD, useClass: FeatureGateGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: TransformInterceptor },

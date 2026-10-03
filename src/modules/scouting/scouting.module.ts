@@ -11,10 +11,12 @@ import { RejectScoutingReportUseCase } from './application/use-cases/reject-scou
 import { ManageWatchlistUseCase } from './application/use-cases/manage-watchlist.use-case';
 import { ManageAssignmentUseCase } from './application/use-cases/manage-assignment.use-case';
 import { PrismaModule } from '../../infrastructure/prisma/prisma.module';
+import { behindFeature } from '../../common/feature-flags/feature-gate.guard';
 
 @Module({
   imports: [PrismaModule],
-  controllers: [ScoutingController],
+  // Quarantined until its rebuild: FEATURE_SCOUTING (0.1.8; 1.11.1–1.11.8).
+  controllers: behindFeature('scouting', [ScoutingController]),
   providers: [
     // Repositories
     ScoutingReportRepository,

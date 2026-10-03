@@ -8,6 +8,8 @@ import { z } from 'zod';
 
 const secret = z.string().min(32);
 const port = z.coerce.number().int().min(1).max(65535);
+// Exactly `true` or `false`: a typo refuses to boot rather than guess.
+const flag = z.enum(['true', 'false']).transform((value) => value === 'true');
 
 export const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
@@ -25,6 +27,9 @@ export const Env = z.object({
   // The web app's origin: CORS allows it, and links in emails point to it.
   CORS_ORIGIN: z.url({ protocol: /^https?$/ }),
   MAIL_FROM: z.email(),
+  // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
+  FEATURE_MEDICAL: flag.default(false),
+  FEATURE_SCOUTING: flag.default(false),
 });
 export type Env = z.infer<typeof Env>;
 
