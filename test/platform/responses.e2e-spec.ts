@@ -91,13 +91,6 @@ describe('one success envelope', () => {
     };
     expect(data.createdAt).toMatch(ISO_UTC);
     expect(data.updatedAt).toMatch(ISO_UTC);
-
-    const health = await booted.http.get('/api/health');
-    const checked = health.body as {
-      data: { status: string; timestamp: string };
-    };
-    expect(checked.data.status).toBe('ok');
-    expect(checked.data.timestamp).toMatch(ISO_UTC);
   });
 
   it('a_command_with_nothing_to_return_answers_data_null', async () => {

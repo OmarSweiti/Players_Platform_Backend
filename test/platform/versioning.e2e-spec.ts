@@ -45,15 +45,16 @@ describe('versioned routes', () => {
       expect([method, path, unversioned.status]).toEqual([method, path, 404]);
     }
 
-    // The health checks alone stay unversioned.
+    // The probes alone sit outside the prefix and the version.
     expect(health.map(({ path }) => path)).toEqual([
-      '/api/health',
-      '/api/health/ready',
+      '/health/live',
+      '/health/ready',
     ]);
     for (const { path } of health) {
       expect((await booted.http.get(path)).status).toBe(200);
-      const versionedHealth = path.replace('/api/', '/api/v1/');
-      expect((await booted.http.get(versionedHealth)).status).toBe(404);
+      for (const elsewhere of [`/api${path}`, `/api/v1${path}`]) {
+        expect((await booted.http.get(elsewhere)).status).toBe(404);
+      }
     }
   });
 });

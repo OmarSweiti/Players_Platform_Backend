@@ -85,7 +85,7 @@ describe('NestJS 12', () => {
     expect(majors.size).toBe(1);
     expect([...majors][0]).toBeGreaterThanOrEqual(12);
 
-    await booted.http.get('/api/health').expect(200);
+    await booted.http.get('/health/live').expect(200);
   });
 
   it('a_route_schema_validates_and_transforms_its_parameter', async () => {

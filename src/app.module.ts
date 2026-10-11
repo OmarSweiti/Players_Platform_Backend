@@ -15,7 +15,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ScoutingModule } from './modules/scouting/scouting.module';
 import { MedicalModule } from './modules/medical/medical.module';
-import { HealthController } from './health/health.controller';
+import { HealthModule } from './health/health.module';
 import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -38,8 +38,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     NotificationsModule,
     ScoutingModule,
     MedicalModule,
+    HealthModule,
   ],
-  controllers: [HealthController],
   providers: [
     // Global guards run in this order. The feature gate is first: a disabled
     // module's routes answer 404 before authentication can answer 401.

@@ -94,6 +94,59 @@ function clientErrorStatusOf(exception: unknown): number | undefined {
   return expose === true && typeof status === 'number' ? status : undefined;
 }
 
+const logger = new Logger('ProblemDetailsFilter');
+
+/**
+ * Answers `exception` as a problem: the one writer of error bodies, whether
+ * Nest caught the exception (ProblemDetailsFilter) or no route took the
+ * request at all (answerUnknownPaths, app.setup.ts).
+ */
+export function sendProblem(
+  exception: unknown,
+  request: Request,
+  response: Response,
+): void {
+  const requestId = requestIdOf(request) ?? randomUUID();
+  const { code, fieldIssues, unexpected } = classify(exception);
+  const { status, title } = PROBLEMS[code];
+
+  // The class and, for the unexpected, the frames — never the message: it
+  // can carry the values that caused the error (describe-error.ts).
+  const line = `${unexpected ? 'Unhandled' : code} ${describeError(exception)} on ${request.method} ${routeTemplateOf(request)} [${requestId}]`;
+  if (unexpected) logger.error(line, stackFramesOf(exception));
+  else if (status >= 500) logger.error(line); // named by the contract: no frames
+  if (response.headersSent) {
+    response.end(); // too late for a problem; the log has the cause
+    return;
+  }
+
+  const locale = localeOf(request.headers['accept-language']);
+  const message = PROBLEMS[code].message[locale];
+  const problem: ProblemDetails = {
+    type: problemTypeOf(code),
+    title,
+    status,
+    detail: message,
+    instance: `urn:uuid:${requestId}`,
+    code,
+    message,
+    requestId,
+    fieldErrors: fieldIssues
+      .slice(0, MAX_FIELD_ERRORS)
+      .map(({ field, code: fieldCode }) => ({
+        field,
+        code: fieldCode,
+        message: FIELD_PROBLEMS[fieldCode][locale],
+      })),
+  };
+
+  response
+    .status(status)
+    .set({ [REQUEST_ID_HEADER]: requestId, 'Content-Language': locale })
+    .type('application/problem+json')
+    .json(problem);
+}
+
 /**
  * Every error, from every layer, as `application/problem+json`: a route's
  * exception, a guard's refusal, an unknown route, a body the parser refused.
@@ -101,53 +154,12 @@ function clientErrorStatusOf(exception: unknown): number | undefined {
  */
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
-  private readonly logger = new Logger(ProblemDetailsFilter.name);
-
   catch(exception: unknown, host: ArgumentsHost): void {
     const http = host.switchToHttp();
-    const request = http.getRequest<Request>();
-    const response = http.getResponse<Response>();
-    const requestId = requestIdOf(request) ?? randomUUID();
-    const { code, fieldIssues, unexpected } = classify(exception);
-    const { status, title } = PROBLEMS[code];
-
-    if (unexpected || status >= 500) {
-      // The class and the frames, never the message: it can carry the
-      // values that caused the error (describe-error.ts).
-      this.logger.error(
-        `${unexpected ? 'Unhandled' : code} ${describeError(exception)} on ${request.method} ${routeTemplateOf(request)} [${requestId}]`,
-        stackFramesOf(exception),
-      );
-    }
-    if (response.headersSent) {
-      response.end(); // too late for a problem; the log has the cause
-      return;
-    }
-
-    const locale = localeOf(request.headers['accept-language']);
-    const message = PROBLEMS[code].message[locale];
-    const problem: ProblemDetails = {
-      type: problemTypeOf(code),
-      title,
-      status,
-      detail: message,
-      instance: `urn:uuid:${requestId}`,
-      code,
-      message,
-      requestId,
-      fieldErrors: fieldIssues
-        .slice(0, MAX_FIELD_ERRORS)
-        .map(({ field, code: fieldCode }) => ({
-          field,
-          code: fieldCode,
-          message: FIELD_PROBLEMS[fieldCode][locale],
-        })),
-    };
-
-    response
-      .status(status)
-      .set({ [REQUEST_ID_HEADER]: requestId, 'Content-Language': locale })
-      .type('application/problem+json')
-      .json(problem);
+    sendProblem(
+      exception,
+      http.getRequest<Request>(),
+      http.getResponse<Response>(),
+    );
   }
 }

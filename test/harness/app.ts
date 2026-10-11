@@ -4,7 +4,7 @@ import type { INestApplication, LoggerService, Type } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
-import { configureApp } from '../../src/app.setup';
+import { answerUnknownPaths, configureApp } from '../../src/app.setup';
 import { SessionGuard } from '../../src/common/guards/session.guard';
 import { TestSessionGuard } from './session';
 
@@ -40,6 +40,9 @@ export async function bootApp(
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
+  // As main.ts does: every route first, then what none serves.
+  await app.init();
+  answerUnknownPaths(app);
   // Listen on 127.0.0.1 itself, on a port free there. Handed the server,
   // supertest would listen on every interface and then connect to 127.0.0.1,
   // where another process — an editor helper, a VM's port forward — may hold
