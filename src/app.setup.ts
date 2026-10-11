@@ -1,15 +1,21 @@
 import {
   INestApplication,
+  NotFoundException,
+  RequestMethod,
   StandardSchemaValidationPipe,
   VersioningType,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
 import { ValidationFailedError } from './common/errors/domain-error';
 import { fieldIssuesOf } from './common/errors/schema-issues';
-import { ProblemDetailsFilter } from './common/filters/problem-details.filter';
+import {
+  ProblemDetailsFilter,
+  sendProblem,
+} from './common/filters/problem-details.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
 import { assignRequestId } from './common/logging/request-id';
@@ -17,6 +23,9 @@ import type { Env } from './config/env.schema';
 
 /** The API's version: every route is `/api/v1/…`, except the health checks. */
 export const API_VERSION = '1';
+
+/** The routes served outside the API prefix and its version: the probes. */
+export const UNPREFIXED_ROUTES = ['health/live', 'health/ready'];
 
 /**
  * The HTTP pipeline: middleware, interceptors, CORS, the route prefix,
@@ -62,7 +71,12 @@ export function configureApp(app: INestApplication): string {
 
   // Global prefix for API routes
   const apiPrefix = config.get('API_PREFIX', { infer: true });
-  app.setGlobalPrefix(apiPrefix);
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: UNPREFIXED_ROUTES.map((path) => ({
+      path,
+      method: RequestMethod.GET,
+    })),
+  });
   // A breaking change gets a new version, beside the old (ADR-0010).
   app.enableVersioning({
     type: VersioningType.URI,
@@ -85,4 +99,16 @@ export function configureApp(app: INestApplication): string {
   );
 
   return apiPrefix;
+}
+
+/**
+ * Answers a path no route serves with the NOT_FOUND problem every unknown
+ * API route gets — outside the API prefix too, where Nest's own not-found
+ * handler does not reach. Call it after `app.init()`, so it follows every
+ * route, the API description's included.
+ */
+export function answerUnknownPaths(app: INestApplication): void {
+  app.use((request: Request, response: Response) =>
+    sendProblem(new NotFoundException(), request, response),
+  );
 }

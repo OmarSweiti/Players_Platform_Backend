@@ -44,6 +44,11 @@ export class ConflictError extends DomainError {
   readonly code = 'CONFLICT';
 }
 
+/** A dependency this process cannot serve without is not answering. */
+export class DependencyUnavailableError extends DomainError {
+  readonly code = 'DEPENDENCY_UNAVAILABLE';
+}
+
 /** The resource's state does not allow this action. */
 export class InvalidTransitionError extends DomainError {
   readonly code = 'INVALID_TRANSITION';
