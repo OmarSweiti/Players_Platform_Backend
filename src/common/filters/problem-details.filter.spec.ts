@@ -9,7 +9,11 @@ import {
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { describe, expect, it } from 'vitest';
-import { NotFoundError, ValidationFailedError } from '../errors/domain-error';
+import {
+  NotFoundError,
+  RateLimitedError,
+  ValidationFailedError,
+} from '../errors/domain-error';
 import { FIELD_PROBLEMS, PROBLEMS } from '../errors/error-codes';
 import {
   classify,
@@ -41,6 +45,12 @@ describe('classify', () => {
     expect(classify(new NotFoundError('Player not found'))).toMatchObject({
       code: 'NOT_FOUND',
       fieldIssues: [],
+    });
+    expect(classify(new RateLimitedError(42, 'Over the limit'))).toEqual({
+      code: 'RATE_LIMITED',
+      fieldIssues: [],
+      unexpected: false,
+      retryAfterSeconds: 42,
     });
   });
 
@@ -150,6 +160,20 @@ describe('ProblemDetailsFilter', () => {
     });
     expect(sent.body?.instance).toBe(`urn:uuid:${sent.body?.requestId}`);
     expect(JSON.stringify(sent.body)).not.toContain('too young');
+  });
+
+  it('says when to try again only when the error does', () => {
+    const limited = answer(new RateLimitedError(42, 'Over the export limit'));
+    expect(limited).toMatchObject({
+      status: 429,
+      headers: { 'Retry-After': '42' },
+    });
+    expect(limited.body).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(JSON.stringify(limited.body)).not.toContain('export');
+
+    expect(answer(new NotFoundError('gone')).headers).not.toHaveProperty(
+      'Retry-After',
+    );
   });
 
   it('names at most MAX_FIELD_ERRORS fields', () => {

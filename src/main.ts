@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import { answerUnknownPaths, configureApp } from './app.setup';
 import type { Env } from './config/env.schema';
@@ -9,7 +10,7 @@ import { setupSwagger } from './config/swagger';
 async function bootstrap() {
   // The environment is validated as AppModule loads (src/config/env.schema.ts):
   // a missing or invalid variable stops the process here, naming the variable.
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   const logger = new Logger('Bootstrap');
 

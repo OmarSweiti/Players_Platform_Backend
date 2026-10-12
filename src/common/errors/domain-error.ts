@@ -14,6 +14,8 @@ export interface FieldIssue {
  */
 export abstract class DomainError extends Error {
   abstract readonly code: ErrorCode;
+  /** When the client may try again, sent as `Retry-After`. */
+  readonly retryAfterSeconds?: number;
 
   constructor(
     message: string,
@@ -42,6 +44,18 @@ export class ValidationFailedError extends DomainError {
 /** The change conflicts with the data as it stands. */
 export class ConflictError extends DomainError {
   readonly code = 'CONFLICT';
+}
+
+/** Too many requests: the client may try again in `retryAfterSeconds`. */
+export class RateLimitedError extends DomainError {
+  readonly code = 'RATE_LIMITED';
+
+  constructor(
+    override readonly retryAfterSeconds: number,
+    message: string,
+  ) {
+    super(message);
+  }
 }
 
 /** A dependency this process cannot serve without is not answering. */
