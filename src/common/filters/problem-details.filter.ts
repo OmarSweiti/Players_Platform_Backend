@@ -59,6 +59,8 @@ export interface Classified {
   fieldIssues: readonly FieldIssue[];
   /** Nothing in the contract explains it: a 500, logged. */
   unexpected: boolean;
+  /** When to try again, if the error says (`Retry-After`). */
+  retryAfterSeconds?: number;
 }
 
 /**
@@ -69,8 +71,8 @@ export interface Classified {
  */
 export function classify(exception: unknown): Classified {
   if (exception instanceof DomainError) {
-    const { code, fieldIssues } = exception;
-    return { code, fieldIssues, unexpected: false };
+    const { code, fieldIssues, retryAfterSeconds } = exception;
+    return { code, fieldIssues, unexpected: false, retryAfterSeconds };
   }
   const status =
     exception instanceof HttpException
@@ -107,7 +109,8 @@ export function sendProblem(
   response: Response,
 ): void {
   const requestId = requestIdOf(request) ?? randomUUID();
-  const { code, fieldIssues, unexpected } = classify(exception);
+  const { code, fieldIssues, unexpected, retryAfterSeconds } =
+    classify(exception);
   const { status, title } = PROBLEMS[code];
 
   // The class and, for the unexpected, the frames — never the message: it
@@ -142,7 +145,13 @@ export function sendProblem(
 
   response
     .status(status)
-    .set({ [REQUEST_ID_HEADER]: requestId, 'Content-Language': locale })
+    .set({
+      [REQUEST_ID_HEADER]: requestId,
+      'Content-Language': locale,
+      ...(retryAfterSeconds === undefined
+        ? {}
+        : { 'Retry-After': String(retryAfterSeconds) }),
+    })
     .type('application/problem+json')
     .json(problem);
 }

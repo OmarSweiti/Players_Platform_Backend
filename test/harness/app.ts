@@ -1,11 +1,16 @@
-import type { Server } from 'node:http';
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import type { INestApplication, LoggerService, Type } from '@nestjs/common';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { answerUnknownPaths, configureApp } from '../../src/app.setup';
 import { SessionGuard } from '../../src/common/guards/session.guard';
+import {
+  RATE_LIMIT_KEY_PREFIX,
+  RATE_LIMIT_KEYS,
+} from '../../src/common/rate-limit/rate-limiter';
 import { TestSessionGuard } from './session';
 
 export interface BootedApp {
@@ -24,6 +29,14 @@ export async function bootApp(
     testSessions?: boolean;
     /** Test-only routes, served through the same pipeline as the app's. */
     controllers?: Type[];
+    /**
+     * Where this app counts its rate limits in Valkey. Each boot counts
+     * apart unless two share a namespace, as two API instances share one
+     * Valkey.
+     */
+    rateLimitNamespace?: string;
+    /** TRUSTED_PROXIES, for this app only: the environment has none. */
+    trustedProxies?: string[];
   } = {},
 ): Promise<BootedApp> {
   const builder = Test.createTestingModule({
@@ -37,9 +50,15 @@ export async function bootApp(
   if (opts.testSessions) {
     builder.overrideProvider(SessionGuard).useClass(TestSessionGuard);
   }
+  // Test files run at once against one Valkey: none may spend another's limits.
+  const namespace = opts.rateLimitNamespace ?? randomUUID();
+  builder
+    .overrideProvider(RATE_LIMIT_KEY_PREFIX)
+    .useValue(`${RATE_LIMIT_KEYS}test:${namespace}:`);
   const moduleRef = await builder.compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication<NestExpressApplication>();
   configureApp(app);
+  if (opts.trustedProxies) app.set('trust proxy', opts.trustedProxies);
   // As main.ts does: every route first, then what none serves.
   await app.init();
   answerUnknownPaths(app);
@@ -48,6 +67,6 @@ export async function bootApp(
   // where another process — an editor helper, a VM's port forward — may hold
   // the same port: on macOS both binds succeed, and that process answers.
   await app.listen(0, '127.0.0.1');
-  const { port } = (app.getHttpServer() as Server).address() as AddressInfo;
+  const { port } = app.getHttpServer().address() as AddressInfo;
   return { app, http: request(`http://127.0.0.1:${port}`) };
 }

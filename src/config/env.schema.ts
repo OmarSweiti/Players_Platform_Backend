@@ -9,6 +9,15 @@ import { z } from 'zod';
 const port = z.coerce.number().int().min(1).max(65535);
 // Exactly `true` or `false`: a typo refuses to boot rather than guess.
 const flag = z.enum(['true', 'false']).transform((value) => value === 'true');
+// A proxy the API believes about the client's address: an address, a subnet,
+// or one of Express's names for a range.
+const proxy = z.union([
+  z.ipv4(),
+  z.ipv6(),
+  z.cidrv4(),
+  z.cidrv6(),
+  z.enum(['loopback', 'linklocal', 'uniquelocal']),
+]);
 
 export const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
@@ -20,6 +29,18 @@ export const Env = z.object({
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_HOST: z.string().min(1).default('localhost'),
   REDIS_PORT: port.default(6379),
+  // The proxies whose X-Forwarded-For names the client (0.3.8), comma-
+  // separated. None by default: the client is whoever connected.
+  TRUSTED_PROXIES: z
+    .string()
+    .default('')
+    .transform((list) =>
+      list
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''),
+    )
+    .pipe(z.array(proxy)),
   // The web app's origin: CORS allows it, and links in emails point to it.
   CORS_ORIGIN: z.url({ protocol: /^https?$/ }),
   MAIL_FROM: z.email(),

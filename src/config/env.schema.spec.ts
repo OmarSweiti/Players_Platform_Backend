@@ -80,6 +80,25 @@ describe('the environment schema', () => {
     );
   });
 
+  it('believes no proxy unless told, and nothing that is not one', () => {
+    expect(parseEnv(valid)).toMatchObject({ TRUSTED_PROXIES: [] });
+    expect(
+      parseEnv({
+        ...valid,
+        TRUSTED_PROXIES: ' loopback, 10.0.0.0/8 ,fd00::/8, 192.0.2.10',
+      }),
+    ).toMatchObject({
+      TRUSTED_PROXIES: ['loopback', '10.0.0.0/8', 'fd00::/8', '192.0.2.10'],
+    });
+    // A host name, or `true` — which Express would read as "every proxy".
+    for (const list of ['loopback, proxy.agency.test', 'true', '10.0.0.0/33']) {
+      expect([list, failureOf({ ...valid, TRUSTED_PROXIES: list })]).toEqual([
+        list,
+        expect.stringContaining('TRUSTED_PROXIES is invalid'),
+      ]);
+    }
+  });
+
   it('boot_errors_name_the_variable_but_not_its_value', () => {
     const canary = 'canary-value-9b2e';
     const message = failureOf({
@@ -89,6 +108,7 @@ describe('the environment schema', () => {
       CORS_ORIGIN: canary,
       MAIL_FROM: canary,
       PORT: canary,
+      TRUSTED_PROXIES: canary,
     });
 
     for (const name of [
@@ -97,6 +117,7 @@ describe('the environment schema', () => {
       'CORS_ORIGIN',
       'MAIL_FROM',
       'PORT',
+      'TRUSTED_PROXIES',
     ]) {
       expect(message).toContain(name);
     }

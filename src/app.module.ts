@@ -16,6 +16,8 @@ import { NotificationsModule } from './modules/notifications/notifications.modul
 import { ScoutingModule } from './modules/scouting/scouting.module';
 import { MedicalModule } from './modules/medical/medical.module';
 import { HealthModule } from './health/health.module';
+import { RateLimitModule } from './common/rate-limit/rate-limit.module';
+import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { RolesGuard } from './common/guards/roles.guard';
@@ -39,6 +41,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     ScoutingModule,
     MedicalModule,
     HealthModule,
+    RateLimitModule,
   ],
   providers: [
     // Global guards run in this order. The feature gate is first: a disabled
@@ -47,6 +50,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     // useExisting, so a test can stand in for sessions (overrideProvider)
     SessionGuard,
     { provide: APP_GUARD, useExisting: SessionGuard },
+    // After the session, so that a signed-in member counts as themselves;
+    // before permissions, so that a refused request counts too.
+    { provide: APP_GUARD, useClass: RateLimitGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })

@@ -6,6 +6,7 @@ import {
   VersioningType,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
 import helmet from 'helmet';
 import compression from 'compression';
@@ -32,8 +33,13 @@ export const UNPREFIXED_ROUTES = ['health/live', 'health/ready'];
  * validation and errors. `main.ts` and the API test harness both call it, so
  * the tests exercise the pipeline that production runs. Returns the prefix.
  */
-export function configureApp(app: INestApplication): string {
+export function configureApp(app: NestExpressApplication): string {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
+
+  // Who the client is (`request.ip`): X-Forwarded-For is believed only from
+  // the proxies TRUSTED_PROXIES names, so that no client can choose the
+  // address its rate limits count against (0.3.8).
+  app.set('trust proxy', config.get('TRUSTED_PROXIES', { infer: true }));
 
   // First, so that every response carries its request id (X-Request-Id).
   app.use(assignRequestId);
@@ -65,8 +71,9 @@ export function configureApp(app: INestApplication): string {
       'X-Tenant-ID',
       'If-Match',
     ],
-    // What a browser's script may read: entity tags (0.3.6) and request ids.
-    exposedHeaders: ['ETag', 'X-Request-Id'],
+    // What a browser's script may read: entity tags (0.3.6), request ids, and
+    // when a refused request may be tried again (0.3.8).
+    exposedHeaders: ['ETag', 'X-Request-Id', 'Retry-After'],
   });
 
   // Global prefix for API routes
