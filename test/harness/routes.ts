@@ -10,7 +10,7 @@ import {
   VERSION_METADATA,
 } from '@nestjs/common/constants';
 import { ModulesContainer } from '@nestjs/core';
-import { API_VERSION } from '../../src/app.setup';
+import { API_VERSION, UNPREFIXED_ROUTES } from '../../src/app.setup';
 
 export type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
 
@@ -38,12 +38,16 @@ export function routesOf(controller: Type): Route[] {
       Reflect.getMetadata(VERSION_METADATA, controller) ??
       API_VERSION) as string | symbol;
     const segment = version === VERSION_NEUTRAL ? '' : `v${String(version)}`;
+    const local = `${base}/${path}`
+      .replace(/\/+/g, '/')
+      .replace(/^\/|\/$/g, '');
+    const served = UNPREFIXED_ROUTES.includes(local)
+      ? `/${local}`
+      : `/api/${segment}/${local}`.replace(/\/+/g, '/').replace(/\/$/, '');
     return [
       {
         method: RequestMethod[verb].toLowerCase() as Method,
-        path: `/api/${segment}/${base}/${path}`
-          .replace(/\/+/g, '/')
-          .replace(/\/$/, ''),
+        path: served,
         controller,
         handler,
       },

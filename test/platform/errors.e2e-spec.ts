@@ -193,7 +193,7 @@ describe('one error format: RFC 9457 problem details', () => {
     expect(new Set(ids).size).toBe(ids.length);
 
     // A success carries one too.
-    const health = await http.get('/api/health');
+    const health = await http.get('/health/live');
     expect(health.headers['x-request-id']).toMatch(UUID);
   });
 

@@ -19,7 +19,7 @@ describe('the API test harness', () => {
     expect(schema).toMatch(/^sadara_test_[0-9a-f]{12}$/);
 
     // The whole HTTP pipeline answers.
-    await booted.http.get('/api/health').expect(200);
+    await booted.http.get('/health/live').expect(200);
 
     // A fixture written to the run's schema is what the app itself reads.
     const tenant = await createTenant();

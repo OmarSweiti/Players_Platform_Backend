@@ -33,10 +33,10 @@ describe('secrets and personal data stay out of logs and error responses', () =>
     // A token in the query and a password in the body, on the routes that
     // log — the public health checks — and on the retired sign-in addresses
     // (0.1.6), which must leave no trace either.
-    await http.get('/api/health').query({ token: TOKEN, password: PASSWORD });
-    await http.get('/api/health/ready').query({ token: TOKEN });
+    await http.get('/health/live').query({ token: TOKEN, password: PASSWORD });
+    await http.get('/health/ready').query({ token: TOKEN });
     await http
-      .post('/api/health')
+      .post('/health/live')
       .send({ email, password: PASSWORD, token: TOKEN });
     await http.get('/api/v1/auth/verify-email').query({ token: TOKEN });
     await http.post('/api/v1/auth/login').send({ email, password: PASSWORD });
@@ -53,11 +53,11 @@ describe('secrets and personal data stay out of logs and error responses', () =>
   });
 
   it('urls_are_logged_without_query_strings', async () => {
-    await booted.http.get('/api/health').query({ token: TOKEN, lang: 'ar' });
+    await booted.http.get('/health/live').query({ token: TOKEN, lang: 'ar' });
 
     // The access log names the route template, and never the query.
     expect(
-      capture.lines.some((line) => line.includes('GET /api/health ')),
+      capture.lines.some((line) => line.includes('GET /health/live ')),
     ).toBe(true);
     for (const line of capture.lines) {
       expect(line).not.toContain('health?');
