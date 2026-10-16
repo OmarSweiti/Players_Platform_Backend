@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { lastValueFrom, of } from 'rxjs';
 import { describe, expect, it } from 'vitest';
+import { paginate } from '../pagination/paginate';
 import { EnvelopeInterceptor } from './envelope.interceptor';
 
 const answer = (value: unknown) =>
@@ -23,6 +24,17 @@ describe('EnvelopeInterceptor', () => {
     expect(await answer([1, 2])).toEqual({ data: [1, 2] });
     expect(await answer(undefined)).toEqual({ data: null });
     expect(await answer(null)).toEqual({ data: null });
+  });
+
+  it('answers a page as it is: it is already { data, page }', async () => {
+    const page = await paginate(
+      { limit: 2, scope: { tenantId: 't-1', filters: {}, sort: 'createdAt' } },
+      () => Promise.resolve([]),
+    );
+    expect(JSON.parse(JSON.stringify(await answer(page)))).toEqual({
+      data: [],
+      page: { hasMore: false, nextCursor: null },
+    });
   });
 
   it('streams a file as it is', async () => {

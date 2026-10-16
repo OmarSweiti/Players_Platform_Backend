@@ -13,6 +13,7 @@ run bash scripts/validate-branch-flow.sh --self-test
 run bash scripts/check-attribution.sh --self-test
 run bash scripts/check-protected-paths.sh --self-test
 run bash scripts/pr-type-label.sh --self-test
+run bash scripts/check-breaking-contract.sh --self-test
 run bash .githooks/test-hooks.sh
 if [ "$status" -eq 0 ]; then echo; echo "guards: every guard still refuses"; else echo; echo "guards: FAILED"; fi
 exit "$status"

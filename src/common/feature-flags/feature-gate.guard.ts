@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import { ApiExcludeController } from '@nestjs/swagger';
 import type { Env } from '../../config/env.schema';
 
 /** An unfinished module: off in every environment unless its flag is set. */
@@ -22,7 +23,9 @@ const FEATURE_KEY = 'sadara:feature';
 
 /**
  * Puts every controller a module mounts behind one flag. Called in the module
- * file, so a controller added to the module later is gated too.
+ * file, so a controller added to the module later is gated too. A gated
+ * module is not part of the API's contract either: it ships when it is
+ * rebuilt and released, and its routes join the contract then.
  */
 export function behindFeature<T extends Type[]>(
   feature: Feature,
@@ -30,6 +33,7 @@ export function behindFeature<T extends Type[]>(
 ): T {
   for (const controller of controllers) {
     SetMetadata(FEATURE_KEY, feature)(controller);
+    ApiExcludeController()(controller);
   }
   return controllers;
 }

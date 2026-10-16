@@ -13,6 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
+    "openapi": "ts-node --transpile-only scripts/export-openapi.ts",
     "seed": "ts-node src/database/seed.ts",
     "test": "vitest run --project unit",
     "test:int": "vitest run --project integration",

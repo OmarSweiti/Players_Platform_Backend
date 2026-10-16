@@ -94,8 +94,20 @@ test-e2e *$args:
     if [ "${1:-}" = "--" ]; then shift; fi
     npx --no-install vitest run --project e2e "$@"
 
+# The API contract (0.3.9): openapi/openapi.json is what the code generates, and breaks nothing in development's
+contract:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    npm run --silent openapi >/dev/null
+    git diff --exit-code -- openapi/openapi.json || {
+      echo "contract: openapi/openapi.json was stale — now regenerated; review and commit it" >&2
+      exit 1
+    }
+    git fetch -q origin development
+    bash ./scripts/check-breaking-contract.sh origin/development
+
 # CI's required `test` check, except the migration replay (that is `just migrations`)
-check: prisma lint build typecheck boundaries test
+check: prisma lint build typecheck boundaries test contract
 
 # Read-only integrity report on DATABASE_URL (or .env): exits 1 on any violation — run before every constraint or data migration
 preflight:

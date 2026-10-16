@@ -1,0 +1,345 @@
+{
+  "openapi": "3.1.0",
+  "paths": {
+    "/health/live": {
+      "get": {
+        "operationId": "HealthController.live",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Live"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 500
+                        },
+                        "code": {
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "The process is running",
+        "tags": [
+          "Health"
+        ],
+        "security": []
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "operationId": "HealthController.ready",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Ready"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 500
+                        },
+                        "code": {
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 503
+                        },
+                        "code": {
+                          "enum": [
+                            "DEPENDENCY_UNAVAILABLE"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "The process can serve: its dependencies answer",
+        "tags": [
+          "Health"
+        ],
+        "security": []
+      }
+    }
+  },
+  "info": {
+    "title": "Sadara API",
+    "description": "Player management for sports agencies, in Arabic and English. A success is `{ data }`; a failure is an RFC 9457 problem.",
+    "version": "1"
+  },
+  "components": {
+    "headers": {
+      "RequestId": {
+        "description": "Names this request in logs and problem details",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "RetryAfter": {
+        "description": "Seconds until the request may be tried again",
+        "schema": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "schemas": {
+      "Live": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "live"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "The problem type: urn:sadara:problem:<code>"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string",
+            "description": "This occurrence: urn:uuid:<request id>"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "VALIDATION_FAILED",
+              "INVALID_CURSOR",
+              "AUTHENTICATION_REQUIRED",
+              "SESSION_EXPIRED",
+              "FORBIDDEN",
+              "CSRF_FAILED",
+              "STEP_UP_REQUIRED",
+              "NOT_FOUND",
+              "CONFLICT",
+              "INVALID_TRANSITION",
+              "IDEMPOTENCY_IN_PROGRESS",
+              "IDEMPOTENCY_KEY_REUSED",
+              "REVISION_MISMATCH",
+              "PAYLOAD_TOO_LARGE",
+              "UNSUPPORTED_MEDIA_TYPE",
+              "PRECONDITION_REQUIRED",
+              "RATE_LIMITED",
+              "INTERNAL_ERROR",
+              "DEPENDENCY_UNAVAILABLE"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe to show, in the request's language"
+          },
+          "requestId": {
+            "type": "string"
+          },
+          "fieldErrors": {
+            "maxItems": 50,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "description": "A JSON Pointer into what was sent"
+                },
+                "code": {
+                  "type": "string",
+                  "enum": [
+                    "REQUIRED",
+                    "INVALID_TYPE",
+                    "INVALID_FORMAT",
+                    "INVALID_VALUE",
+                    "TOO_SMALL",
+                    "TOO_BIG",
+                    "OUT_OF_RANGE",
+                    "UNKNOWN_FIELD"
+                  ]
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "code",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status",
+          "detail",
+          "instance",
+          "code",
+          "message",
+          "requestId",
+          "fieldErrors"
+        ],
+        "additionalProperties": false
+      },
+      "Ready": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "__Host-Http-sadara_session",
+        "description": "The opaque session the API sets at sign-in (ADR-0023)."
+      },
+      "csrf": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-CSRF-Token",
+        "description": "The session's CSRF token, required on every write."
+      }
+    }
+  }
+}
