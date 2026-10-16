@@ -76,19 +76,8 @@ export function configureApp(app: NestExpressApplication): string {
     exposedHeaders: ['ETag', 'X-Request-Id', 'Retry-After'],
   });
 
-  // Global prefix for API routes
   const apiPrefix = config.get('API_PREFIX', { infer: true });
-  app.setGlobalPrefix(apiPrefix, {
-    exclude: UNPREFIXED_ROUTES.map((path) => ({
-      path,
-      method: RequestMethod.GET,
-    })),
-  });
-  // A breaking change gets a new version, beside the old (ADR-0010).
-  app.enableVersioning({
-    type: VersioningType.URI,
-    defaultVersion: API_VERSION,
-  });
+  configureRoutes(app, apiPrefix);
 
   // Validation, the one mechanism (ADR-0024): every body, query and path
   // parameter declares a Zod 4 schema — `@Body({ schema })`, `@Query({ schema
@@ -106,6 +95,25 @@ export function configureApp(app: NestExpressApplication): string {
   );
 
   return apiPrefix;
+}
+
+/**
+ * Where every route is served: under the API prefix and its version, except
+ * the probes. The contract is generated through this too (src/contract.ts),
+ * so it names the paths the application serves.
+ */
+export function configureRoutes(app: INestApplication, apiPrefix: string) {
+  app.setGlobalPrefix(apiPrefix, {
+    exclude: UNPREFIXED_ROUTES.map((path) => ({
+      path,
+      method: RequestMethod.GET,
+    })),
+  });
+  // A breaking change gets a new version, beside the old (ADR-0010).
+  app.enableVersioning({
+    type: VersioningType.URI,
+    defaultVersion: API_VERSION,
+  });
 }
 
 /**

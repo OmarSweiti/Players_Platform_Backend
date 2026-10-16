@@ -19,13 +19,16 @@ const proxy = z.union([
   z.enum(['loopback', 'linklocal', 'uniquelocal']),
 ]);
 
+/** Where the API's routes live; the committed contract names this one. */
+export const DEFAULT_API_PREFIX = 'api';
+
 export const Env = z.object({
   NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
   PORT: port.default(3000),
   API_PREFIX: z
     .string()
     .regex(/^[a-z0-9-]+$/)
-    .default('api'),
+    .default(DEFAULT_API_PREFIX),
   DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
   REDIS_HOST: z.string().min(1).default('localhost'),
   REDIS_PORT: port.default(6379),

@@ -127,6 +127,27 @@ jobs:
       - name: Format — every file is Prettier-formatted
         if: ${{ !cancelled() && steps.install.outcome == 'success' }}
         run: npx --no-install prettier --check "src/**/*.ts" "test/**/*.ts" "scripts/**/*.ts"
+      # The committed OpenAPI document is the API's contract (ADR-0010):
+      # generated from the routes and their Zod schemas in Nest's preview
+      # mode, so it needs no server and no database.
+      - name: The committed API contract is what the code generates
+        id: contract
+        if: ${{ !cancelled() && steps.prisma.outcome == 'success' }}
+        run: |
+          npm run openapi
+          git diff --exit-code -- openapi/openapi.json
+      # Against development's copy and development's reviewed exceptions, so a
+      # change can never excuse itself. Work PRs only: a promotion carries
+      # changes development has already accepted.
+      - name: No breaking change to development's contract
+        if: >-
+          ${{ !cancelled() && steps.contract.outcome == 'success' &&
+              github.event_name == 'pull_request' && github.base_ref == 'development' }}
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          bash ./scripts/check-breaking-contract.sh "$BASE_SHA"
 
   # REQUIRED CHECK. The policy scripts and the git hooks prove they still refuse.
   guards:

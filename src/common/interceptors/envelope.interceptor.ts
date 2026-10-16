@@ -6,6 +6,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { map, type Observable } from 'rxjs';
+import { isPage } from '../pagination/paginate';
 
 /** A success, as every route answers one (docs/reference/api.md). */
 export interface Success<T> {
@@ -15,8 +16,9 @@ export interface Success<T> {
 /**
  * Wraps every success in `{ data }`, exactly once: a controller returns the
  * resource itself, never a body of its own making. A command with nothing to
- * return answers `{ data: null }`; a file streams as it is. Errors never come
- * through here — they are problems (problem-details.filter.ts).
+ * return answers `{ data: null }`; a file streams as it is; a page from
+ * paginate() is already `{ data, page }`. Errors never come through here —
+ * they are problems (problem-details.filter.ts).
  */
 @Injectable()
 export class EnvelopeInterceptor implements NestInterceptor {
@@ -28,7 +30,9 @@ export class EnvelopeInterceptor implements NestInterceptor {
       .handle()
       .pipe(
         map((data: unknown) =>
-          data instanceof StreamableFile ? data : { data: data ?? null },
+          data instanceof StreamableFile || isPage(data)
+            ? data
+            : { data: data ?? null },
         ),
       );
   }

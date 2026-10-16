@@ -11,6 +11,15 @@ export interface Page<T> {
   page: { nextCursor: string | null; hasMore: boolean };
 }
 
+// Marks what paginate returns, so the envelope does not wrap it a second time
+// (envelope.interceptor.ts). A symbol, and not enumerable: JSON never sends it.
+const PAGE = Symbol('sadara.page');
+
+/** Whether a controller returned a page, which is already `{ data, page }`. */
+export function isPage(value: unknown): value is Page<unknown> {
+  return typeof value === 'object' && value !== null && PAGE in value;
+}
+
 export interface PageQuery {
   limit: number;
   cursor?: string;
@@ -40,11 +49,12 @@ export async function paginate<T extends Keyset>(
   const hasMore = rows.length > query.limit;
   const data = rows.slice(0, query.limit);
   const last = data.at(-1);
-  return {
+  const page: Page<T> = {
     data,
     page: {
       hasMore,
       nextCursor: hasMore && last ? encodeCursor(last, query.scope) : null,
     },
   };
+  return Object.defineProperty(page, PAGE, { value: true });
 }

@@ -51,6 +51,20 @@ database differs from `schema.prisma` (a schema edit without its migration).
 `just migrations` runs the same check locally against a throwaway PostgreSQL in
 Docker — never against your development database.
 
+## The API contract
+
+`openapi/openapi.json` is the API's contract (ADR-0010), generated from the
+routes and their Zod schemas. Every route declares its success with
+`@Returns(schema)` and the problems it raises itself with `@Raises(…)`; the
+security and the problems the HTTP pipeline can answer with are added for it
+(`src/common/openapi/contract.ts`), and generation fails on a route that
+declares no success. After changing a route, run `npm run openapi` and commit
+the file. `just contract` checks it as CI does: the file is what the code
+generates, and nothing in it breaks `development`'s copy. A breaking change
+gets a new version of its route; a reviewed exception is a line of
+`openapi/breaking-changes.allowed`, merged to `development` in a pull request
+of its own before the change (`scripts/check-breaking-contract.sh`).
+
 ## Before you push
 
 `just pre-push` runs the complete local gate: schema validation and client
