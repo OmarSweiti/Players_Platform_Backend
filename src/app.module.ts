@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { configOptions } from './config/env.schema';
+import { LoggingModule } from './infrastructure/logging/logging.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { EventsModule } from './infrastructure/events/events.module';
 import { MailModule } from './infrastructure/mail/mail.module';
@@ -27,6 +28,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     // Validates the environment as this module loads: the API refuses to
     // boot on a missing or invalid variable (src/config/env.schema.ts).
     ConfigModule.forRoot(configOptions),
+    // Structured logs: the access log, and every other line as JSON.
+    LoggingModule,
     PrismaModule,
     EventsModule,
     MailModule,

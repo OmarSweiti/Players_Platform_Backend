@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
+import { Logger } from 'nestjs-pino';
 import helmet from 'helmet';
 import compression from 'compression';
 import cookieParser from 'cookie-parser';
@@ -17,7 +18,6 @@ import {
   ProblemDetailsFilter,
   sendProblem,
 } from './common/filters/problem-details.filter';
-import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { EnvelopeInterceptor } from './common/interceptors/envelope.interceptor';
 import { assignRequestId } from './common/logging/request-id';
 import type { Env } from './config/env.schema';
@@ -36,6 +36,10 @@ export const UNPREFIXED_ROUTES = ['health/live', 'health/ready'];
 export function configureApp(app: NestExpressApplication): string {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
 
+  // Every log line as JSON through pino (infrastructure/logging), Nest's own
+  // included; main.ts buffers what Nest logs before this.
+  app.useLogger(app.get(Logger));
+
   // Who the client is (`request.ip`): X-Forwarded-For is believed only from
   // the proxies TRUSTED_PROXIES names, so that no client can choose the
   // address its rate limits count against (0.3.8).
@@ -47,8 +51,7 @@ export function configureApp(app: NestExpressApplication): string {
   // Every error, from every layer, as RFC 9457 problem details.
   app.useGlobalFilters(new ProblemDetailsFilter());
 
-  // The access log, then every success as `{ data }`, once.
-  app.useGlobalInterceptors(new LoggingInterceptor());
+  // Every success as `{ data }`, once. The access log is pino-http's.
   app.useGlobalInterceptors(new EnvelopeInterceptor());
 
   // Security - Helmet for secure HTTP headers

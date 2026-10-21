@@ -100,7 +100,7 @@ describe('one error format: RFC 9457 problem details', () => {
 
   beforeAll(async () => {
     booted = await bootApp({
-      logger: capture,
+      logs: capture,
       controllers: [ErrorsProbeController],
     });
     capture.start();

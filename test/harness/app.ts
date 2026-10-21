@@ -1,16 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
-import type { INestApplication, LoggerService, Type } from '@nestjs/common';
+import type { INestApplication, Type } from '@nestjs/common';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { answerUnknownPaths, configureApp } from '../../src/app.setup';
 import { SessionGuard } from '../../src/common/guards/session.guard';
+import { LOG_SINK } from '../../src/infrastructure/logging/logger-options';
 import {
   RATE_LIMIT_KEY_PREFIX,
   RATE_LIMIT_KEYS,
 } from '../../src/common/rate-limit/rate-limiter';
+import type { LogCapture } from './log-capture';
 import { TestSessionGuard } from './session';
 
 export interface BootedApp {
@@ -25,7 +27,12 @@ export interface BootedApp {
  */
 export async function bootApp(
   opts: {
-    logger?: LoggerService;
+    /**
+     * Captures the structured log, every level. nestjs-pino keeps one logger
+     * per process, built by the first app: in a file, pass it to the first
+     * bootApp.
+     */
+    logs?: LogCapture;
     testSessions?: boolean;
     /** Test-only routes, served through the same pipeline as the app's. */
     controllers?: Type[];
@@ -43,9 +50,9 @@ export async function bootApp(
     imports: [AppModule],
     controllers: opts.controllers,
   });
-  // Nest's testing logger drops everything but errors; a test that inspects
-  // the log passes its own (test/harness/log-capture.ts).
-  if (opts.logger) builder.setLogger(opts.logger);
+  // The log goes to stdout, errors only, as in every test; a test that reads
+  // it captures it (test/harness/log-capture.ts).
+  if (opts.logs) builder.overrideProvider(LOG_SINK).useValue(opts.logs.sink);
   // Signed-in requests, until real sessions exist (test/harness/session.ts).
   if (opts.testSessions) {
     builder.overrideProvider(SessionGuard).useClass(TestSessionGuard);
