@@ -2,14 +2,27 @@
 # Wait until every check the target branch's rulesets REQUIRE has registered
 # on the PR, then watch until all of them finish, and pass only if each one
 # passed. `gh pr checks --watch` on its own can report green while a slower
-# workflow has not even registered its check yet.
-#   ./scripts/watch-required-checks.sh <pr-number-or-url>
+# workflow has not even registered its check yet. `--except <check>` leaves one
+# out: `just pr` waits for everything but `validation`, whose evidence can
+# only be posted once the PR exists.
+#   ./scripts/watch-required-checks.sh <pr-number-or-url> [--except <check>]…
 set -euo pipefail
-pr=${1:?usage: watch-required-checks.sh <pr-number-or-url>}
+pr=${1:?usage: watch-required-checks.sh <pr-number-or-url> [--except <check>]…}
+shift
+except=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --except) except+=("${2:?--except needs a check name}"); shift 2 ;;
+    *) echo "watch-required-checks: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
 
 base=$(gh pr view "$pr" --json baseRefName --jq .baseRefName)
 required=$(gh api "repos/{owner}/{repo}/rules/branches/$base" \
   --jq '[.[] | select(.type == "required_status_checks") | .parameters.required_status_checks[].context] | unique | .[]')
+for check in "${except[@]+"${except[@]}"}"; do
+  required=$(grep -vxF -- "$check" <<<"$required" || true)
+done
 if [ -z "$required" ]; then
   echo "no ruleset requires a check on $base — watching every check instead"
   exec gh pr checks "$pr" --watch

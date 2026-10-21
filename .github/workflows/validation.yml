@@ -1,0 +1,54 @@
+name: validation
+
+on:
+  pull_request:
+    branches: [development, staging, main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  # REQUIRED CHECK on development. The head commit was run and seen working:
+  # a validation comment for exactly this commit, from the maintainer or the
+  # engineering app (scripts/check-validation.sh). It stays red until the
+  # evidence is posted; the umbrella's `just evidence` posts it and runs this
+  # job again. Keep the job id: the ruleset requires it by name.
+  validation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read # the PR and its comments; nothing is written
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      # As the supply-chain job takes its policy: the BASE branch's checker,
+      # so a change cannot relax the check it has to pass. Only the change
+      # that introduces the checker runs its own copy.
+      - name: Take the checker from the trusted base
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "$BASE_SHA:scripts/check-validation.sh" 2>/dev/null; then
+            git show "$BASE_SHA:scripts/check-validation.sh" >"$RUNNER_TEMP/check-validation.sh"
+          else
+            cp scripts/check-validation.sh "$RUNNER_TEMP/check-validation.sh"
+          fi
+      - name: The head commit carries validation evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: bash "$RUNNER_TEMP/check-validation.sh" "$REPO" "$NUMBER"
