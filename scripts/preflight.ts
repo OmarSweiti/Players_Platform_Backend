@@ -113,10 +113,10 @@ export async function runPreflight(
       );
     }
 
-    const currencies: string[] = (await exists(client, 'type', '"Currency"'))
+    const currencies: string[] = (await exists(client, 'type', 'currency'))
       ? (
           await client.query<{ code: string }>(
-            `SELECT unnest(enum_range(NULL::"Currency"))::text AS code`,
+            `SELECT unnest(enum_range(NULL::currency))::text AS code`,
           )
         ).rows.map(({ code }) => code)
       : [];

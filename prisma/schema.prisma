@@ -8,6 +8,10 @@ datasource db {
   provider = "postgresql"
 }
 
+// Every name in the database is lower snake_case (0.4.0): a camelCase field
+// carries @map("snake_case") and every enum @@map, so no SQL statement has to
+// quote a name. test/db/naming.integration-spec.ts refuses anything else.
+
 //////////////////////////
 // ENUMS
 //////////////////////////
@@ -31,6 +35,8 @@ enum UserRole {
   TRAINING_MANAGER   // Training coordination
   PLAYER             // Athlete
   GUARDIAN           // Parent/guardian (academy)
+
+  @@map("user_role")
 }
 
 enum ContractStatus {
@@ -41,6 +47,8 @@ enum ContractStatus {
   EXPIRED
   TERMINATED
   REJECTED
+
+  @@map("contract_status")
 }
 
 enum ContractType {
@@ -50,6 +58,8 @@ enum ContractType {
   SPONSORSHIP
   COACHING
   OTHER
+
+  @@map("contract_type")
 }
 
 enum EnrollmentStatus {
@@ -58,6 +68,8 @@ enum EnrollmentStatus {
   REJECTED
   CANCELLED
   WAITLISTED
+
+  @@map("enrollment_status")
 }
 
 enum PaymentStatus {
@@ -66,6 +78,8 @@ enum PaymentStatus {
   PARTIAL
   REFUNDED
   WAIVED
+
+  @@map("payment_status")
 }
 
 enum MessageType {
@@ -73,11 +87,15 @@ enum MessageType {
   FILE
   IMAGE
   SYSTEM
+
+  @@map("message_type")
 }
 
 enum ConversationMemberRole {
   MEMBER
   ADMIN
+
+  @@map("conversation_member_role")
 }
 
 enum LegalTicketStatus {
@@ -86,6 +104,8 @@ enum LegalTicketStatus {
   PENDING_REVIEW
   RESOLVED
   CLOSED
+
+  @@map("legal_ticket_status")
 }
 
 enum LegalTicketPriority {
@@ -93,12 +113,16 @@ enum LegalTicketPriority {
   MEDIUM
   HIGH
   URGENT
+
+  @@map("legal_ticket_priority")
 }
 
 enum ApprovalStatus {
   PENDING
   APPROVED
   REJECTED
+
+  @@map("approval_status")
 }
 
 enum PlayerPosition {
@@ -112,6 +136,8 @@ enum PlayerPosition {
   LW
   RW
   ST
+
+  @@map("player_position")
 }
 
 enum PlayerStatus {
@@ -121,6 +147,8 @@ enum PlayerStatus {
   LOANED_OUT
   RETIRED
   FREE_AGENT
+
+  @@map("player_status")
 }
 
 enum NotificationType {
@@ -135,6 +163,8 @@ enum NotificationType {
   LEGAL_TICKET_UPDATED
   MEDICAL_RECORD_ADDED
   SYSTEM_ALERT
+
+  @@map("notification_type")
 }
 
 enum DocumentEntityType {
@@ -153,12 +183,16 @@ enum DocumentEntityType {
   SEASON
   PERFORMANCE_RECORD
   RATING
+
+  @@map("document_entity_type")
 }
 
 enum FootPreference {
   LEFT
   RIGHT
   BOTH
+
+  @@map("foot_preference")
 }
 
 enum AttendanceStatus {
@@ -166,6 +200,8 @@ enum AttendanceStatus {
   ABSENT
   LATE
   EXCUSED
+
+  @@map("attendance_status")
 }
 
 enum Currency {
@@ -173,12 +209,16 @@ enum Currency {
   EUR
   GBP
   JOD
+
+  @@map("currency")
 }
 
 enum SalaryPeriod {
   WEEKLY
   MONTHLY
   ANNUAL
+
+  @@map("salary_period")
 }
 
 //////////////////////////
@@ -200,6 +240,8 @@ enum PermissionCategory {
   REPORT
   DOCUMENT
   NOTIFICATION
+
+  @@map("permission_category")
 }
 
 enum PermissionAction {
@@ -213,6 +255,8 @@ enum PermissionAction {
   ASSIGN
   VIEW_CONFIDENTIAL
   MANAGE
+
+  @@map("permission_action")
 }
 
 //////////////////////////
@@ -225,6 +269,8 @@ enum ScoutReportStatus {
   UNDER_REVIEW
   APPROVED
   REJECTED
+
+  @@map("scout_report_status")
 }
 
 enum RecommendationLevel {
@@ -232,6 +278,8 @@ enum RecommendationLevel {
   SIGN
   MONITOR
   NOT_SUITABLE
+
+  @@map("recommendation_level")
 }
 
 // Medical Module Enums
@@ -243,6 +291,8 @@ enum InjuryType {
   JOINT
   HEAD_CONCUSSION
   OTHER
+
+  @@map("injury_type")
 }
 
 enum InjurySeverity {
@@ -250,6 +300,8 @@ enum InjurySeverity {
   MODERATE
   SEVERE
   CRITICAL
+
+  @@map("injury_severity")
 }
 
 enum TreatmentStatus {
@@ -257,6 +309,8 @@ enum TreatmentStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+
+  @@map("treatment_status")
 }
 
 enum MedicalRecordType {
@@ -266,6 +320,8 @@ enum MedicalRecordType {
   VACCINATION
   MEDICAL_EXAM
   REHABILITATION
+
+  @@map("medical_record_type")
 }
 
 //////////////////////////
@@ -277,8 +333,8 @@ model Tenant {
   name        String  @db.VarChar(255)
   slug        String  @unique @db.VarChar(100)
   domain      String? @unique @db.VarChar(255)
-  logoUrl     String? @db.VarChar(500)
-  isActive    Boolean @default(true)
+  logoUrl     String? @db.VarChar(500) @map("logo_url")
+  isActive    Boolean @default(true) @map("is_active")
 
   /// Flexible per-tenant configuration (timezone, currency, feature flags, etc.)
   settings    Json?
@@ -310,8 +366,8 @@ model Tenant {
   scoutingAssignments ScoutingAssignment[]
   treatmentSessions   TreatmentSession[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@map("tenants")
   @@index([isActive])
@@ -320,7 +376,7 @@ model Tenant {
 
 model User {
   id                    String    @id @default(uuid()) @db.Uuid
-  tenantId              String    @db.Uuid
+  tenantId              String    @db.Uuid @map("tenant_id")
 
   email                 String    @db.VarChar(255)
   // No credential is stored here: passwords, second factors, reset and
@@ -329,14 +385,14 @@ model User {
 
   role                  UserRole
 
-  firstName             String?   @db.VarChar(100)
-  lastName              String?   @db.VarChar(100)
-  avatarUrl             String?   @db.VarChar(500)
+  firstName             String?   @db.VarChar(100) @map("first_name")
+  lastName              String?   @db.VarChar(100) @map("last_name")
+  avatarUrl             String?   @db.VarChar(500) @map("avatar_url")
   phone                 String?   @db.VarChar(20)
 
-  lastLoginAt           DateTime?
+  lastLoginAt           DateTime? @map("last_login_at")
 
-  isActive              Boolean   @default(true)
+  isActive              Boolean   @default(true) @map("is_active")
 
   /// Extra per-user preferences (UI theme, language, notification prefs, etc.)
   preferences           Json?
@@ -345,11 +401,11 @@ model User {
   department            String?   @db.VarChar(100) // e.g., "Coaching", "Medical", "Legal"
   position              String?   @db.VarChar(150) // Job title
   certifications        Json?     // Array of certifications/licenses
-  employmentStartDate   DateTime?
-  employmentEndDate     DateTime?
+  employmentStartDate   DateTime? @map("employment_start_date")
+  employmentEndDate     DateTime? @map("employment_end_date")
   bio                   String?   @db.Text
-  emergencyContact      String?   @db.VarChar(150)
-  emergencyPhone        String?   @db.VarChar(20)
+  emergencyContact      String?   @db.VarChar(150) @map("emergency_contact")
+  emergencyPhone        String?   @db.VarChar(20) @map("emergency_phone")
 
   tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -375,9 +431,9 @@ model User {
   scoutingAssignmentsBy ScoutingAssignment[] @relation("ScoutingAssignmentBy")
   treatmentSessions     TreatmentSession[]   @relation("TreatmentSessionConductor")
 
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  deletedAt             DateTime?
+  createdAt             DateTime  @default(now()) @map("created_at")
+  updatedAt             DateTime  @updatedAt @map("updated_at")
+  deletedAt             DateTime? @map("deleted_at")
 
   @@unique([tenantId, email])
   @@unique([id, tenantId])
@@ -395,12 +451,12 @@ model User {
 
 model Season {
   id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
+  tenantId    String   @db.Uuid @map("tenant_id")
 
   name        String   @db.VarChar(255)
-  startDate   DateTime
-  endDate     DateTime
-  isCurrent   Boolean  @default(false)
+  startDate   DateTime @map("start_date")
+  endDate     DateTime @map("end_date")
+  isCurrent   Boolean  @default(false) @map("is_current")
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
@@ -408,9 +464,9 @@ model Season {
   trainings   Training[]
   performances PerformanceRecord[]
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -425,25 +481,25 @@ model Season {
 
 model Document {
   id          String             @id @default(uuid()) @db.Uuid
-  tenantId    String             @db.Uuid
+  tenantId    String             @db.Uuid @map("tenant_id")
 
-  entityType  DocumentEntityType
-  entityId    String             @db.Uuid
+  entityType  DocumentEntityType @map("entity_type")
+  entityId    String             @db.Uuid @map("entity_id")
 
-  fileUrl     String             @db.VarChar(500)
-  fileName    String             @db.VarChar(255)
-  fileSize    Int?
-  mimeType    String?            @db.VarChar(100)
+  fileUrl     String             @db.VarChar(500) @map("file_url")
+  fileName    String             @db.VarChar(255) @map("file_name")
+  fileSize    Int? @map("file_size")
+  mimeType    String?            @db.VarChar(100) @map("mime_type")
   description String?            @db.VarChar(500)
 
   /// Uploaded by (nullable in case user is deleted)
-  uploadedById String?           @db.Uuid
+  uploadedById String?           @db.Uuid @map("uploaded_by_id")
 
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  createdAt   DateTime           @default(now())
-  updatedAt   DateTime           @updatedAt
-  deletedAt   DateTime?
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -459,31 +515,31 @@ model Document {
 
 model Player {
   id                String          @id @default(uuid()) @db.Uuid
-  tenantId          String          @db.Uuid
+  tenantId          String          @db.Uuid @map("tenant_id")
 
-  fullName          String          @db.VarChar(255)
-  dateOfBirth       DateTime?
+  fullName          String          @db.VarChar(255) @map("full_name")
+  dateOfBirth       DateTime? @map("date_of_birth")
   nationality       String?         @db.VarChar(100)
-  secondNationality String?         @db.VarChar(100)
+  secondNationality String?         @db.VarChar(100) @map("second_nationality")
   position          PlayerPosition?
-  secondaryPosition PlayerPosition?
-  footPreference    FootPreference?
+  secondaryPosition PlayerPosition? @map("secondary_position")
+  footPreference    FootPreference? @map("foot_preference")
   status            PlayerStatus    @default(ACTIVE)
-  currentClub       String?         @db.VarChar(150)
-  jerseyNumber      Int?
+  currentClub       String?         @db.VarChar(150) @map("current_club")
+  jerseyNumber      Int? @map("jersey_number")
 
   height            Float?
   weight            Float?
 
-  passportNumber    String?         @db.VarChar(20)
-  passportExpiry    DateTime?
+  passportNumber    String?         @db.VarChar(20) @map("passport_number")
+  passportExpiry    DateTime? @map("passport_expiry")
 
-  agentName         String?         @db.VarChar(150)
-  agentEmail        String?         @db.VarChar(255)
-  agentPhone        String?         @db.VarChar(20)
+  agentName         String?         @db.VarChar(150) @map("agent_name")
+  agentEmail        String?         @db.VarChar(255) @map("agent_email")
+  agentPhone        String?         @db.VarChar(20) @map("agent_phone")
 
-  emergencyContact  String?         @db.VarChar(150)
-  emergencyPhone    String?         @db.VarChar(20)
+  emergencyContact  String?         @db.VarChar(150) @map("emergency_contact")
+  emergencyPhone    String?         @db.VarChar(20) @map("emergency_phone")
 
   bio               String?         @db.Text
 
@@ -502,9 +558,9 @@ model Player {
   watchlists         PlayerWatchlist[]
   treatmentSessions  TreatmentSession[]
 
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  deletedAt         DateTime?
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -517,22 +573,22 @@ model Player {
 
 model PlayerMedia {
   id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  playerId    String   @db.Uuid
+  tenantId    String   @db.Uuid @map("tenant_id")
+  playerId    String   @db.Uuid @map("player_id")
 
-  fileUrl     String   @db.VarChar(500)
-  fileName    String?  @db.VarChar(255)
-  fileSize    Int?
-  mimeType    String?  @db.VarChar(100)
+  fileUrl     String   @db.VarChar(500) @map("file_url")
+  fileName    String?  @db.VarChar(255) @map("file_name")
+  fileSize    Int? @map("file_size")
+  mimeType    String?  @db.VarChar(100) @map("mime_type")
   caption     String?  @db.VarChar(255)
-  isFeatured  Boolean  @default(false)
+  isFeatured  Boolean  @default(false) @map("is_featured")
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  deletedAt   DateTime?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -543,20 +599,20 @@ model PlayerMedia {
 
 model MedicalRecord {
   id               String    @id @default(uuid()) @db.Uuid
-  tenantId         String    @db.Uuid
-  playerId         String    @db.Uuid
-  createdById      String    @db.Uuid
+  tenantId         String    @db.Uuid @map("tenant_id")
+  playerId         String    @db.Uuid @map("player_id")
+  createdById      String    @db.Uuid @map("created_by_id")
 
-  injuryType       String    @db.VarChar(255)
-  bodyPart         String?   @db.VarChar(100)
+  injuryType       String    @db.VarChar(255) @map("injury_type")
+  bodyPart         String?   @db.VarChar(100) @map("body_part")
   severity         String?   @db.VarChar(50)
   description      String?   @db.Text
   treatment        String?   @db.Text
-  injuryDate       DateTime?
-  recoveryDate     DateTime?
-  returnToPlayDate DateTime?
+  injuryDate       DateTime? @map("injury_date")
+  recoveryDate     DateTime? @map("recovery_date")
+  returnToPlayDate DateTime? @map("return_to_play_date")
 
-  isConfidential   Boolean   @default(true)
+  isConfidential   Boolean   @default(true) @map("is_confidential")
 
   /// Attachments (scans, reports) are stored in the Document model
   metadata         Json?
@@ -566,9 +622,9 @@ model MedicalRecord {
   createdBy        User      @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
   treatmentSessions TreatmentSession[]
 
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  deletedAt        DateTime?
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -584,36 +640,36 @@ model MedicalRecord {
 
 model Contract {
   id                String         @id @default(uuid()) @db.Uuid
-  tenantId          String         @db.Uuid
-  playerId          String         @db.Uuid
-  createdById       String         @db.Uuid
-  seasonId          String?        @db.Uuid
+  tenantId          String         @db.Uuid @map("tenant_id")
+  playerId          String         @db.Uuid @map("player_id")
+  createdById       String         @db.Uuid @map("created_by_id")
+  seasonId          String?        @db.Uuid @map("season_id")
 
   title             String         @db.VarChar(255)
   type              ContractType   @default(PROFESSIONAL)
   status            ContractStatus @default(DRAFT)
 
-  startDate         DateTime
-  endDate           DateTime
+  startDate         DateTime @map("start_date")
+  endDate           DateTime @map("end_date")
 
   /// Gross salary per pay period. Stored as Decimal(16,2).
   /// For high-precision arithmetic (e.g., bonus calculations), consider minor-unit integer storage in application layer.
-  salaryAmount      Decimal?       @db.Decimal(16, 2)
-  salaryCurrency    Currency       @default(USD)
-  salaryPeriod      SalaryPeriod?
+  salaryAmount      Decimal?       @db.Decimal(16, 2) @map("salary_amount")
+  salaryCurrency    Currency       @default(USD) @map("salary_currency")
+  salaryPeriod      SalaryPeriod? @map("salary_period")
 
-  bonusDetails      Json?
-  signingFee        Decimal?       @db.Decimal(14, 2)
+  bonusDetails      Json? @map("bonus_details")
+  signingFee        Decimal?       @db.Decimal(14, 2) @map("signing_fee")
 
   /// Primary file stored in Document model; this field is kept for quick access to latest version
-  fileUrl           String?        @db.VarChar(500)
+  fileUrl           String?        @db.VarChar(500) @map("file_url")
 
-  signedAt          DateTime?
-  approvedAt        DateTime?
-  expiresNotifiedAt DateTime?
+  signedAt          DateTime? @map("signed_at")
+  approvedAt        DateTime? @map("approved_at")
+  expiresNotifiedAt DateTime? @map("expires_notified_at")
 
-  terminationDate   DateTime?
-  terminationReason String?        @db.VarChar(500)
+  terminationDate   DateTime? @map("termination_date")
+  terminationReason String?        @db.VarChar(500) @map("termination_reason")
 
   metadata          Json?
 
@@ -625,9 +681,9 @@ model Contract {
   versions          ContractVersion[]
   approvals         ContractApproval[]
 
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
-  deletedAt         DateTime?
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -645,25 +701,25 @@ model Contract {
 
 model ContractVersion {
   id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  contractId   String   @db.Uuid
-  createdById  String   @db.Uuid
+  tenantId     String   @db.Uuid @map("tenant_id")
+  contractId   String   @db.Uuid @map("contract_id")
+  createdById  String   @db.Uuid @map("created_by_id")
 
   version      Int
-  changeNote   String?  @db.VarChar(500)
+  changeNote   String?  @db.VarChar(500) @map("change_note")
 
-  fileUrl      String   @db.VarChar(500)
-  fileName     String?  @db.VarChar(255)
-  fileSize     Int?
-  mimeType     String?  @db.VarChar(100)
+  fileUrl      String   @db.VarChar(500) @map("file_url")
+  fileName     String?  @db.VarChar(255) @map("file_name")
+  fileSize     Int? @map("file_size")
+  mimeType     String?  @db.VarChar(100) @map("mime_type")
 
   contract     Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict)
   createdBy    User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
 
   @@unique([contractId, version])
   @@unique([id, tenantId])
@@ -676,25 +732,25 @@ model ContractVersion {
 
 model ContractApproval {
   id            String         @id @default(uuid()) @db.Uuid
-  tenantId      String         @db.Uuid
-  contractId    String         @db.Uuid
-  approvedById  String         @db.Uuid
+  tenantId      String         @db.Uuid @map("tenant_id")
+  contractId    String         @db.Uuid @map("contract_id")
+  approvedById  String         @db.Uuid @map("approved_by_id")
 
   status        ApprovalStatus @default(PENDING)
   comment       String?        @db.VarChar(1000)
 
   /// For ordered approval workflows (step 1 = legal, step 2 = owner, etc.)
-  stepOrder     Int            @default(1)
+  stepOrder     Int            @default(1) @map("step_order")
 
-  respondedAt   DateTime?
+  respondedAt   DateTime? @map("responded_at")
 
   contract      Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict)
   approvedBy    User     @relation(fields: [approvedById, tenantId], references: [id, tenantId], onDelete: Restrict)
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deletedAt     DateTime?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
   @@unique([contractId, approvedById])
   @@unique([id, tenantId])
@@ -711,38 +767,38 @@ model ContractApproval {
 
 model PerformanceRecord {
   id              String    @id @default(uuid()) @db.Uuid
-  tenantId        String    @db.Uuid
-  playerId        String    @db.Uuid
-  seasonId        String?   @db.Uuid
+  tenantId        String    @db.Uuid @map("tenant_id")
+  playerId        String    @db.Uuid @map("player_id")
+  seasonId        String?   @db.Uuid @map("season_id")
 
-  matchDate       DateTime
+  matchDate       DateTime @map("match_date")
   opponent        String?   @db.VarChar(150)
   venue           String?   @db.VarChar(200)
   competition     String?   @db.VarChar(200)
 
   /// Starting XI or substitute
-  isStarting      Boolean?
+  isStarting      Boolean? @map("is_starting")
 
   goals           Int       @default(0)
   assists         Int       @default(0)
-  minutesPlayed   Int       @default(0)
-  yellowCards     Int       @default(0)
-  redCards        Int       @default(0)
+  minutesPlayed   Int       @default(0) @map("minutes_played")
+  yellowCards     Int       @default(0) @map("yellow_cards")
+  redCards        Int       @default(0) @map("red_cards")
   shots           Int       @default(0)
-  shotsOnTarget   Int       @default(0)
-  passAccuracy    Decimal?  @db.Decimal(5, 2)
+  shotsOnTarget   Int       @default(0) @map("shots_on_target")
+  passAccuracy    Decimal?  @db.Decimal(5, 2) @map("pass_accuracy")
   rating          Decimal?  @db.Decimal(3, 1)
 
   /// Catch-all for position-specific or future stats (e.g. saves for GK)
-  extraStats      Json?
+  extraStats      Json? @map("extra_stats")
 
   tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   player          Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
   season          Season?   @relation(fields: [seasonId], references: [id], onDelete: SetNull)
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -756,30 +812,30 @@ model PerformanceRecord {
 
 model Rating {
   id              String   @id @default(uuid()) @db.Uuid
-  tenantId        String   @db.Uuid
-  playerId        String   @db.Uuid
-  createdById     String   @db.Uuid
+  tenantId        String   @db.Uuid @map("tenant_id")
+  playerId        String   @db.Uuid @map("player_id")
+  createdById     String   @db.Uuid @map("created_by_id")
 
-  technicalScore  Decimal  @db.Decimal(5, 2)
-  physicalScore   Decimal  @db.Decimal(5, 2)
-  mentalScore     Decimal  @db.Decimal(5, 2)
+  technicalScore  Decimal  @db.Decimal(5, 2) @map("technical_score")
+  physicalScore   Decimal  @db.Decimal(5, 2) @map("physical_score")
+  mentalScore     Decimal  @db.Decimal(5, 2) @map("mental_score")
 
   /// totalScore is derived from the three scores; kept for query performance.
   /// Application layer must ensure: totalScore = (technical + physical + mental) / 3
-  totalScore      Decimal  @db.Decimal(5, 2)
+  totalScore      Decimal  @db.Decimal(5, 2) @map("total_score")
 
   notes           String?  @db.Text
 
   /// Extra scoring dimensions (e.g. tactical, leadership) for future flexibility
-  extraScores     Json?
+  extraScores     Json? @map("extra_scores")
 
   tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   player          Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
   createdBy       User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -795,14 +851,14 @@ model Rating {
 
 model Training {
   id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  seasonId     String?  @db.Uuid
+  tenantId     String   @db.Uuid @map("tenant_id")
+  seasonId     String?  @db.Uuid @map("season_id")
 
   title        String   @db.VarChar(255)
   description  String?  @db.Text
 
-  startDate    DateTime
-  endDate      DateTime
+  startDate    DateTime @map("start_date")
+  endDate      DateTime @map("end_date")
 
   location     String?  @db.VarChar(255)
   capacity     Int?
@@ -810,7 +866,7 @@ model Training {
   price        Decimal? @db.Decimal(10, 2)
   currency     Currency @default(USD)
 
-  isRecurring  Boolean  @default(false)
+  isRecurring  Boolean  @default(false) @map("is_recurring")
 
   /// Flexible: store recurrence rules, target positions, etc.
   metadata     Json?
@@ -821,9 +877,9 @@ model Training {
   sessions     TrainingSession[]
   enrollments  Enrollment[]
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -838,26 +894,26 @@ model Training {
 /// Individual sessions within a training program (supports recurring / multi-session trainings)
 model TrainingSession {
   id           String   @id @default(uuid()) @db.Uuid
-  tenantId     String   @db.Uuid
-  trainingId   String   @db.Uuid
+  tenantId     String   @db.Uuid @map("tenant_id")
+  trainingId   String   @db.Uuid @map("training_id")
 
   title        String?  @db.VarChar(255)
   date         DateTime
-  startTime    DateTime?
-  endTime      DateTime?
+  startTime    DateTime? @map("start_time")
+  endTime      DateTime? @map("end_time")
   location     String?  @db.VarChar(255)
 
-  isCancelled  Boolean  @default(false)
-  cancelNote   String?  @db.VarChar(500)
+  isCancelled  Boolean  @default(false) @map("is_cancelled")
+  cancelNote   String?  @db.VarChar(500) @map("cancel_note")
 
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   training     Training @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
   attendance   Attendance[]
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  deletedAt    DateTime?
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -869,18 +925,18 @@ model TrainingSession {
 
 model Enrollment {
   id              String           @id @default(uuid()) @db.Uuid
-  tenantId        String           @db.Uuid
-  trainingId      String           @db.Uuid
-  playerId        String           @db.Uuid
+  tenantId        String           @db.Uuid @map("tenant_id")
+  trainingId      String           @db.Uuid @map("training_id")
+  playerId        String           @db.Uuid @map("player_id")
 
   status          EnrollmentStatus @default(PENDING)
-  paymentStatus   PaymentStatus    @default(UNPAID)
+  paymentStatus   PaymentStatus    @default(UNPAID) @map("payment_status")
 
-  rejectionReason String?          @db.VarChar(500)
+  rejectionReason String?          @db.VarChar(500) @map("rejection_reason")
   notes           String?          @db.Text
 
-  paidAt          DateTime?
-  paidAmount      Decimal?         @db.Decimal(10, 2)
+  paidAt          DateTime? @map("paid_at")
+  paidAmount      Decimal?         @db.Decimal(10, 2) @map("paid_amount")
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   training        Training         @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict)
@@ -888,9 +944,9 @@ model Enrollment {
 
   attendance      Attendance[]
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
 
   @@unique([trainingId, playerId])
   @@unique([id, tenantId])
@@ -903,9 +959,9 @@ model Enrollment {
 
 model Attendance {
   id                String           @id @default(uuid()) @db.Uuid
-  tenantId          String           @db.Uuid
-  enrollmentId      String           @db.Uuid
-  trainingSessionId String           @db.Uuid
+  tenantId          String           @db.Uuid @map("tenant_id")
+  enrollmentId      String           @db.Uuid @map("enrollment_id")
+  trainingSessionId String           @db.Uuid @map("training_session_id")
 
   /// Denormalized from TrainingSession for query convenience
   date              DateTime
@@ -916,9 +972,9 @@ model Attendance {
   enrollment        Enrollment       @relation(fields: [enrollmentId, tenantId], references: [id, tenantId], onDelete: Restrict)
   trainingSession   TrainingSession  @relation(fields: [trainingSessionId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  deletedAt         DateTime?
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
 
   @@unique([enrollmentId, trainingSessionId])
   @@unique([id, tenantId])
@@ -936,10 +992,10 @@ model Attendance {
 
 model LegalTicket {
   id            String              @id @default(uuid()) @db.Uuid
-  tenantId      String              @db.Uuid
-  playerId      String              @db.Uuid
-  createdById   String              @db.Uuid
-  assignedToId  String?             @db.Uuid
+  tenantId      String              @db.Uuid @map("tenant_id")
+  playerId      String              @db.Uuid @map("player_id")
+  createdById   String              @db.Uuid @map("created_by_id")
+  assignedToId  String?             @db.Uuid @map("assigned_to_id")
 
   subject       String              @db.VarChar(255)
   description   String              @db.Text
@@ -947,9 +1003,9 @@ model LegalTicket {
   status        LegalTicketStatus   @default(OPEN)
   priority      LegalTicketPriority @default(MEDIUM)
 
-  resolvedAt    DateTime?
-  closedAt      DateTime?
-  dueDate       DateTime?
+  resolvedAt    DateTime? @map("resolved_at")
+  closedAt      DateTime? @map("closed_at")
+  dueDate       DateTime? @map("due_date")
 
   /// For linking to external legal case IDs, contract refs, etc.
   metadata      Json?
@@ -961,9 +1017,9 @@ model LegalTicket {
 
   notes         LegalNote[]
 
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  deletedAt     DateTime?
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -978,20 +1034,20 @@ model LegalTicket {
 
 model LegalNote {
   id            String      @id @default(uuid()) @db.Uuid
-  tenantId      String      @db.Uuid
-  ticketId      String      @db.Uuid
-  createdById   String      @db.Uuid
+  tenantId      String      @db.Uuid @map("tenant_id")
+  ticketId      String      @db.Uuid @map("ticket_id")
+  createdById   String      @db.Uuid @map("created_by_id")
 
   note          String      @db.Text
-  isInternal    Boolean     @default(false)
+  isInternal    Boolean     @default(false) @map("is_internal")
 
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   ticket        LegalTicket @relation(fields: [ticketId, tenantId], references: [id, tenantId], onDelete: Restrict)
   createdBy     User        @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
 
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-  deletedAt     DateTime?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -1007,23 +1063,23 @@ model LegalNote {
 
 model Conversation {
   id             String   @id @default(uuid()) @db.Uuid
-  tenantId       String   @db.Uuid
+  tenantId       String   @db.Uuid @map("tenant_id")
 
-  isGroup        Boolean  @default(false)
+  isGroup        Boolean  @default(false) @map("is_group")
   name           String?  @db.VarChar(255)
-  imageUrl       String?  @db.VarChar(500)
+  imageUrl       String?  @db.VarChar(500) @map("image_url")
   description    String?  @db.VarChar(500)
 
-  lastMessageAt  DateTime?
+  lastMessageAt  DateTime? @map("last_message_at")
 
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   messages       Message[]
   members        ConversationMember[]
 
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  deletedAt      DateTime?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  deletedAt      DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -1034,21 +1090,21 @@ model Conversation {
 
 model ConversationMember {
   id             String                 @id @default(uuid()) @db.Uuid
-  tenantId       String                 @db.Uuid
-  conversationId String                 @db.Uuid
-  userId         String                 @db.Uuid
+  tenantId       String                 @db.Uuid @map("tenant_id")
+  conversationId String                 @db.Uuid @map("conversation_id")
+  userId         String                 @db.Uuid @map("user_id")
 
   role           ConversationMemberRole @default(MEMBER)
 
   /// For unread message count / read receipts
-  lastReadAt     DateTime?
+  lastReadAt     DateTime? @map("last_read_at")
 
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict)
   user           User         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
-  createdAt      DateTime     @default(now())
-  deletedAt      DateTime?
+  createdAt      DateTime     @default(now()) @map("created_at")
+  deletedAt      DateTime? @map("deleted_at")
 
   @@unique([conversationId, userId])
 
@@ -1063,36 +1119,36 @@ model ConversationMember {
 
 model ScoutingReport {
   id              String             @id @default(uuid()) @db.Uuid
-  tenantId        String             @db.Uuid
-  scoutId         String             @db.Uuid
-  playerId        String?            @db.Uuid  // Null for external prospects
+  tenantId        String             @db.Uuid @map("tenant_id")
+  scoutId         String             @db.Uuid @map("scout_id")
+  playerId        String?            @db.Uuid @map("player_id")  // Null for external prospects
   
   // Player being scouted (if not in system yet)
-  prospectName    String?            @db.VarChar(255)
-  prospectAge     Int?
-  prospectClub    String?            @db.VarChar(255)
-  prospectPosition PlayerPosition?
-  prospectNationality String?        @db.VarChar(100)
+  prospectName    String?            @db.VarChar(255) @map("prospect_name")
+  prospectAge     Int? @map("prospect_age")
+  prospectClub    String?            @db.VarChar(255) @map("prospect_club")
+  prospectPosition PlayerPosition? @map("prospect_position")
+  prospectNationality String?        @db.VarChar(100) @map("prospect_nationality")
   
   status          ScoutReportStatus  @default(DRAFT)
   recommendation  RecommendationLevel?
   
   // Evaluation scores (1-10)
-  technicalScore  Decimal?           @db.Decimal(3, 1)
-  physicalScore   Decimal?           @db.Decimal(3, 1)
-  tacticalScore   Decimal?           @db.Decimal(3, 1)
-  mentalScore     Decimal?           @db.Decimal(3, 1)
+  technicalScore  Decimal?           @db.Decimal(3, 1) @map("technical_score")
+  physicalScore   Decimal?           @db.Decimal(3, 1) @map("physical_score")
+  tacticalScore   Decimal?           @db.Decimal(3, 1) @map("tactical_score")
+  mentalScore     Decimal?           @db.Decimal(3, 1) @map("mental_score")
   
   strengths       String?            @db.Text
   weaknesses      String?            @db.Text
-  personalityNotes String?           @db.Text
-  tacticalFit     String?            @db.Text
+  personalityNotes String?           @db.Text @map("personality_notes")
+  tacticalFit     String?            @db.Text @map("tactical_fit")
   
-  overallRating   Decimal?           @db.Decimal(3, 1)
-  potentialRating Decimal?           @db.Decimal(3, 1)
+  overallRating   Decimal?           @db.Decimal(3, 1) @map("overall_rating")
+  potentialRating Decimal?           @db.Decimal(3, 1) @map("potential_rating")
   
-  reportDate      DateTime
-  matchObserved   String?            @db.VarChar(255)
+  reportDate      DateTime @map("report_date")
+  matchObserved   String?            @db.VarChar(255) @map("match_observed")
   
   metadata        Json?
   
@@ -1100,9 +1156,9 @@ model ScoutingReport {
   scout           User               @relation(fields: [scoutId, tenantId], references: [id, tenantId], onDelete: Restrict)
   player          Player?            @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: SetNull)
   
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
   
   @@unique([id, tenantId])
   @@map("scouting_reports")
@@ -1115,9 +1171,9 @@ model ScoutingReport {
 
 model PlayerWatchlist {
   id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
-  userId      String   @db.Uuid  // Scout or Sporting Director
-  playerId    String   @db.Uuid
+  tenantId    String   @db.Uuid @map("tenant_id")
+  userId      String   @db.Uuid @map("user_id")  // Scout or Sporting Director
+  playerId    String   @db.Uuid @map("player_id")
   
   priority    String?  @db.VarChar(50) // HIGH, MEDIUM, LOW
   notes       String?  @db.Text
@@ -1126,8 +1182,8 @@ model PlayerWatchlist {
   user        User     @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
   player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
   
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
   
   @@unique([userId, playerId])
   @@unique([id, tenantId])
@@ -1138,17 +1194,17 @@ model PlayerWatchlist {
 
 model ScoutingAssignment {
   id            String   @id @default(uuid()) @db.Uuid
-  tenantId      String   @db.Uuid
-  assignedToId  String   @db.Uuid  // Scout
-  assignedById  String   @db.Uuid  // Sporting Director
+  tenantId      String   @db.Uuid @map("tenant_id")
+  assignedToId  String   @db.Uuid @map("assigned_to_id")  // Scout
+  assignedById  String   @db.Uuid @map("assigned_by_id")  // Sporting Director
   
   region        String?  @db.VarChar(100)
   competition   String?  @db.VarChar(150)
-  targetPosition PlayerPosition?
-  minAge        Int?
-  maxAge        Int?
+  targetPosition PlayerPosition? @map("target_position")
+  minAge        Int? @map("min_age")
+  maxAge        Int? @map("max_age")
   
-  dueDate       DateTime?
+  dueDate       DateTime? @map("due_date")
   status        String   @db.VarChar(50) @default("OPEN")
   
   notes         String?  @db.Text
@@ -1157,8 +1213,8 @@ model ScoutingAssignment {
   assignedTo    User     @relation("ScoutingAssignmentTo", fields: [assignedToId, tenantId], references: [id, tenantId], onDelete: Restrict)
   assignedBy    User     @relation("ScoutingAssignmentBy", fields: [assignedById, tenantId], references: [id, tenantId], onDelete: Restrict)
   
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
   
   @@unique([id, tenantId])
   @@map("scouting_assignments")
@@ -1173,28 +1229,28 @@ model ScoutingAssignment {
 
 model TreatmentSession {
   id              String             @id @default(uuid()) @db.Uuid
-  tenantId        String             @db.Uuid
-  playerId        String             @db.Uuid
-  medicalRecordId String?            @db.Uuid  // Link to injury/treatment record
+  tenantId        String             @db.Uuid @map("tenant_id")
+  playerId        String             @db.Uuid @map("player_id")
+  medicalRecordId String?            @db.Uuid @map("medical_record_id")  // Link to injury/treatment record
   
-  sessionDate     DateTime
+  sessionDate     DateTime @map("session_date")
   duration        Int?               // Duration in minutes
   status          TreatmentStatus    @default(SCHEDULED)
   
-  treatmentType   String             @db.VarChar(100) // e.g., "Physiotherapy", "Ice Therapy", "Massage"
+  treatmentType   String             @db.VarChar(100) @map("treatment_type") // e.g., "Physiotherapy", "Ice Therapy", "Massage"
   description     String?            @db.Text
   exercises       String?            @db.Text  // Prescribed exercises
-  progressNotes   String?            @db.Text
+  progressNotes   String?            @db.Text @map("progress_notes")
   
-  conductedBy     String             @db.Uuid  // Medical staff ID
+  conductedBy     String             @db.Uuid @map("conducted_by")  // Medical staff ID
   
   tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   player          Player             @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
   medicalRecord   MedicalRecord?     @relation(fields: [medicalRecordId, tenantId], references: [id, tenantId], onDelete: SetNull)
   conductor       User               @relation("TreatmentSessionConductor", fields: [conductedBy, tenantId], references: [id, tenantId], onDelete: Restrict)
   
-  createdAt       DateTime           @default(now())
-  updatedAt       DateTime           @updatedAt
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
   
   @@unique([id, tenantId])
   @@map("treatment_sessions")
@@ -1218,8 +1274,8 @@ model Permission {
   
   roles       RolePermission[]
   
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
   
   @@map("permissions")
   @@index([category])
@@ -1228,12 +1284,12 @@ model Permission {
 
 model RolePermission {
   id             String     @id @default(uuid()) @db.Uuid
-  roleId         UserRole
-  permissionId   String     @db.Uuid
+  roleId         UserRole @map("role_id")
+  permissionId   String     @db.Uuid @map("permission_id")
   
   permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
   
-  createdAt      DateTime   @default(now())
+  createdAt      DateTime   @default(now()) @map("created_at")
   
   @@unique([roleId, permissionId])
   @@map("role_permissions")
@@ -1243,27 +1299,27 @@ model RolePermission {
 
 model Message {
   id             String      @id @default(uuid()) @db.Uuid
-  tenantId       String      @db.Uuid
-  conversationId String      @db.Uuid
+  tenantId       String      @db.Uuid @map("tenant_id")
+  conversationId String      @db.Uuid @map("conversation_id")
 
   /// Nullable: sender may be deleted or a system message
-  senderId       String?     @db.Uuid
+  senderId       String?     @db.Uuid @map("sender_id")
 
   content        String?     @db.Text
 
   /// File details kept on Message for quick rendering; full doc stored in Document model
-  fileUrl        String?     @db.VarChar(500)
-  fileName       String?     @db.VarChar(255)
-  fileSize       Int?
-  mimeType       String?     @db.VarChar(100)
+  fileUrl        String?     @db.VarChar(500) @map("file_url")
+  fileName       String?     @db.VarChar(255) @map("file_name")
+  fileSize       Int? @map("file_size")
+  mimeType       String?     @db.VarChar(100) @map("mime_type")
 
   type           MessageType
 
-  isEdited       Boolean     @default(false)
-  editedAt       DateTime?
+  isEdited       Boolean     @default(false) @map("is_edited")
+  editedAt       DateTime? @map("edited_at")
 
   /// Soft delete (message recalled)
-  deletedAt      DateTime?
+  deletedAt      DateTime? @map("deleted_at")
 
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict)
@@ -1271,8 +1327,8 @@ model Message {
   /// Single-field FK due to Prisma limitation with nullable composite keys
   sender         User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
 
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
 
   @@unique([id, tenantId])
 
@@ -1289,26 +1345,26 @@ model Message {
 
 model Notification {
   id              String           @id @default(uuid()) @db.Uuid
-  tenantId        String           @db.Uuid
-  userId          String           @db.Uuid
+  tenantId        String           @db.Uuid @map("tenant_id")
+  userId          String           @db.Uuid @map("user_id")
 
   type            NotificationType
   title           String?          @db.VarChar(255)
   content         String           @db.Text
 
   /// Deep-link target: the entity this notification is about
-  referenceType   String?          @db.VarChar(100)
-  referenceId     String?          @db.Uuid
+  referenceType   String?          @db.VarChar(100) @map("reference_type")
+  referenceId     String?          @db.Uuid @map("reference_id")
 
-  isRead          Boolean          @default(false)
-  readAt          DateTime?
+  isRead          Boolean          @default(false) @map("is_read")
+  readAt          DateTime? @map("read_at")
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   user            User             @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  deletedAt       DateTime?
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
@@ -1324,26 +1380,26 @@ model Notification {
 
 model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
-  tenantId    String   @db.Uuid
+  tenantId    String   @db.Uuid @map("tenant_id")
 
   /// Nullable separately — single-field FK to avoid Prisma limitation with nullable composite keys
-  userId      String?  @db.Uuid
+  userId      String?  @db.Uuid @map("user_id")
 
   action      String   @db.VarChar(100)
-  entityType  String   @db.VarChar(100)
-  entityId    String   @db.Uuid
+  entityType  String   @db.VarChar(100) @map("entity_type")
+  entityId    String   @db.Uuid @map("entity_id")
 
-  oldValues   Json?
-  newValues   Json?
+  oldValues   Json? @map("old_values")
+  newValues   Json? @map("new_values")
 
-  ipAddress   String?  @db.VarChar(45)
-  userAgent   String?  @db.VarChar(500)
+  ipAddress   String?  @db.VarChar(45) @map("ip_address")
+  userAgent   String?  @db.VarChar(500) @map("user_agent")
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
 
-  createdAt   DateTime @default(now())
-  deletedAt   DateTime?
+  createdAt   DateTime @default(now()) @map("created_at")
+  deletedAt   DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
 
