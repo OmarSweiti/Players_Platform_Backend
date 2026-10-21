@@ -16,8 +16,8 @@
 -- into another tenant (DB-02: six of them today). Read from the catalog, so a
 -- new one is caught too.
 SELECT format(
-  'SELECT %L AS table_name, c.id AS row_id, c."tenantId" AS tenant_id, %L AS reason '
-  'FROM %I c JOIN %I p ON p.%I = c.%I WHERE p."tenantId" <> c."tenantId"',
+  'SELECT %L AS table_name, c.id AS row_id, c.tenant_id AS tenant_id, %L AS reason '
+  'FROM %I c JOIN %I p ON p.%I = c.%I WHERE p.tenant_id <> c.tenant_id',
   child.relname,
   format('%s.%s names a row of another tenant in %s', child.relname, col.attname, parent.relname),
   child.relname, parent.relname, ref.attname, col.attname
@@ -30,67 +30,67 @@ JOIN pg_attribute ref ON ref.attrelid = fk.confrelid AND ref.attnum = fk.confkey
 WHERE fk.contype = 'f'
   AND cardinality(fk.conkey) = 1
   AND child.relnamespace = current_schema()::regnamespace
-  AND col.attname <> 'tenantId'
+  AND col.attname <> 'tenant_id'
   AND EXISTS (SELECT 1 FROM pg_attribute t
-              WHERE t.attrelid = child.oid AND t.attname = 'tenantId' AND NOT t.attisdropped)
+              WHERE t.attrelid = child.oid AND t.attname = 'tenant_id' AND NOT t.attisdropped)
   AND EXISTS (SELECT 1 FROM pg_attribute t
-              WHERE t.attrelid = parent.oid AND t.attname = 'tenantId' AND NOT t.attisdropped)
+              WHERE t.attrelid = parent.oid AND t.attname = 'tenant_id' AND NOT t.attisdropped)
 ORDER BY child.relname, col.attname;
 
 -- violations: same_parent
 -- Both parents exist in the tenant, but they are not the same parent.
-SELECT 'treatment_sessions' AS table_name, t.id AS row_id, t."tenantId" AS tenant_id,
-       'treatment_sessions.medicalRecordId names the record of another player' AS reason
+SELECT 'treatment_sessions' AS table_name, t.id AS row_id, t.tenant_id AS tenant_id,
+       'treatment_sessions.medical_record_id names the record of another player' AS reason
 FROM treatment_sessions t
-JOIN medical_records r ON r.id = t."medicalRecordId" AND r."tenantId" = t."tenantId"
-WHERE r."playerId" <> t."playerId"
+JOIN medical_records r ON r.id = t.medical_record_id AND r.tenant_id = t.tenant_id
+WHERE r.player_id <> t.player_id
 UNION ALL
-SELECT 'attendance', a.id, a."tenantId",
+SELECT 'attendance', a.id, a.tenant_id,
        'attendance joins an enrollment and a session of two different programs'
 FROM attendance a
-JOIN enrollments e ON e.id = a."enrollmentId" AND e."tenantId" = a."tenantId"
-JOIN training_sessions s ON s.id = a."trainingSessionId" AND s."tenantId" = a."tenantId"
-WHERE e."trainingId" <> s."trainingId";
+JOIN enrollments e ON e.id = a.enrollment_id AND e.tenant_id = a.tenant_id
+JOIN training_sessions s ON s.id = a.training_session_id AND s.tenant_id = a.tenant_id
+WHERE e.training_id <> s.training_id;
 
 -- violations: orphaned_reference
 -- References no foreign key protects: they must name a row of the same tenant.
-SELECT 'documents' AS table_name, d.id AS row_id, d."tenantId" AS tenant_id,
-       'documents.entityId names no ' || d."entityType" || ' of its tenant' AS reason
+SELECT 'documents' AS table_name, d.id AS row_id, d.tenant_id AS tenant_id,
+       'documents.entity_id names no ' || d.entity_type || ' of its tenant' AS reason
 FROM documents d
-WHERE NOT CASE d."entityType"::text
-  WHEN 'PLAYER' THEN EXISTS (SELECT 1 FROM players x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'CONTRACT' THEN EXISTS (SELECT 1 FROM contracts x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'TRAINING' THEN EXISTS (SELECT 1 FROM trainings x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'LEGAL_TICKET' THEN EXISTS (SELECT 1 FROM legal_tickets x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'MEDICAL_RECORD' THEN EXISTS (SELECT 1 FROM medical_records x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'USER' THEN EXISTS (SELECT 1 FROM users x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'MESSAGE' THEN EXISTS (SELECT 1 FROM messages x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'CONTRACT_VERSION' THEN EXISTS (SELECT 1 FROM contract_versions x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'TRAINING_SESSION' THEN EXISTS (SELECT 1 FROM training_sessions x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'ENROLLMENT' THEN EXISTS (SELECT 1 FROM enrollments x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'LEGAL_NOTE' THEN EXISTS (SELECT 1 FROM legal_notes x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'PLAYER_MEDIA' THEN EXISTS (SELECT 1 FROM player_media x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'SEASON' THEN EXISTS (SELECT 1 FROM seasons x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'PERFORMANCE_RECORD' THEN EXISTS (SELECT 1 FROM performance_records x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
-  WHEN 'RATING' THEN EXISTS (SELECT 1 FROM ratings x WHERE x.id = d."entityId" AND x."tenantId" = d."tenantId")
+WHERE NOT CASE d.entity_type::text
+  WHEN 'PLAYER' THEN EXISTS (SELECT 1 FROM players x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'CONTRACT' THEN EXISTS (SELECT 1 FROM contracts x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'TRAINING' THEN EXISTS (SELECT 1 FROM trainings x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'LEGAL_TICKET' THEN EXISTS (SELECT 1 FROM legal_tickets x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'MEDICAL_RECORD' THEN EXISTS (SELECT 1 FROM medical_records x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'USER' THEN EXISTS (SELECT 1 FROM users x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'MESSAGE' THEN EXISTS (SELECT 1 FROM messages x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'CONTRACT_VERSION' THEN EXISTS (SELECT 1 FROM contract_versions x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'TRAINING_SESSION' THEN EXISTS (SELECT 1 FROM training_sessions x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'ENROLLMENT' THEN EXISTS (SELECT 1 FROM enrollments x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'LEGAL_NOTE' THEN EXISTS (SELECT 1 FROM legal_notes x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'PLAYER_MEDIA' THEN EXISTS (SELECT 1 FROM player_media x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'SEASON' THEN EXISTS (SELECT 1 FROM seasons x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'PERFORMANCE_RECORD' THEN EXISTS (SELECT 1 FROM performance_records x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
+  WHEN 'RATING' THEN EXISTS (SELECT 1 FROM ratings x WHERE x.id = d.entity_id AND x.tenant_id = d.tenant_id)
   ELSE false -- a type this report does not know yet: teach it, never guess
 END
 UNION ALL
-SELECT 'documents', d.id, d."tenantId", 'documents.uploadedById names no member of its tenant'
+SELECT 'documents', d.id, d.tenant_id, 'documents.uploaded_by_id names no member of its tenant'
 FROM documents d
-WHERE d."uploadedById" IS NOT NULL
-  AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = d."uploadedById" AND u."tenantId" = d."tenantId");
--- audit_logs.entityId is history: it may outlive what it names, so it is not checked.
+WHERE d.uploaded_by_id IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM users u WHERE u.id = d.uploaded_by_id AND u.tenant_id = d.tenant_id);
+-- audit_logs.entity_id is history: it may outlive what it names, so it is not checked.
 
 -- violations: duplicate_email
 -- Two members of one tenant whose addresses differ only in case or surrounding
 -- spaces; both rows are reported, never the address.
-SELECT 'users' AS table_name, u.id AS row_id, u."tenantId" AS tenant_id,
+SELECT 'users' AS table_name, u.id AS row_id, u.tenant_id AS tenant_id,
        'users.email equals another member''s address once case and spaces are normalised' AS reason
 FROM users u
 WHERE EXISTS (
   SELECT 1 FROM users o
-  WHERE o."tenantId" = u."tenantId" AND o.id <> u.id
+  WHERE o.tenant_id = u.tenant_id AND o.id <> u.id
     AND lower(btrim(o.email)) = lower(btrim(u.email))
 );
 
@@ -101,38 +101,38 @@ WITH exponents AS (
   SELECT key AS currency, value::int AS exponent
   FROM jsonb_each_text(current_setting('sadara.currency_exponents')::jsonb)
 )
-SELECT 'contracts' AS table_name, c.id AS row_id, c."tenantId" AS tenant_id,
-       'contracts.salaryAmount is not a finite, non-negative amount within its currency''s minor units' AS reason
-FROM contracts c LEFT JOIN exponents e ON e.currency = c."salaryCurrency"::text
-WHERE c."salaryAmount" = 'NaN' OR c."salaryAmount" < 0 OR min_scale(c."salaryAmount") > e.exponent
+SELECT 'contracts' AS table_name, c.id AS row_id, c.tenant_id AS tenant_id,
+       'contracts.salary_amount is not a finite, non-negative amount within its currency''s minor units' AS reason
+FROM contracts c LEFT JOIN exponents e ON e.currency = c.salary_currency::text
+WHERE c.salary_amount = 'NaN' OR c.salary_amount < 0 OR min_scale(c.salary_amount) > e.exponent
 UNION ALL
-SELECT 'contracts', c.id, c."tenantId",
-       'contracts.signingFee is not a finite, non-negative amount within its currency''s minor units'
-FROM contracts c LEFT JOIN exponents e ON e.currency = c."salaryCurrency"::text
-WHERE c."signingFee" = 'NaN' OR c."signingFee" < 0 OR min_scale(c."signingFee") > e.exponent
+SELECT 'contracts', c.id, c.tenant_id,
+       'contracts.signing_fee is not a finite, non-negative amount within its currency''s minor units'
+FROM contracts c LEFT JOIN exponents e ON e.currency = c.salary_currency::text
+WHERE c.signing_fee = 'NaN' OR c.signing_fee < 0 OR min_scale(c.signing_fee) > e.exponent
 UNION ALL
-SELECT 'trainings', t.id, t."tenantId",
+SELECT 'trainings', t.id, t.tenant_id,
        'trainings.price is not a finite, non-negative amount within its currency''s minor units'
 FROM trainings t LEFT JOIN exponents e ON e.currency = t.currency::text
 WHERE t.price = 'NaN' OR t.price < 0 OR min_scale(t.price) > e.exponent
 UNION ALL
-SELECT 'enrollments', n.id, n."tenantId", 'enrollments.paidAmount is not a finite, non-negative amount'
+SELECT 'enrollments', n.id, n.tenant_id, 'enrollments.paid_amount is not a finite, non-negative amount'
 FROM enrollments n
-WHERE n."paidAmount" = 'NaN' OR n."paidAmount" < 0;
+WHERE n.paid_amount = 'NaN' OR n.paid_amount < 0;
 
 -- violations: deleted_audit_row
 -- Audit is append-only (invariant 5): a soft-deleted audit row is a removed one.
-SELECT 'audit_logs' AS table_name, a.id AS row_id, a."tenantId" AS tenant_id,
+SELECT 'audit_logs' AS table_name, a.id AS row_id, a.tenant_id AS tenant_id,
        'audit_logs row is soft-deleted; audit is append-only' AS reason
 FROM audit_logs a
-WHERE a."deletedAt" IS NOT NULL;
+WHERE a.deleted_at IS NOT NULL;
 
 -- violations: real_account
 -- A member whose address is neither on a domain reserved for tests and
 -- examples (RFC 2606, RFC 6761) nor one the old seed creates
 -- (src/database/seed.ts, until 0.5.11 moves it to .test): a real person may
 -- own it. Its credential data must not be dropped without the owner deciding.
-SELECT 'users' AS table_name, u.id AS row_id, u."tenantId" AS tenant_id,
+SELECT 'users' AS table_name, u.id AS row_id, u.tenant_id AS tenant_id,
        'users row is not a known synthetic account: a real person may own it' AS reason
 FROM users u
 WHERE NOT (
@@ -147,20 +147,21 @@ WHERE NOT (
 );
 
 -- unknowns: unverifiable_reference
-SELECT 'notifications' AS table_name, 'referenceId' AS column_name, count(*) AS count,
-       'notifications.referenceId names an entity by a free-text type: it cannot be checked' AS reason
-FROM notifications WHERE "referenceId" IS NOT NULL
+SELECT 'notifications' AS table_name, 'reference_id' AS column_name, count(*) AS count,
+       'notifications.reference_id names an entity by a free-text type: it cannot be checked' AS reason
+FROM notifications WHERE reference_id IS NOT NULL
 HAVING count(*) > 0;
 
 -- unknowns: money_currency_unknown
-SELECT 'enrollments' AS table_name, 'paidAmount' AS column_name, count(*) AS count,
-       'enrollments.paidAmount has no currency of its own: its minor units cannot be checked' AS reason
-FROM enrollments WHERE "paidAmount" IS NOT NULL
+SELECT 'enrollments' AS table_name, 'paid_amount' AS column_name, count(*) AS count,
+       'enrollments.paid_amount has no currency of its own: its minor units cannot be checked' AS reason
+FROM enrollments WHERE paid_amount IS NOT NULL
 HAVING count(*) > 0;
 
 -- generate unknowns: secret_material
 -- Raw tokens and second-factor secrets the local credential system stored,
--- wherever those columns still exist (0.1.6 drops them).
+-- wherever those columns still exist (0.1.6 drops them). They keep their
+-- camelCase names: they were gone before 0.4.0 renamed every column.
 SELECT format(
   'SELECT %L AS table_name, %L AS column_name, count(%I) AS count, %L AS reason '
   'FROM %I HAVING count(%I) > 0',

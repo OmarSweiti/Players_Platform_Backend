@@ -248,7 +248,7 @@ async function seedCounterExamples(
   // Money: NaN cannot be written through Prisma, a negative amount can.
   await sqlIn(
     schema,
-    `UPDATE contracts SET "signingFee" = 'NaN' WHERE id = $1`,
+    `UPDATE contracts SET signing_fee = 'NaN' WHERE id = $1`,
     [contract.id],
   );
 
@@ -329,12 +329,12 @@ describe('the preflight report', () => {
       );
     }
     expect(found.map((v) => v.reason).sort()).toEqual([
-      'audit_logs.userId names a row of another tenant in users',
-      'contracts.seasonId names a row of another tenant in seasons',
-      'legal_tickets.assignedToId names a row of another tenant in users',
-      'messages.senderId names a row of another tenant in users',
-      'performance_records.seasonId names a row of another tenant in seasons',
-      'trainings.seasonId names a row of another tenant in seasons',
+      'audit_logs.user_id names a row of another tenant in users',
+      'contracts.season_id names a row of another tenant in seasons',
+      'legal_tickets.assigned_to_id names a row of another tenant in users',
+      'messages.sender_id names a row of another tenant in users',
+      'performance_records.season_id names a row of another tenant in seasons',
+      'trainings.season_id names a row of another tenant in seasons',
     ]);
   });
 
@@ -385,16 +385,16 @@ describe('the preflight report', () => {
         (u) => u.rule === rule && u.table === table && u.column === column,
       );
     expect(
-      unknown('unverifiable_reference', 'notifications', 'referenceId')?.count,
+      unknown('unverifiable_reference', 'notifications', 'reference_id')?.count,
     ).toBe(1);
     expect(
-      unknown('money_currency_unknown', 'enrollments', 'paidAmount')?.count,
+      unknown('money_currency_unknown', 'enrollments', 'paid_amount')?.count,
     ).toBe(1);
     // The credential columns are gone (0.1.6): no secret material is left to find.
     expect(report.unknowns.filter((u) => u.rule === 'secret_material')).toEqual(
       [],
     );
-    expect(unknown('timestamp_provenance', 'users', 'createdAt')?.count).toBe(
+    expect(unknown('timestamp_provenance', 'users', 'created_at')?.count).toBe(
       4,
     );
     expect(report.schemaVersion).toMatch(/^\d{14}_\w+$/);
