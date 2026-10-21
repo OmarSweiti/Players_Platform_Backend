@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
+import { jobCorrelation } from '../logging/correlation';
 
 @Injectable()
 export class EventService {
@@ -19,10 +20,12 @@ export class EventService {
   }
 
   /**
-   * Queue notification for async processing
+   * Queue notification for async processing, correlated with the request
+   * that caused it (infrastructure/logging/correlation.ts)
    */
   async queueNotification(data: any) {
-    await this.notificationQueue.add('send-notification', data, {
+    const correlated = { ...(data as object), correlation: jobCorrelation() };
+    await this.notificationQueue.add('send-notification', correlated, {
       attempts: 3,
       backoff: {
         type: 'exponential',
@@ -32,10 +35,12 @@ export class EventService {
   }
 
   /**
-   * Queue audit log for async processing
+   * Queue audit log for async processing, correlated with the request that
+   * caused it
    */
   async queueAuditLog(data: any) {
-    await this.auditLogQueue.add('create-audit-log', data, {
+    const correlated = { ...(data as object), correlation: jobCorrelation() };
+    await this.auditLogQueue.add('create-audit-log', correlated, {
       removeOnComplete: true,
     });
   }
