@@ -18,4 +18,11 @@ describe('routeTemplateOf', () => {
       '(unmatched route)',
     );
   });
+
+  it("names a request Nest's not-found catch-all answered as unmatched", () => {
+    const request = requestTo('/api/v1/nope/7?token=secret', {
+      route: { path: '*path' },
+    });
+    expect(routeTemplateOf(request)).toBe('(unmatched route)');
+  });
 });
