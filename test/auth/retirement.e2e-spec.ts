@@ -73,6 +73,19 @@ const CREDENTIAL_COLUMNS = [
   'emailVerificationExpiry',
   'is2FAEnabled',
   'twoFASecret',
+  // The same columns as the snake_case names (0.4.0) would spell them, so a
+  // credential column re-added under the database's naming scheme is caught.
+  'password_hash',
+  'password_changed_at',
+  'email_verified_at',
+  'failed_login_attempts',
+  'locked_until',
+  'password_reset_token',
+  'password_reset_expiry',
+  'email_verification_token',
+  'email_verification_expiry',
+  'is_2fa_enabled',
+  'two_fa_secret',
 ];
 
 describe('the local credential system is retired', () => {
