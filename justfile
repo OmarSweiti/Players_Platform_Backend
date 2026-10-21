@@ -148,27 +148,41 @@ branch $name:
 #   just pr                                      one commit: the title is its subject
 #   just pr 'feat(auth): add refresh-token rotation  [#42]'  several commits: say it once
 #   just pr 'feat(auth): add refresh-token rotation  [#42]' notes/pr.md
-# Gate, push, open the PR into development, wait for its required checks
+# Gate, push, open the PR as the engineering app (assigned to the maintainer, their review requested), wait for checks
 pr $title='' $body='':
     #!/usr/bin/env bash
     set -euo pipefail
     { command -v gh >/dev/null && gh auth status >/dev/null 2>&1; } || { echo "pr: gh must be installed and authenticated" >&2; exit 1; }
     if [ -n "$body" ] && [ -z "$title" ]; then echo "pr: a body file needs a title" >&2; exit 2; fi
     if [ -n "$title" ]; then bash ./scripts/validate-change-title.sh --validate "$title"; fi
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    maintainer=${repo%%/*}
+    # The engineering app opens the PR, because every PR merges only with the
+    # maintainer's approval and GitHub refuses an approval from a PR's author.
+    # Commits and branches stay the maintainer's.
+    app_token=$(bash ./scripts/engineering-token.sh "$repo") ||
+      { echo "pr: REFUSED — the engineering app opens every PR, so that the maintainer can approve it" >&2; exit 1; }
     just pre-push
     git push -u origin HEAD
+    as_app() { GH_TOKEN="$app_token" "$@"; }
+    to=(--assignee "$maintainer" --reviewer "$maintainer" --base development)
     if [ -n "$body" ]; then
-      gh pr create --assignee @me --base development --title "$title" --body-file "$body"
+      as_app gh pr create "${to[@]}" --title "$title" --body-file "$body"
     elif [ -n "$title" ]; then
       git fetch -q origin development
-      gh pr create --assignee @me --base development --title "$title" \
+      as_app gh pr create "${to[@]}" --title "$title" \
         --body "$(git log --reverse --format='- %s' "$(git merge-base origin/development HEAD)"..HEAD)"
     else
-      gh pr create --assignee @me --base development --fill-first
+      as_app gh pr create "${to[@]}" --fill-first
     fi
-    bash ./scripts/watch-required-checks.sh "$(gh pr view --json url --jq .url)"
+    url=$(gh pr view --json url --jq .url)
+    # Every check but `validation`: its evidence can only be posted on a PR that exists.
+    bash ./scripts/watch-required-checks.sh "$url" --except validation
+    echo "pr: $url"
+    echo "pr: next — validate it running and post the evidence (in the umbrella: just evidence $url <report.md> <screenshots>);"
+    echo "    the maintainer reviews and approves it; then: just merge $url"
 
-# Squash-merge a green WORK PR into development, bound to the exact head that was checked
+# Squash-merge an approved, green WORK PR into development, bound to the exact head that was checked
 merge $pr='':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -189,6 +203,9 @@ merge $pr='':
     trap 'rm -f "$text"' EXIT
     get '.title + "\n" + (.body // "")' >"$text"
     bash ./scripts/check-attribution.sh --message-file "$text"
+    # The maintainer's approval is the merge decision; GitHub enforces it too.
+    decision=$(gh pr view "$target" --json reviewDecision --jq .reviewDecision)
+    [ "$decision" = APPROVED ] || { echo "merge: REFUSED — the maintainer has not approved it (review decision: ${decision:-none}); it merges only once they do" >&2; exit 1; }
     bash ./scripts/watch-required-checks.sh "$target"
     [ "$(snapshot)" = "$before" ] || { echo "merge: REFUSED — the PR changed while its checks ran; run again" >&2; exit 1; }
     # The admin holds bypass_mode "pull_request", and the API applies it
@@ -213,13 +230,21 @@ merge $pr='':
 
 # Open the development → staging promotion (a release candidate)
 promote-staging:
-    gh pr create --assignee @me --base staging --head development --title "promote development to staging" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    GH_TOKEN="$(bash ./scripts/engineering-token.sh "$repo")" gh pr create --assignee "${repo%%/*}" --reviewer "${repo%%/*}" \
+      --base staging --head development --title "promote development to staging" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
 
 # Open the staging → main promotion (production)
 promote-main:
-    gh pr create --assignee @me --base main --head staging --title "promote staging to main" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
+    #!/usr/bin/env bash
+    set -euo pipefail
+    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+    GH_TOKEN="$(bash ./scripts/engineering-token.sh "$repo")" gh pr create --assignee "${repo%%/*}" --reviewer "${repo%%/*}" \
+      --base main --head staging --title "promote staging to main" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
 
-# Merge a promotion with a MERGE COMMIT once every required check is green: just promote-merge 42
+# Merge an approved promotion with a MERGE COMMIT once every required check is green: just promote-merge 42
 promote-merge $pr:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -239,6 +264,9 @@ promote-merge $pr:
     trap 'rm -f "$text"' EXIT
     get '.title + "\n" + (.body // "")' >"$text"
     bash ./scripts/check-attribution.sh --message-file "$text"
+    # The maintainer's approval is the merge decision; GitHub enforces it too.
+    decision=$(gh pr view "$pr" --json reviewDecision --jq .reviewDecision)
+    [ "$decision" = APPROVED ] || { echo "promote-merge: REFUSED — the maintainer has not approved it (review decision: ${decision:-none}); it merges only once they do" >&2; exit 1; }
     bash ./scripts/watch-required-checks.sh "$pr"
     [ "$(snapshot)" = "$before" ] || { echo "promote-merge: REFUSED — the PR changed while its checks ran; run again" >&2; exit 1; }
     # The admin holds bypass_mode "pull_request", and the API applies it

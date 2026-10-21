@@ -1,6 +1,9 @@
-# Intended ownership. With one maintainer, no ruleset requires code-owner
-# review (you cannot approve your own PR), so this is governance metadata —
-# ready for the day a second developer arrives — not a merge control.
+# Ownership, and the review it requires. Every path is the maintainer's, and
+# every flow-branch ruleset requires the code owner's approval: nothing merges
+# until the maintainer approves it, and a new push dismisses the approval.
+# GitHub refuses an approval from a PR's own author, so the PRs prepared for
+# the maintainer are opened by the engineering app (03-github-workflow.md in
+# the umbrella, "Review and approval"); commits stay the maintainer's.
 *                          @OmarSweiti
 
 # The gates themselves: changing what CI enforces is a change to the law.
