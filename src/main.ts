@@ -10,7 +10,10 @@ import { setupSwagger } from './config/swagger';
 async function bootstrap() {
   // The environment is validated as AppModule loads (src/config/env.schema.ts):
   // a missing or invalid variable stops the process here, naming the variable.
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+  // Nest's own lines wait for the structured logger (configureApp).
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+    bufferLogs: true,
+  });
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   const logger = new Logger('Bootstrap');
 

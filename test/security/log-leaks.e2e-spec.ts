@@ -15,7 +15,7 @@ describe('secrets and personal data stay out of logs and error responses', () =>
   let email: string;
 
   beforeAll(async () => {
-    booted = await bootApp({ logger: capture });
+    booted = await bootApp({ logs: capture });
     const tenant = await createTenant();
     email = (await createMember(tenant, 'COACH')).email;
     capture.start();

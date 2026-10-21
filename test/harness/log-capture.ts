@@ -1,6 +1,6 @@
-import type { LoggerService } from '@nestjs/common';
 import { format } from 'node:util';
 import { type MockInstance, vi } from 'vitest';
+import type { LogSink } from '../../src/infrastructure/logging/logger-options';
 
 const CONSOLE_METHODS = [
   'log',
@@ -11,33 +11,38 @@ const CONSOLE_METHODS = [
   'trace',
 ] as const;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
- * Everything the application writes while a test watches: what it logs
- * through Nest's logger, at every level (debug included, as production
- * prints it), what reaches the console, and raw writes to stdout and stderr.
- * Pass it to `bootApp({ logger })`, then `start()` before the requests.
+ * Everything the application writes while a test watches: every line of the
+ * structured log, at every level — the access log and Nest's own lines alike —
+ * and, once `start()`ed, what reaches the console and raw writes to stdout and
+ * stderr. Pass it to `bootApp({ logs })`, then `start()` before the requests.
  */
-export class LogCapture implements LoggerService {
+export class LogCapture {
   readonly lines: string[] = [];
   private spies: MockInstance[] = [];
 
-  log(message: unknown, ...rest: unknown[]): void {
-    this.record('log', message, rest);
+  /** Where bootApp points the logger: every level, into `lines`. */
+  get sink(): LogSink {
+    return {
+      level: 'trace',
+      stream: { write: (line: string) => this.lines.push(line.trimEnd()) },
+    };
   }
-  error(message: unknown, ...rest: unknown[]): void {
-    this.record('error', message, rest);
-  }
-  warn(message: unknown, ...rest: unknown[]): void {
-    this.record('warn', message, rest);
-  }
-  debug(message: unknown, ...rest: unknown[]): void {
-    this.record('debug', message, rest);
-  }
-  verbose(message: unknown, ...rest: unknown[]): void {
-    this.record('verbose', message, rest);
-  }
-  fatal(message: unknown, ...rest: unknown[]): void {
-    this.record('fatal', message, rest);
+
+  /** The structured lines, parsed; console and raw writes are not JSON. */
+  entries(): Record<string, unknown>[] {
+    return this.lines.flatMap((line) => {
+      try {
+        const entry: unknown = JSON.parse(line);
+        return isRecord(entry) ? [entry] : [];
+      } catch {
+        return [];
+      }
+    });
   }
 
   /** Also capture the console and raw stdout and stderr writes, until `stop()`. */
@@ -70,11 +75,5 @@ export class LogCapture implements LoggerService {
 
   clear(): void {
     this.lines.length = 0;
-  }
-
-  private record(level: string, message: unknown, rest: unknown[]): void {
-    // Nest passes an absent stack as `undefined`; its console logger skips it.
-    const params = rest.filter((param) => param !== undefined);
-    this.lines.push(`${level} ${format(message, ...params)}`);
   }
 }
