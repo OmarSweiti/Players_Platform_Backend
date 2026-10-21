@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import {
   type ArgumentsHost,
   Catch,
@@ -7,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { newRequestId } from '../../infrastructure/logging/correlation';
 import { problemCodeOfPrismaError } from '../../infrastructure/prisma/prisma-errors';
 import { DomainError, type FieldIssue } from '../errors/domain-error';
 import {
@@ -108,7 +108,7 @@ export function sendProblem(
   request: Request,
   response: Response,
 ): void {
-  const requestId = requestIdOf(request) ?? randomUUID();
+  const requestId = requestIdOf(request) ?? newRequestId();
   const { code, fieldIssues, unexpected, retryAfterSeconds } =
     classify(exception);
   const { status, title } = PROBLEMS[code];
