@@ -20,10 +20,17 @@ import {
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
-/** Runs raw SQL in an isolated schema, for values Prisma will not write (NaN). */
-async function sqlIn(schema: IsolatedSchema, text: string, params: unknown[]) {
+/**
+ * Runs raw SQL in an isolated schema: as the runtime role, for values Prisma
+ * will not write (NaN); as the migrator (`url`), for changes to the schema.
+ */
+async function sqlIn(
+  schema: IsolatedSchema,
+  statements: Array<[text: string, params?: unknown[]]>,
+  url: string = schema.url,
+) {
   const client = new Client({
-    connectionString: databaseConnectionOf(schema.url).connectionString,
+    connectionString: databaseConnectionOf(url).connectionString,
   });
   await client.connect();
   try {
@@ -31,11 +38,37 @@ async function sqlIn(schema: IsolatedSchema, text: string, params: unknown[]) {
       "SELECT set_config('search_path', quote_ident($1), false)",
       [schema.schema],
     );
-    await client.query(text, params);
+    for (const [text, params] of statements) await client.query(text, params);
   } finally {
     await client.end();
   }
 }
+
+// The preflight runs on a database from before its constraints, and the keys
+// of 0.4.4 refuse the very rows it must find. The dirty schema gets back the
+// keys it had before them: the single-column ones the cross-tenant rule reads
+// from the catalog, and the composites without the shared parent.
+const KEYS_BEFORE_0_4_4 = [
+  'ALTER TABLE attendance DROP CONSTRAINT attendance_enrollment_id_tenant_id_training_id_fkey,' +
+    ' ADD FOREIGN KEY (enrollment_id, tenant_id) REFERENCES enrollments (id, tenant_id)',
+  'ALTER TABLE attendance DROP CONSTRAINT attendance_training_session_id_tenant_id_training_id_fkey,' +
+    ' ADD FOREIGN KEY (training_session_id, tenant_id) REFERENCES training_sessions (id, tenant_id)',
+  'ALTER TABLE audit_logs DROP CONSTRAINT audit_logs_user_id_tenant_id_fkey,' +
+    ' ADD FOREIGN KEY (user_id) REFERENCES users (id)',
+  'ALTER TABLE contracts DROP CONSTRAINT contracts_season_id_tenant_id_fkey,' +
+    ' ADD FOREIGN KEY (season_id) REFERENCES seasons (id)',
+  'ALTER TABLE documents DROP CONSTRAINT documents_uploaded_by_id_tenant_id_fkey',
+  'ALTER TABLE legal_tickets DROP CONSTRAINT legal_tickets_assigned_to_id_tenant_id_fkey,' +
+    ' ADD FOREIGN KEY (assigned_to_id) REFERENCES users (id)',
+  'ALTER TABLE messages DROP CONSTRAINT messages_sender_id_tenant_id_fkey,' +
+    ' ADD FOREIGN KEY (sender_id) REFERENCES users (id)',
+  'ALTER TABLE performance_records DROP CONSTRAINT performance_records_season_id_tenant_id_fkey,' +
+    ' ADD FOREIGN KEY (season_id) REFERENCES seasons (id)',
+  'ALTER TABLE trainings DROP CONSTRAINT trainings_season_id_tenant_id_fkey,' +
+    ' ADD FOREIGN KEY (season_id) REFERENCES seasons (id)',
+  'ALTER TABLE treatment_sessions DROP CONSTRAINT treatment_sessions_medical_record_id_tenant_id_player_id_fkey,' +
+    ' ADD FOREIGN KEY (medical_record_id, tenant_id) REFERENCES medical_records (id, tenant_id)',
+];
 
 const PERSONAL = {
   memberEmail: 'Layla.Haddad@agency-one.test',
@@ -220,6 +253,7 @@ async function seedCounterExamples(
       tenantId: a.id,
       enrollmentId: enrollment.id,
       trainingSessionId: session.id,
+      trainingId: programOne.id, // the enrollment's; the session is programme two's
       date: day('2026-10-05'),
     },
   });
@@ -246,11 +280,9 @@ async function seedCounterExamples(
   });
 
   // Money: NaN cannot be written through Prisma, a negative amount can.
-  await sqlIn(
-    schema,
-    `UPDATE contracts SET signing_fee = 'NaN' WHERE id = $1`,
-    [contract.id],
-  );
+  await sqlIn(schema, [
+    [`UPDATE contracts SET signing_fee = 'NaN' WHERE id = $1`, [contract.id]],
+  ]);
 
   const deletedAudit = await prisma.auditLog.create({
     data: {
@@ -307,6 +339,11 @@ describe('the preflight report', () => {
       createIsolatedSchema(),
       createIsolatedSchema(),
     ]);
+    await sqlIn(
+      dirty,
+      KEYS_BEFORE_0_4_4.map((statement) => [statement]),
+      dirty.migrationUrl,
+    );
     const db = prismaFor(dirty.url);
     try {
       seeded = await seedCounterExamples(db.prisma, dirty);

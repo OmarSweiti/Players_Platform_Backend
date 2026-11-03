@@ -138,9 +138,11 @@ export async function runPreflight(
       const queries = kind.startsWith('generate')
         ? (await client.query<{ sql: string }>(sql)).rows.map((r) => r.sql)
         : [sql];
+      // Listed even when the catalog gives a generated rule nothing to check:
+      // since 0.4.4 no single-column key crosses tenants, and that is a zero.
+      if (kind.endsWith('violations')) report.counts[rule] ??= 0;
       for (const query of queries) {
         if (kind.endsWith('violations')) {
-          report.counts[rule] ??= 0;
           for (const row of (await client.query<ViolationRow>(query)).rows) {
             report.violations.push({
               rule,
