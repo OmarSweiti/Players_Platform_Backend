@@ -176,8 +176,13 @@ pr $title='' $body='':
       as_app gh pr create "${to[@]}" --fill-first
     fi
     url=$(gh pr view --json url --jq .url)
+    # The board holds status and is never a gate: a card that fails to file leaves the PR open.
+    board() { bash ./scripts/gh-project-item.sh "$url" ||
+      echo "pr: the PR is open, but its card on the board is not filed or current: run just gh-project-item $url" >&2; }
+    board
     # Every check but `validation`: its evidence can only be posted on a PR that exists.
     bash ./scripts/watch-required-checks.sh "$url" --except validation
+    board # again, now that the labeler has labelled it: its Risk is known
     echo "pr: $url"
     echo "pr: next — validate it running and post the evidence (in the umbrella: just evidence $url <report.md> <screenshots>);"
     echo "    the maintainer reviews and approves it; then: just merge $url"
@@ -227,6 +232,8 @@ merge $pr='':
     get '.body // ""' >"$text"
     gh pr merge "$target" --squash --delete-branch --match-head-commit "$(get .headRefOid)" \
       --subject "$(get .title) (#$(get .number))" --body-file "$text"
+    bash ./scripts/gh-project-item.sh "$target" ||
+      echo "merge: merged, but its card on the board is not Done: run just gh-project-item $target" >&2
 
 # Open the development → staging promotion (a release candidate)
 promote-staging:
@@ -309,3 +316,11 @@ gh-bootstrap:
 # Read the live configuration back and report drift (read-only)
 gh-audit:
     bash ./scripts/gh-audit.sh
+
+# File a PR on the delivery board (the umbrella's just gh-project), or bring its card up to date: just gh-project-item <URL>
+gh-project-item $ref:
+    bash ./scripts/gh-project-item.sh "$ref"
+
+# File every PR into development that the board lacks or has stale
+gh-project-sync:
+    bash ./scripts/gh-project-item.sh --sync
