@@ -14,10 +14,12 @@ import { NotFoundError } from '../../src/common/errors/domain-error';
 import { IdParams, line } from '../../src/common/validation/schemas';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { bootApp, type BootedApp } from '../harness/app';
-import { runPrisma } from '../harness/fixtures';
+import { migrationPrisma, runPrisma } from '../harness/fixtures';
 
 // The fixture aggregate: a table of this run's schema only, editable the way
-// every domain aggregate is — `revision` from 1, a compare-and-update.
+// every domain aggregate is — `revision` from 1, a compare-and-update. The
+// migrator creates it, as every table is; the app then writes it as the
+// runtime role, through the owner's default privileges.
 const FIXTURE_TABLE = `
   CREATE TABLE concurrency_fixture (
     id uuid PRIMARY KEY,
@@ -109,7 +111,7 @@ describe('optimistic concurrency', () => {
   let booted: BootedApp;
 
   beforeAll(async () => {
-    await runPrisma().$executeRawUnsafe(FIXTURE_TABLE);
+    await migrationPrisma().$executeRawUnsafe(FIXTURE_TABLE);
     booted = await bootApp({ controllers: [FixtureController] });
   });
 

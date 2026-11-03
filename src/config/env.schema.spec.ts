@@ -99,6 +99,25 @@ describe('the environment schema', () => {
     }
   });
 
+  it('refuses a database connection as the owner, the migrator or the superuser', () => {
+    for (const role of [
+      'sadara_owner',
+      'sadara_migrator',
+      'postgres',
+      '%70ostgres',
+    ]) {
+      const message = failureOf({
+        ...valid,
+        DATABASE_URL: `postgresql://${role}:not-a-real-password@db.agency.test:5432/sadara`,
+      });
+      expect(message).toContain(
+        'DATABASE_URL must connect as the runtime role, never as the owner, the migrator or a superuser',
+      );
+      expect(message).not.toContain('not-a-real-password');
+    }
+    expect(parseEnv(valid).DATABASE_URL).toBe(valid.DATABASE_URL);
+  });
+
   it('boot_errors_name_the_variable_but_not_its_value', () => {
     const canary = 'canary-value-9b2e';
     const message = failureOf({
