@@ -102,13 +102,20 @@ export async function createIsolatedSchema(
   return { schema, url: inSchema(base, schema), migrationUrl, drop };
 }
 
-/** A Prisma client bound to one run's schema, for fixtures and assertions outside the app. */
-export function prismaFor(url: string): {
+/**
+ * A Prisma client bound to one run's schema, for fixtures and assertions outside
+ * the app. `max: 1` makes every statement reuse one connection, for a test that
+ * must see what a pooled connection carries from one piece of work to the next.
+ */
+export function prismaFor(
+  url: string,
+  { max = 2 }: { max?: number } = {},
+): {
   prisma: PrismaClient;
   close(): Promise<void>;
 } {
   const { connectionString, schema, options } = databaseConnectionOf(url);
-  const pool = new Pool({ connectionString, options, max: 2 });
+  const pool = new Pool({ connectionString, options, max });
   const prisma = new PrismaClient({
     adapter: new PrismaPg(pool, schema ? { schema } : undefined),
   });
