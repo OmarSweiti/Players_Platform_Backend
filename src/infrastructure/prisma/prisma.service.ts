@@ -8,7 +8,6 @@ import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { Pool } from 'pg';
 import { ConfigService } from '@nestjs/config';
-import { AsyncLocalStorage } from 'async_hooks';
 import { databaseConnectionOf } from './database-url';
 import {
   describeError,
@@ -16,17 +15,12 @@ import {
 } from '../../common/logging/describe-error';
 import type { Env } from '../../config/env.schema';
 
-export interface TenantContext {
-  tenantId: string;
-}
-
 @Injectable()
 export class PrismaService
   extends PrismaClient
   implements OnModuleInit, OnModuleDestroy
 {
   private readonly logger = new Logger(PrismaService.name);
-  private readonly asyncLocalStorage = new AsyncLocalStorage<TenantContext>();
   private pool: Pool;
 
   constructor(config: ConfigService<Env, true>) {
@@ -87,10 +81,8 @@ export class PrismaService
     try {
       await this.$connect();
       this.logger.log('Successfully connected to database');
-
-      // Note: Prisma 7.x with adapter does not support $use middleware
-      // Tenant isolation should be handled at the application/service layer
-      // using the runWithTenant method and explicit tenantId filtering
+      // Tenant work never runs on this client directly: modules go through
+      // TenantTransactions.withTenantTransaction (src/common/tenancy, 0.4.3).
     } catch (error) {
       this.logger.error(
         `Failed to connect to database: ${describeError(error)}`,
@@ -111,32 +103,5 @@ export class PrismaService
         stackFramesOf(error),
       );
     }
-  }
-
-  /**
-   * Run a database operation with tenant context
-   * This method should be used to wrap service-layer operations that require tenant isolation
-   */
-  async runWithTenant<T>(tenantId: string, fn: () => Promise<T>): Promise<T> {
-    return this.asyncLocalStorage.run({ tenantId }, fn);
-  }
-
-  /**
-   * Get current tenant ID from context
-   */
-  getCurrentTenantId(): string | undefined {
-    return this.asyncLocalStorage.getStore()?.tenantId;
-  }
-
-  /**
-   * Helper method to ensure tenant isolation in queries
-   * Service layer should use this to append tenantId to where clauses
-   */
-  getTenantFilter(tenantId?: string): { tenantId: string } {
-    const tid = tenantId || this.getCurrentTenantId();
-    if (!tid) {
-      throw new Error('Tenant ID is required for this operation');
-    }
-    return { tenantId: tid };
   }
 }
