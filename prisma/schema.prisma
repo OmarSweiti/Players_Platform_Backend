@@ -12,6 +12,13 @@ datasource db {
 // carries @map("snake_case") and every enum @@map, so no SQL statement has to
 // quote a name. test/db/naming.integration-spec.ts refuses anything else.
 
+// Every foreign key to a tenant-owned row is composite, (…Id, tenantId), so it
+// cannot name another tenant's row; where a row has two parents that must
+// agree, the key carries the shared column too (attendance, treatment
+// sessions). No key deletes into tenantId (SET NULL) or cascades a key change:
+// every relation is onUpdate: Restrict (0.4.4).
+// test/db/foreign-keys.integration-spec.ts holds the catalog to this.
+
 //////////////////////////
 // ENUMS
 //////////////////////////
@@ -407,7 +414,7 @@ model User {
   emergencyContact      String?   @db.VarChar(150) @map("emergency_contact")
   emergencyPhone        String?   @db.VarChar(20) @map("emergency_phone")
 
-  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   messages              Message[]
   conversationMembers   ConversationMember[]
@@ -430,6 +437,7 @@ model User {
   scoutingAssignmentsTo ScoutingAssignment[] @relation("ScoutingAssignmentTo")
   scoutingAssignmentsBy ScoutingAssignment[] @relation("ScoutingAssignmentBy")
   treatmentSessions     TreatmentSession[]   @relation("TreatmentSessionConductor")
+  uploadedDocuments     Document[]
 
   createdAt             DateTime  @default(now()) @map("created_at")
   updatedAt             DateTime  @updatedAt @map("updated_at")
@@ -458,7 +466,7 @@ model Season {
   endDate     DateTime @map("end_date")
   isCurrent   Boolean  @default(false) @map("is_current")
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   contracts   Contract[]
   trainings   Training[]
@@ -492,10 +500,11 @@ model Document {
   mimeType    String?            @db.VarChar(100) @map("mime_type")
   description String?            @db.VarChar(500)
 
-  /// Uploaded by (nullable in case user is deleted)
+  /// The member who uploaded it: one of the document's own tenant (0.4.4)
   uploadedById String?           @db.Uuid @map("uploaded_by_id")
 
-  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  uploadedBy  User?              @relation(fields: [uploadedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt   DateTime           @default(now()) @map("created_at")
   updatedAt   DateTime           @updatedAt @map("updated_at")
@@ -545,7 +554,7 @@ model Player {
 
   metadata          Json?
 
-  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   media             PlayerMedia[]
   contracts         Contract[]
@@ -583,8 +592,8 @@ model PlayerMedia {
   caption     String?  @db.VarChar(255)
   isFeatured  Boolean  @default(false) @map("is_featured")
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -617,9 +626,9 @@ model MedicalRecord {
   /// Attachments (scans, reports) are stored in the Document model
   metadata         Json?
 
-  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player           Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  createdBy        User      @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player           Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy        User      @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   treatmentSessions TreatmentSession[]
 
   createdAt        DateTime  @default(now()) @map("created_at")
@@ -627,6 +636,8 @@ model MedicalRecord {
   deletedAt        DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
+  /// The parent key of a treatment session's record: the same player's (0.4.4)
+  @@unique([id, tenantId, playerId])
 
   @@map("medical_records")
   @@index([tenantId])
@@ -673,10 +684,10 @@ model Contract {
 
   metadata          Json?
 
-  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player            Player         @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  createdBy         User           @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
-  season            Season?        @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  tenant            Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player            Player         @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy         User           @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  season            Season?        @relation(fields: [seasonId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   versions          ContractVersion[]
   approvals         ContractApproval[]
@@ -713,9 +724,9 @@ model ContractVersion {
   fileSize     Int? @map("file_size")
   mimeType     String?  @db.VarChar(100) @map("mime_type")
 
-  contract     Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  createdBy    User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  contract     Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -744,9 +755,9 @@ model ContractApproval {
 
   respondedAt   DateTime? @map("responded_at")
 
-  contract      Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  approvedBy    User     @relation(fields: [approvedById, tenantId], references: [id, tenantId], onDelete: Restrict)
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  contract      Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  approvedBy    User     @relation(fields: [approvedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -792,9 +803,9 @@ model PerformanceRecord {
   /// Catch-all for position-specific or future stats (e.g. saves for GK)
   extraStats      Json? @map("extra_stats")
 
-  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player          Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  season          Season?   @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player          Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  season          Season?   @relation(fields: [seasonId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -829,9 +840,9 @@ model Rating {
   /// Extra scoring dimensions (e.g. tactical, leadership) for future flexibility
   extraScores     Json? @map("extra_scores")
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player          Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  createdBy       User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player          Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy       User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
@@ -871,8 +882,8 @@ model Training {
   /// Flexible: store recurrence rules, target positions, etc.
   metadata     Json?
 
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  season       Season?  @relation(fields: [seasonId], references: [id], onDelete: SetNull)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  season       Season?  @relation(fields: [seasonId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   sessions     TrainingSession[]
   enrollments  Enrollment[]
@@ -906,8 +917,8 @@ model TrainingSession {
   isCancelled  Boolean  @default(false) @map("is_cancelled")
   cancelNote   String?  @db.VarChar(500) @map("cancel_note")
 
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  training     Training @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  training     Training @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   attendance   Attendance[]
 
@@ -916,6 +927,8 @@ model TrainingSession {
   deletedAt    DateTime? @map("deleted_at")
 
   @@unique([id, tenantId])
+  /// The parent key of attendance: a session of the same program (0.4.4)
+  @@unique([id, tenantId, trainingId])
 
   @@map("training_sessions")
   @@index([tenantId])
@@ -938,9 +951,9 @@ model Enrollment {
   paidAt          DateTime? @map("paid_at")
   paidAmount      Decimal?         @db.Decimal(10, 2) @map("paid_amount")
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  training        Training         @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  player          Player           @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  training        Training         @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  player          Player           @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   attendance      Attendance[]
 
@@ -950,6 +963,8 @@ model Enrollment {
 
   @@unique([trainingId, playerId])
   @@unique([id, tenantId])
+  /// The parent key of attendance: an enrollment in the same program (0.4.4)
+  @@unique([id, tenantId, trainingId])
 
   @@map("enrollments")
   @@index([tenantId])
@@ -962,15 +977,18 @@ model Attendance {
   tenantId          String           @db.Uuid @map("tenant_id")
   enrollmentId      String           @db.Uuid @map("enrollment_id")
   trainingSessionId String           @db.Uuid @map("training_session_id")
+  /// The program both parents belong to: each key below includes it, so the
+  /// enrollment and the session cannot come from two programs (0.4.4)
+  trainingId        String           @db.Uuid @map("training_id")
 
   /// Denormalized from TrainingSession for query convenience
   date              DateTime
   status            AttendanceStatus @default(ABSENT)
   note              String?          @db.VarChar(500)
 
-  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  enrollment        Enrollment       @relation(fields: [enrollmentId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  trainingSession   TrainingSession  @relation(fields: [trainingSessionId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  enrollment        Enrollment       @relation(fields: [enrollmentId, tenantId, trainingId], references: [id, tenantId, trainingId], onDelete: Restrict, onUpdate: Restrict)
+  trainingSession   TrainingSession  @relation(fields: [trainingSessionId, tenantId, trainingId], references: [id, tenantId, trainingId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt         DateTime         @default(now()) @map("created_at")
   updatedAt         DateTime         @updatedAt @map("updated_at")
@@ -1010,10 +1028,10 @@ model LegalTicket {
   /// For linking to external legal case IDs, contract refs, etc.
   metadata      Json?
 
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player        Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  createdBy     User     @relation("TicketCreator", fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
-  assignedTo    User?    @relation("TicketAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player        Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy     User     @relation("TicketCreator", fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  assignedTo    User?    @relation("TicketAssignee", fields: [assignedToId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   notes         LegalNote[]
 
@@ -1041,9 +1059,9 @@ model LegalNote {
   note          String      @db.Text
   isInternal    Boolean     @default(false) @map("is_internal")
 
-  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  ticket        LegalTicket @relation(fields: [ticketId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  createdBy     User        @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  ticket        LegalTicket @relation(fields: [ticketId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy     User        @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt     DateTime    @default(now()) @map("created_at")
   updatedAt     DateTime    @updatedAt @map("updated_at")
@@ -1072,7 +1090,7 @@ model Conversation {
 
   lastMessageAt  DateTime? @map("last_message_at")
 
-  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   messages       Message[]
   members        ConversationMember[]
@@ -1099,9 +1117,9 @@ model ConversationMember {
   /// For unread message count / read receipts
   lastReadAt     DateTime? @map("last_read_at")
 
-  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  user           User         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  user           User         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt      DateTime     @default(now()) @map("created_at")
   deletedAt      DateTime? @map("deleted_at")
@@ -1152,9 +1170,9 @@ model ScoutingReport {
   
   metadata        Json?
   
-  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  scout           User               @relation(fields: [scoutId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  player          Player?            @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: SetNull)
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  scout           User               @relation(fields: [scoutId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  player          Player?            @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
@@ -1178,9 +1196,9 @@ model PlayerWatchlist {
   priority    String?  @db.VarChar(50) // HIGH, MEDIUM, LOW
   notes       String?  @db.Text
   
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user        User     @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user        User     @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
@@ -1209,9 +1227,9 @@ model ScoutingAssignment {
   
   notes         String?  @db.Text
   
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  assignedTo    User     @relation("ScoutingAssignmentTo", fields: [assignedToId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  assignedBy    User     @relation("ScoutingAssignmentBy", fields: [assignedById, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  assignedTo    User     @relation("ScoutingAssignmentTo", fields: [assignedToId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  assignedBy    User     @relation("ScoutingAssignmentBy", fields: [assignedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
@@ -1244,10 +1262,11 @@ model TreatmentSession {
   
   conductedBy     String             @db.Uuid @map("conducted_by")  // Medical staff ID
   
-  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  player          Player             @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict)
-  medicalRecord   MedicalRecord?     @relation(fields: [medicalRecordId, tenantId], references: [id, tenantId], onDelete: SetNull)
-  conductor       User               @relation("TreatmentSessionConductor", fields: [conductedBy, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant          Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  player          Player             @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  /// The record of this session's own player: the key includes playerId (0.4.4)
+  medicalRecord   MedicalRecord?     @relation(fields: [medicalRecordId, tenantId, playerId], references: [id, tenantId, playerId], onDelete: Restrict, onUpdate: Restrict)
+  conductor       User               @relation("TreatmentSessionConductor", fields: [conductedBy, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
@@ -1287,7 +1306,7 @@ model RolePermission {
   roleId         UserRole @map("role_id")
   permissionId   String     @db.Uuid @map("permission_id")
   
-  permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: Restrict)
   
   createdAt      DateTime   @default(now()) @map("created_at")
   
@@ -1321,11 +1340,10 @@ model Message {
   /// Soft delete (message recalled)
   deletedAt      DateTime? @map("deleted_at")
 
-  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  /// Single-field FK due to Prisma limitation with nullable composite keys
-  sender         User?        @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  sender         User?        @relation(fields: [senderId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
@@ -1359,8 +1377,8 @@ model Notification {
   isRead          Boolean          @default(false) @map("is_read")
   readAt          DateTime? @map("read_at")
 
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user            User             @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict)
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user            User             @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt       DateTime         @default(now()) @map("created_at")
   updatedAt       DateTime         @updatedAt @map("updated_at")
@@ -1382,7 +1400,6 @@ model AuditLog {
   id          String   @id @default(uuid()) @db.Uuid
   tenantId    String   @db.Uuid @map("tenant_id")
 
-  /// Nullable separately — single-field FK to avoid Prisma limitation with nullable composite keys
   userId      String?  @db.Uuid @map("user_id")
 
   action      String   @db.VarChar(100)
@@ -1395,8 +1412,8 @@ model AuditLog {
   ipAddress   String?  @db.VarChar(45) @map("ip_address")
   userAgent   String?  @db.VarChar(500) @map("user_agent")
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user        User?    @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   createdAt   DateTime @default(now()) @map("created_at")
   deletedAt   DateTime? @map("deleted_at")
