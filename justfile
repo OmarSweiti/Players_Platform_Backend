@@ -52,8 +52,8 @@ lint-prune:
 
 # The Prisma schema is valid, and the client generates from it (neither connects)
 prisma:
-    DATABASE_URL="${DATABASE_URL:-postgresql://ci:ci@localhost:5432/ci}" npx --no-install prisma validate
-    DATABASE_URL="${DATABASE_URL:-postgresql://ci:ci@localhost:5432/ci}" npx --no-install prisma generate
+    npx --no-install prisma validate
+    npx --no-install prisma generate
 
 # Compile
 build:
@@ -116,19 +116,34 @@ preflight:
     if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then set -a; source ./.env; set +a; fi
     npx --no-install ts-node --transpile-only scripts/preflight.ts
 
-# CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database)
+# Apply the migrations to your development database, as the migrator (MIGRATION_DATABASE_URL in .env)
+migrate:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -z "${MIGRATION_DATABASE_URL:-}" ] && [ -f .env ]; then set -a; source ./.env; set +a; fi
+    [ -n "${MIGRATION_DATABASE_URL:-}" ] ||
+      { echo "migrate: MIGRATION_DATABASE_URL is not set: copy it from .env.example into .env" >&2; exit 1; }
+    npx --no-install prisma migrate deploy
+
+# CI's migration replay, against a throwaway PostgreSQL in Docker (never your dev database):
+# provisioned as every database is — the builtin C.UTF-8 collation, the three roles — and
+# migrated as the migrator
 migrations:
     #!/usr/bin/env bash
     set -euo pipefail
     name="players-platform-migrations-$$"
     docker run -d --rm --name "$name" -e POSTGRES_USER=ci -e POSTGRES_PASSWORD=ci -e POSTGRES_DB=ci \
+      -e POSTGRES_INITDB_ARGS="--locale-provider=builtin --locale=C.UTF-8" \
       -p 127.0.0.1::5432 postgres:18@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722 >/dev/null
     trap 'docker stop "$name" >/dev/null' EXIT
     # -h: the init phase listens on the socket only; ready means TCP answers
     until docker exec "$name" pg_isready -h 127.0.0.1 -U ci -d ci >/dev/null 2>&1; do sleep 1; done
+    # A disposable container's passwords, not secrets
+    docker exec -i -e SADARA_MIGRATOR_PASSWORD=ci-migrator -e SADARA_APP_PASSWORD=ci-app "$name" \
+      psql -U ci -d ci -f - <scripts/database-roles.sql
     port=$(docker port "$name" 5432/tcp | head -n 1 | sed 's/.*://')
     # Exported, so dotenv (prisma.config.ts) never swaps in the .env database
-    export DATABASE_URL="postgresql://ci:ci@127.0.0.1:$port/ci"
+    export MIGRATION_DATABASE_URL="postgresql://sadara_migrator:ci-migrator@127.0.0.1:$port/ci"
     npx --no-install prisma migrate deploy
     npx --no-install prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code
 

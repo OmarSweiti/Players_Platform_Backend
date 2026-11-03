@@ -8,7 +8,11 @@ export default defineConfig({
   migrations: {
     path: "prisma/migrations",
   },
+  // The CLI (migrate deploy, migrate diff) connects as the migrator, which
+  // acts as the schema's owner (scripts/database-roles.sql, 0.4.2). The
+  // application never reads this URL: it connects as the runtime role,
+  // through DATABASE_URL (src/config/env.schema.ts).
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["MIGRATION_DATABASE_URL"],
   },
 });

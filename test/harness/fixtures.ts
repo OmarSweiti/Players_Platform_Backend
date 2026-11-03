@@ -21,9 +21,21 @@ export function runPrisma(): PrismaClient {
   return runClient.prisma;
 }
 
+let migrationClient: ReturnType<typeof prismaFor> | undefined;
+
+/**
+ * The migrator's client for this run's schema: only for a test that changes the
+ * schema itself (a probe table), never for data — the runtime role cannot.
+ */
+export function migrationPrisma(): PrismaClient {
+  migrationClient ??= prismaFor(inject('migrationDatabaseUrl'));
+  return migrationClient.prisma;
+}
+
 afterAll(async () => {
-  await runClient?.close();
+  await Promise.all([runClient?.close(), migrationClient?.close()]);
   runClient = undefined;
+  migrationClient = undefined;
 });
 
 const suffix = () => randomBytes(4).toString('hex');

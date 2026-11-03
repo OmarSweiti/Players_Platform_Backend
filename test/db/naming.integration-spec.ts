@@ -1,6 +1,6 @@
 import type { PrismaClient } from '@prisma/client';
 import { describe, expect, inject, it } from 'vitest';
-import { runPrisma } from '../harness/fixtures';
+import { migrationPrisma, runPrisma } from '../harness/fixtures';
 
 // One naming scheme in the database (0.4.0, DB-49): every name is lower
 // snake_case, so no SQL statement has to quote one. Prisma maps each field
@@ -68,9 +68,9 @@ describe('database names', () => {
     const schema = inject('databaseSchema');
     let found: string[] = [];
 
-    // Made inside a transaction that never commits: the schema stays as the
-    // migrations left it.
-    await runPrisma()
+    // Made by the migrator — the runtime role cannot — inside a transaction
+    // that never commits: the schema stays as the migrations left it.
+    await migrationPrisma()
       .$transaction(async (tx) => {
         await tx.$executeRawUnsafe(
           'CREATE TABLE "probeTable" (id int CONSTRAINT "probeTable_pkey" PRIMARY KEY, "createdAt" date NOT NULL)',

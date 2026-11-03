@@ -4,6 +4,7 @@ import { createIsolatedSchema } from './db';
 declare module 'vitest' {
   export interface ProvidedContext {
     databaseUrl: string;
+    migrationDatabaseUrl: string;
     databaseSchema: string;
   }
 }
@@ -18,6 +19,7 @@ export default async function setup(
 ): Promise<() => Promise<void>> {
   const run = await createIsolatedSchema();
   project.provide('databaseUrl', run.url);
+  project.provide('migrationDatabaseUrl', run.migrationUrl);
   project.provide('databaseSchema', run.schema);
   return async () => {
     if (process.env.KEEP_TEST_SCHEMA !== '1') await run.drop();
