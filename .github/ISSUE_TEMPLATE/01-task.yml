@@ -2,7 +2,7 @@ name: Task
 description: One unit of work you are starting now (WIP = 1). The plan lives in OmarSweiti/Players_Platform; this tracks what is in flight.
 title: "[task] "
 labels: ["type: feat"]
-# projects: ["OmarSweiti/<number>"]   # to auto-add issues to a Projects v2 board
+projects: ["OmarSweiti/5"] # the delivery board, Sadara delivery (03-github-workflow.md, "The board")
 body:
   - type: textarea
     id: goal

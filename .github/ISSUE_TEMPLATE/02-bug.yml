@@ -2,6 +2,7 @@ name: Bug
 description: Something behaves wrongly. A bug written down is a test; one in your head comes back.
 title: "fix: "
 labels: ["type: fix"]
+projects: ["OmarSweiti/5"] # the delivery board, Sadara delivery (03-github-workflow.md, "The board")
 body:
   - type: textarea
     id: expected

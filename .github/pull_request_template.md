@@ -1,7 +1,9 @@
 ## Closes
 
-<!-- `Closes #123`, one per line — or "none" and why. Only a closing keyword
-     closes the issue (and moves its board card) on merge. -->
+<!-- `Part of OmarSweiti/Players_Platform#N` for the microstep's issue: it lives
+     in the umbrella, and closes with the umbrella PR that records the step
+     done. `Closes #N` for an issue of this repository it settles. Or "none"
+     and why. -->
 
 ## What
 
