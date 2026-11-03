@@ -47,6 +47,12 @@ just merge                                           # only once approved: squas
   screenshots, posted for the head commit by the umbrella's `just evidence`.
   The required `validation` check refuses a PR without it
   (`scripts/check-validation.sh`).
+- **Every PR is a card on the delivery board** (the umbrella's
+  `just gh-project`): `just pr` files it, `just merge` moves it to Done, and
+  `just gh-project-sync` files whatever was opened or merged elsewhere. A
+  microstep's PR says `Part of OmarSweiti/Players_Platform#N` — the step's
+  issue, in the umbrella. The scripts run as your login, which needs the
+  `project` scope: `gh auth refresh -s project,read:project`.
 - **No assistant attribution.** Coding assistants are tools, not co-authors:
   `Co-Authored-By:` trailers, "Generated with…" lines and assistant names are
   refused everywhere — commits, branches, titles, PR bodies and comments.
