@@ -165,7 +165,7 @@ pr $title='' $body='':
     just pre-push
     git push -u origin HEAD
     as_app() { GH_TOKEN="$app_token" "$@"; }
-    to=(--assignee "$maintainer" --reviewer "$maintainer" --base development)
+    to=(--assignee "$maintainer" --base development)
     if [ -n "$body" ]; then
       as_app gh pr create "${to[@]}" --title "$title" --body-file "$body"
     elif [ -n "$title" ]; then
@@ -176,6 +176,14 @@ pr $title='' $body='':
       as_app gh pr create "${to[@]}" --fill-first
     fi
     url=$(gh pr view --json url --jq .url)
+    # CODEOWNERS requests the maintainer's review on its own; this asks again, explicitly. Not with
+    # `gh pr create --reviewer`: on a brand-new PR its request can race CODEOWNERS' and fail the
+    # recipe after the PR exists (it did twice on 3 November 2026), so ask once the PR is there.
+    for attempt in 1 2 3; do
+      as_app gh api -X POST "repos/$repo/pulls/${url##*/}/requested_reviewers" -f "reviewers[]=$maintainer" --silent && break
+      [ "$attempt" -lt 3 ] || { echo "pr: REFUSED — the maintainer's review could not be requested: request it on $url" >&2; exit 1; }
+      sleep 5
+    done
     # The board holds status and is never a gate: a card that fails to file leaves the PR open.
     board() { bash ./scripts/gh-project-item.sh "$url" ||
       echo "pr: the PR is open, but its card on the board is not filed or current: run just gh-project-item $url" >&2; }
