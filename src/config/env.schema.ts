@@ -19,6 +19,29 @@ const proxy = z.union([
   z.enum(['loopback', 'linklocal', 'uniquelocal']),
 ]);
 
+// The API connects as the runtime role only (0.4.2): never as the role that
+// owns the schema, the one that migrates it, or the image's superuser.
+const PRIVILEGED_ROLES = new Set([
+  'sadara_owner',
+  'sadara_migrator',
+  'postgres',
+]);
+// The role a URL connects as; '' when it is no URL, which z.url reports itself
+// (a refinement still runs after a failed check).
+function roleOf(url: string): string {
+  try {
+    return decodeURIComponent(new URL(url).username);
+  } catch {
+    return '';
+  }
+}
+const database = z
+  .url({ protocol: /^postgres(ql)?$/ })
+  .refine((url) => !PRIVILEGED_ROLES.has(roleOf(url)), {
+    message:
+      'must connect as the runtime role, never as the owner, the migrator or a superuser',
+  });
+
 /** Where the API's routes live; the committed contract names this one. */
 export const DEFAULT_API_PREFIX = 'api';
 
@@ -29,7 +52,7 @@ export const Env = z.object({
     .string()
     .regex(/^[a-z0-9-]+$/)
     .default(DEFAULT_API_PREFIX),
-  DATABASE_URL: z.url({ protocol: /^postgres(ql)?$/ }),
+  DATABASE_URL: database,
   REDIS_HOST: z.string().min(1).default('localhost'),
   REDIS_PORT: port.default(6379),
   // The proxies whose X-Forwarded-For names the client (0.3.8), comma-
@@ -74,6 +97,8 @@ function problemOf(
       return `${name} must be a valid ${issue.format}`;
     case 'invalid_type':
       return `${name} must be a ${issue.expected}`;
+    case 'custom': // a refinement's message, written above, never the value
+      return `${name} ${issue.message}`;
     default:
       return `${name} is invalid`;
   }
