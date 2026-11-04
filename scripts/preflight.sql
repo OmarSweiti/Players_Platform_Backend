@@ -96,7 +96,9 @@ WHERE EXISTS (
 
 -- violations: money_out_of_range
 -- Not a finite, non-negative amount within its currency's minor units (the
--- exponents come from scripts/preflight.ts, read from ISO 4217 through Intl).
+-- exponents come from scripts/preflight.ts: currency_definitions, or before
+-- 0.4.7, ISO 4217 as Intl carries it). An enrollment's payment is checked
+-- against its own currency below, once it has one.
 WITH exponents AS (
   SELECT key AS currency, value::int AS exponent
   FROM jsonb_each_text(current_setting('sadara.currency_exponents')::jsonb)
@@ -152,11 +154,33 @@ SELECT 'notifications' AS table_name, 'reference_id' AS column_name, count(*) AS
 FROM notifications WHERE reference_id IS NOT NULL
 HAVING count(*) > 0;
 
--- unknowns: money_currency_unknown
-SELECT 'enrollments' AS table_name, 'paid_amount' AS column_name, count(*) AS count,
-       'enrollments.paid_amount has no currency of its own: its minor units cannot be checked' AS reason
+-- generate violations: money_out_of_range
+-- A payment beyond its own currency's minor units, where the payment has a
+-- currency (enrollments.paid_currency, 0.4.7).
+SELECT 'WITH exponents AS (
+  SELECT key AS currency, value::int AS exponent
+  FROM jsonb_each_text(current_setting(''sadara.currency_exponents'')::jsonb)
+)
+SELECT ''enrollments'' AS table_name, n.id AS row_id, n.tenant_id AS tenant_id,
+       ''enrollments.paid_amount has more decimals than its currency'' AS reason
+FROM enrollments n JOIN exponents e ON e.currency = n.paid_currency::text
+WHERE n.paid_amount <> ''NaN'' AND n.paid_amount >= 0 AND min_scale(n.paid_amount) > e.exponent' AS sql
+FROM information_schema.columns c
+WHERE c.table_schema = current_schema()
+  AND c.table_name = 'enrollments' AND c.column_name = 'paid_currency';
+
+-- generate unknowns: money_currency_unknown
+-- Before 0.4.7 a payment had no currency of its own; its minor units cannot be
+-- checked, and the money migration will not guess one.
+SELECT 'SELECT ''enrollments'' AS table_name, ''paid_amount'' AS column_name, count(*) AS count,
+       ''enrollments.paid_amount has no currency of its own: its minor units cannot be checked'' AS reason
 FROM enrollments WHERE paid_amount IS NOT NULL
-HAVING count(*) > 0;
+HAVING count(*) > 0' AS sql
+WHERE NOT EXISTS (
+  SELECT FROM information_schema.columns c
+  WHERE c.table_schema = current_schema()
+    AND c.table_name = 'enrollments' AND c.column_name = 'paid_currency'
+);
 
 -- generate unknowns: secret_material
 -- Raw tokens and second-factor secrets the local credential system stored,

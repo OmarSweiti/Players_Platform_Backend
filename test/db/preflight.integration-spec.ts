@@ -246,12 +246,15 @@ async function seedCounterExamples(
           endDate: day('2026-09-30'),
         },
       });
+      // Priced beyond its currency's minor units: USD has two decimals.
       const programTwo = await tx.training.create({
         data: {
           tenantId: a.id,
           title: 'Programme two',
           startDate: day('2026-10-01'),
           endDate: day('2026-10-31'),
+          price: new Prisma.Decimal('10.555'),
+          currency: 'USD',
         },
       });
       const enrollment = await tx.enrollment.create({
@@ -260,6 +263,17 @@ async function seedCounterExamples(
           trainingId: programOne.id,
           playerId: player.id,
           paidAmount: new Prisma.Decimal('-50.00'),
+          paidCurrency: 'USD',
+        },
+      });
+      // A payment beyond its own currency's minor units: JPY has none.
+      const overPrecise = await tx.enrollment.create({
+        data: {
+          tenantId: a.id,
+          trainingId: programTwo.id,
+          playerId: otherPlayer.id,
+          paidAmount: new Prisma.Decimal('5.5'),
+          paidCurrency: 'JPY',
         },
       });
       const session = await tx.trainingSession.create({
@@ -336,7 +350,7 @@ async function seedCounterExamples(
         },
         orphans: [missingEntity.id, missingUploader.id],
         duplicates: [memberA.id, duplicate.id],
-        money: [contract.id, enrollment.id],
+        money: [contract.id, enrollment.id, programTwo.id, overPrecise.id],
         deletedAudit: deletedAudit.id,
         realAccount: realAccount.id,
       };
@@ -444,7 +458,7 @@ describe('the preflight report', () => {
       same_parent: 2,
       orphaned_reference: 2,
       duplicate_email: 2,
-      money_out_of_range: 2,
+      money_out_of_range: 4,
       deleted_audit_row: 1,
       real_account: 1,
     });
@@ -456,9 +470,10 @@ describe('the preflight report', () => {
     expect(
       unknown('unverifiable_reference', 'notifications', 'reference_id')?.count,
     ).toBe(1);
+    // Since 0.4.7 a payment carries its own currency, so none is unknown.
     expect(
-      unknown('money_currency_unknown', 'enrollments', 'paid_amount')?.count,
-    ).toBe(1);
+      unknown('money_currency_unknown', 'enrollments', 'paid_amount'),
+    ).toBeUndefined();
     // The credential columns are gone (0.1.6): no secret material is left to find.
     expect(report.unknowns.filter((u) => u.rule === 'secret_material')).toEqual(
       [],

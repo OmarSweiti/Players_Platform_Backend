@@ -1,6 +1,7 @@
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
+import { classifiedTables } from '../../src/infrastructure/prisma/model-classification';
 
 // The indexes (0.4.6; SR-DB-006, DB-39, DB-40, DB-54), read from the catalog of
 // this run's schema as the runtime role. Under row-level security every query
@@ -41,9 +42,22 @@ interface ForeignKey {
   table: string;
   name: string;
   columns: string[];
-  /** The column that names the parent row's id. */
-  parentIdColumn: string;
+  parent: string;
+  /** The column that names the parent row's primary key (its id, a currency's code). */
+  parentKeyColumn: string;
 }
+
+/**
+ * Reference data the migrations write and the runtime role only reads
+ * (model-classification.ts): its rows change only by migration, which can
+ * afford to read the children of a row it removes, so a key to it needs no
+ * index; one leading with the code would break the tenant-leading rule.
+ */
+const REFERENCE_DATA = new Set(
+  classifiedTables()
+    .filter((t) => t.class.kind === 'global' && t.class.runtime === 'read-only')
+    .map((t) => t.table),
+);
 
 async function connect(url: string): Promise<Client> {
   const { connectionString, options } = databaseConnectionOf(url);
@@ -83,10 +97,12 @@ describe('the indexes', () => {
                 ARRAY(SELECT a.attname::text FROM unnest(c.conkey) WITH ORDINALITY AS k(n, o)
                         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.n
                        ORDER BY k.o) AS columns,
+                c.confrelid::regclass::text AS parent,
                 (SELECT a.attname::text FROM unnest(c.conkey, c.confkey) AS k(child, parent)
                    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.child
-                   JOIN pg_attribute p ON p.attrelid = c.confrelid AND p.attnum = k.parent
-                  WHERE p.attname = 'id') AS "parentIdColumn"
+                  WHERE k.parent = ANY ((SELECT pk.conkey FROM pg_constraint pk
+                                          WHERE pk.conrelid = c.confrelid AND pk.contype = 'p')::int2[])
+                  LIMIT 1) AS "parentKeyColumn"
            FROM pg_constraint c
           WHERE c.contype = 'f' AND c.connamespace = current_schema()::regnamespace
           ORDER BY 1, 2`,
@@ -123,10 +139,10 @@ describe('the indexes', () => {
     // PostgreSQL checks a key from the child's side (a parent deleted or
     // re-keyed) with equality on every key column. An index serves the key
     // when every column it leads with, up to and including the one that names
-    // the parent's id, is a key column: the parent's id is unique, so that
+    // the parent's primary key, is a key column: that key is unique, so the
     // prefix finds exactly the rows that name it.
     const serves = (index: Index, key: ForeignKey) => {
-      const at = index.columns.indexOf(key.parentIdColumn);
+      const at = index.columns.indexOf(key.parentKeyColumn);
       return (
         at >= 0 &&
         index.predicate === null &&
@@ -134,7 +150,9 @@ describe('the indexes', () => {
       );
     };
     expect(keys.length).toBeGreaterThan(60);
+    expect(keys.filter((key) => !key.parentKeyColumn)).toEqual([]);
     const unserved = keys
+      .filter((key) => !REFERENCE_DATA.has(key.parent))
       .filter(
         (key) =>
           !indexes.some(

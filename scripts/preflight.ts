@@ -73,7 +73,10 @@ function sectionsOf(source: string): Section[] {
   return sections;
 }
 
-/** Each currency's minor units, from ISO 4217 as Intl carries it. */
+/**
+ * Each currency's minor units, from ISO 4217 as Intl carries it: for a
+ * database from before 0.4.7, whose currencies are a four-value enum.
+ */
 function exponentsOf(currencies: string[]): Record<string, number> {
   const exponents: Record<string, number> = {};
   for (const currency of currencies) {
@@ -157,16 +160,9 @@ export async function runPreflight(
       );
     }
 
-    const currencies: string[] = (await exists(client, 'type', 'currency'))
-      ? (
-          await client.query<{ code: string }>(
-            `SELECT unnest(enum_range(NULL::currency))::text AS code`,
-          )
-        ).rows.map(({ code }) => code)
-      : [];
     await client.query(
       "SELECT set_config('sadara.currency_exponents', $1, true)",
-      [JSON.stringify(exponentsOf(currencies))],
+      [JSON.stringify(await currencyExponents(client))],
     );
 
     const report: PreflightReport = {
@@ -215,6 +211,28 @@ export async function runPreflight(
     await client.query('ROLLBACK').catch(() => undefined);
     await client.end();
   }
+}
+
+/**
+ * The minor units of each currency an amount may carry: the database's own
+ * currency_definitions (0.4.7), or before it, the old enum's codes.
+ */
+async function currencyExponents(
+  client: Client,
+): Promise<Record<string, number>> {
+  if (await exists(client, 'relation', 'currency_definitions')) {
+    const { rows } = await client.query<{ code: string; exponent: number }>(
+      'SELECT code, minor_unit_exponent AS exponent FROM currency_definitions',
+    );
+    return Object.fromEntries(
+      rows.map(({ code, exponent }) => [code, exponent]),
+    );
+  }
+  if (!(await exists(client, 'type', 'currency'))) return {};
+  const { rows } = await client.query<{ code: string }>(
+    'SELECT unnest(enum_range(NULL::currency))::text AS code',
+  );
+  return exponentsOf(rows.map(({ code }) => code));
 }
 
 /** Whether a relation or type exists in the inspected schema. */
