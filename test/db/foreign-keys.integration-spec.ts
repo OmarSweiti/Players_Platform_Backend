@@ -3,17 +3,21 @@ import type { Player, Season, Tenant, User } from '@prisma/client';
 import { Client, type DatabaseError } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
+import type { TenantTx } from '../../src/common/tenancy/tenant-transaction';
 import {
+  asTenant,
   createMember,
   createPlayer,
   createTenant,
-  runPrisma,
 } from '../harness/fixtures';
 
 // Composite and same-parent foreign keys (0.4.4). Every refusal is a raw
 // statement as the runtime role, so it is PostgreSQL that refuses, not Prisma
 // or a use case. Each is paired with the same statement naming a parent that
-// does belong, so the refusal is the key's and nothing else's.
+// does belong, so the refusal is the key's and nothing else's. The statements
+// run as tenant A, which row-level security (0.4.5) requires of any write; a
+// key's check reads the parent whatever its tenant, so another tenant's
+// parent is still found, and refused.
 
 // A row naming a parent that is not there, and a parent change a key restricts.
 const FOREIGN_KEY_VIOLATION = '23503';
@@ -71,6 +75,9 @@ describe('composite and same-parent foreign keys', () => {
   let seasonB: Season;
   let keys: ForeignKey[];
 
+  /** Work as tenant A, through the tenant transaction. */
+  const asA = <T>(work: (tx: TenantTx) => Promise<T>) => asTenant(a.id, work);
+
   /** INSERT INTO <table>, as the runtime role, with a fresh id. */
   const insert = (table: string, row: Record<string, unknown>) => {
     const values: Record<string, unknown> = { id: randomUUID(), ...row };
@@ -83,18 +90,23 @@ describe('composite and same-parent foreign keys', () => {
   };
 
   const seasonOf = (tenant: Tenant) =>
-    runPrisma().season.create({
-      data: {
-        tenantId: tenant.id,
-        name: '2026/27',
-        startDate: day('2026-08-01'),
-        endDate: day('2027-05-31'),
-      },
-    });
+    asTenant(tenant.id, (tx) =>
+      tx.season.create({
+        data: {
+          tenantId: tenant.id,
+          name: '2026/27',
+          startDate: day('2026-08-01'),
+          endDate: day('2027-05-31'),
+        },
+      }),
+    );
 
   beforeAll(async () => {
     app = await connect(inject('databaseUrl'));
     [a, b] = [await createTenant(), await createTenant()];
+    // This connection is tenant A's for the whole file: a test's own
+    // connection, never one of the application's pool.
+    await app.query("SELECT set_config('app.tenant_id', $1, false)", [a.id]);
     [memberA, memberB] = await Promise.all([
       createMember(a, 'COACH'),
       createMember(b, 'COACH'),
@@ -126,9 +138,9 @@ describe('composite and same-parent foreign keys', () => {
 
   it('foreign_keys_refuse_cross_tenant_edges', async () => {
     const now = new Date();
-    const conversationA = await runPrisma().conversation.create({
-      data: { tenantId: a.id },
-    });
+    const conversationA = await asA((tx) =>
+      tx.conversation.create({ data: { tenantId: a.id } }),
+    );
     // The seven references that named a row by its id alone, or not at all.
     const edges: Array<{
       key: string;
@@ -290,14 +302,16 @@ describe('composite and same-parent foreign keys', () => {
   it('a_treatment_cannot_cite_another_players_record', async () => {
     const otherPlayer = await createPlayer(a);
     const recordOf = (player: Player, tenant = a, creator = memberA) =>
-      runPrisma().medicalRecord.create({
-        data: {
-          tenantId: tenant.id,
-          playerId: player.id,
-          createdById: creator.id,
-          injuryType: 'Test injury',
-        },
-      });
+      asTenant(tenant.id, (tx) =>
+        tx.medicalRecord.create({
+          data: {
+            tenantId: tenant.id,
+            playerId: player.id,
+            createdById: creator.id,
+            injuryType: 'Test injury',
+          },
+        }),
+      );
     const own = await recordOf(playerA);
     const another = await recordOf(otherPlayer);
     const otherTenant = await recordOf(await createPlayer(b), b, memberB);
@@ -331,29 +345,35 @@ describe('composite and same-parent foreign keys', () => {
 
   it('attendance_cannot_mix_training_programs', async () => {
     const programme = (title: string) =>
-      runPrisma().training.create({
-        data: {
-          tenantId: a.id,
-          title,
-          startDate: day('2026-09-01'),
-          endDate: day('2026-10-31'),
-        },
-      });
+      asA((tx) =>
+        tx.training.create({
+          data: {
+            tenantId: a.id,
+            title,
+            startDate: day('2026-09-01'),
+            endDate: day('2026-10-31'),
+          },
+        }),
+      );
     const [one, two] = [
       await programme('Programme one'),
       await programme('Programme two'),
     ];
-    const enrollment = await runPrisma().enrollment.create({
-      data: { tenantId: a.id, trainingId: one.id, playerId: playerA.id },
-    });
+    const enrollment = await asA((tx) =>
+      tx.enrollment.create({
+        data: { tenantId: a.id, trainingId: one.id, playerId: playerA.id },
+      }),
+    );
     const sessionOf = (training: { id: string }) =>
-      runPrisma().trainingSession.create({
-        data: {
-          tenantId: a.id,
-          trainingId: training.id,
-          date: day('2026-10-05'),
-        },
-      });
+      asA((tx) =>
+        tx.trainingSession.create({
+          data: {
+            tenantId: a.id,
+            trainingId: training.id,
+            date: day('2026-10-05'),
+          },
+        }),
+      );
     const [sessionOne, sessionTwo] = [
       await sessionOf(one),
       await sessionOf(two),
@@ -404,37 +424,43 @@ describe('composite and same-parent foreign keys', () => {
     // The two that did: deleting the parent is refused, and the child keeps
     // its reference and its tenant.
     const scouted = await createPlayer(a);
-    const report = await runPrisma().scoutingReport.create({
-      data: {
-        tenantId: a.id,
-        scoutId: memberA.id,
-        playerId: scouted.id,
-        reportDate: day('2026-09-01'),
-      },
-    });
+    const report = await asA((tx) =>
+      tx.scoutingReport.create({
+        data: {
+          tenantId: a.id,
+          scoutId: memberA.id,
+          playerId: scouted.id,
+          reportDate: day('2026-09-01'),
+        },
+      }),
+    );
     expect(
       await outcomeOf(
         app.query('DELETE FROM players WHERE id = $1', [scouted.id]),
       ),
     ).toEqual(restrictedBy('scouting_reports_player_id_tenant_id_fkey'));
-    const record = await runPrisma().medicalRecord.create({
-      data: {
-        tenantId: a.id,
-        playerId: playerA.id,
-        createdById: memberA.id,
-        injuryType: 'Test injury',
-      },
-    });
-    const treatment = await runPrisma().treatmentSession.create({
-      data: {
-        tenantId: a.id,
-        playerId: playerA.id,
-        medicalRecordId: record.id,
-        conductedBy: memberA.id,
-        sessionDate: day('2026-09-21'),
-        treatmentType: 'Physiotherapy',
-      },
-    });
+    const record = await asA((tx) =>
+      tx.medicalRecord.create({
+        data: {
+          tenantId: a.id,
+          playerId: playerA.id,
+          createdById: memberA.id,
+          injuryType: 'Test injury',
+        },
+      }),
+    );
+    const treatment = await asA((tx) =>
+      tx.treatmentSession.create({
+        data: {
+          tenantId: a.id,
+          playerId: playerA.id,
+          medicalRecordId: record.id,
+          conductedBy: memberA.id,
+          sessionDate: day('2026-09-21'),
+          treatmentType: 'Physiotherapy',
+        },
+      }),
+    );
     expect(
       await outcomeOf(
         app.query('DELETE FROM medical_records WHERE id = $1', [record.id]),
@@ -445,16 +471,20 @@ describe('composite and same-parent foreign keys', () => {
       ),
     );
     expect(
-      await runPrisma().scoutingReport.findUniqueOrThrow({
-        where: { id: report.id },
-        select: { playerId: true, tenantId: true },
-      }),
+      await asA((tx) =>
+        tx.scoutingReport.findUniqueOrThrow({
+          where: { id: report.id },
+          select: { playerId: true, tenantId: true },
+        }),
+      ),
     ).toEqual({ playerId: scouted.id, tenantId: a.id });
     expect(
-      await runPrisma().treatmentSession.findUniqueOrThrow({
-        where: { id: treatment.id },
-        select: { medicalRecordId: true, tenantId: true },
-      }),
+      await asA((tx) =>
+        tx.treatmentSession.findUniqueOrThrow({
+          where: { id: treatment.id },
+          select: { medicalRecordId: true, tenantId: true },
+        }),
+      ),
     ).toEqual({ medicalRecordId: record.id, tenantId: a.id });
   });
 
@@ -468,22 +498,26 @@ describe('composite and same-parent foreign keys', () => {
     ).toEqual([]);
 
     const member = await createMember(a, 'COACH');
-    const ticket = await runPrisma().legalTicket.create({
-      data: {
-        tenantId: a.id,
-        playerId: playerA.id,
-        createdById: member.id,
-        subject: 'Test ticket',
-        description: 'Synthetic',
-      },
-    });
-    const moved = await outcomeOf(
-      app.query('UPDATE users SET tenant_id = $1 WHERE id = $2', [
-        b.id,
+    const ticket = await asA((tx) =>
+      tx.legalTicket.create({
+        data: {
+          tenantId: a.id,
+          playerId: playerA.id,
+          createdById: member.id,
+          subject: 'Test ticket',
+          description: 'Synthetic',
+        },
+      }),
+    );
+    // A member's id cannot change while a ticket names it. (Their tenant_id
+    // cannot change at all: the trigger of 0.4.5 refuses that first.)
+    const renamed = await outcomeOf(
+      app.query('UPDATE users SET id = $1 WHERE id = $2', [
+        randomUUID(),
         member.id,
       ]),
     );
-    expect(moved).toEqual(
+    expect(renamed).toEqual(
       restrictedBy('legal_tickets_created_by_id_tenant_id_fkey'),
     );
     const renumbered = await outcomeOf(
@@ -494,10 +528,12 @@ describe('composite and same-parent foreign keys', () => {
     );
     expect(renumbered).toMatchObject({ code: RESTRICT_VIOLATION });
     expect(
-      await runPrisma().legalTicket.findUniqueOrThrow({
-        where: { id: ticket.id },
-        select: { tenantId: true, createdById: true, playerId: true },
-      }),
+      await asA((tx) =>
+        tx.legalTicket.findUniqueOrThrow({
+          where: { id: ticket.id },
+          select: { tenantId: true, createdById: true, playerId: true },
+        }),
+      ),
     ).toEqual({ tenantId: a.id, createdById: member.id, playerId: playerA.id });
   });
 });

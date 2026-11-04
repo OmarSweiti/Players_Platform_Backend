@@ -10,7 +10,7 @@ import { WatchlistRepository } from '../../src/modules/scouting/infrastructure/r
 import { ScoutingController } from '../../src/modules/scouting/presentation/scouting.controller';
 import { PermissionService } from '../../src/modules/users/application/services/permission.service';
 import { bootApp, type BootedApp } from '../harness/app';
-import { TEST_MEMBER_HEADER } from '../harness/session';
+import { signedInAs } from '../harness/session';
 import { createMember, createTenant } from '../harness/fixtures';
 import { routesOf, withParams } from '../harness/routes';
 
@@ -38,7 +38,7 @@ const REPOSITORIES: Type[] = [
 
 describe('unfinished modules stay behind their flags', () => {
   let booted: BootedApp;
-  let memberId: string;
+  let signedIn: Record<string, string>;
 
   beforeAll(async () => {
     // FEATURE_MEDICAL and FEATURE_SCOUTING unset; signed-in requests through
@@ -46,7 +46,7 @@ describe('unfinished modules stay behind their flags', () => {
     booted = await bootApp({ testSessions: true });
     const tenant = await createTenant();
     const member = await createMember(tenant, 'SUPER_ADMIN');
-    memberId = member.id;
+    signedIn = signedInAs(member);
   });
 
   afterAll(async () => {
@@ -62,7 +62,7 @@ describe('unfinished modules stay behind their flags', () => {
     const routes = routesWithParams(controller);
     expect(routes.length).toBeGreaterThan(0);
     for (const { method, path } of routes) {
-      for (const headers of [{}, { [TEST_MEMBER_HEADER]: memberId }]) {
+      for (const headers of [{}, signedIn]) {
         const response = await booted.http[method](path).set(headers);
         expect([method, path, response.status]).toEqual([method, path, 404]);
         expect(problemShape(response.body)).toEqual(notFound);

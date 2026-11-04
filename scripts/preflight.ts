@@ -5,7 +5,13 @@
 // (docs/reference/database.md). A violation blocks the migration that depends
 // on it until the data is corrected; nothing is ever deleted to let a
 // constraint pass. Unknowns inform, and do not block.
-//   just preflight    report on DATABASE_URL; exits 1 on any violation
+//
+// It runs as the migrator (MIGRATION_DATABASE_URL), which acts as the tables'
+// owner. Row-level security (0.4.5) shows the runtime role one tenant's rows at
+// most, so a report made as it would be clean whatever the data held; the
+// owner reads every tenant's rows through each table's read policy. A role the
+// policies hide rows from is refused before any rule runs.
+//   just preflight    report on MIGRATION_DATABASE_URL; exits 1 on any violation
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
@@ -97,6 +103,30 @@ interface UnknownRow {
   reason: string;
 }
 
+/** The inspecting role cannot see every row: a report made as it would be false. */
+export class PreflightRefused extends Error {}
+
+/**
+ * The tables under row-level security whose rows the connected role cannot
+ * all read: those it neither bypasses (superuser, BYPASSRLS, an owner the
+ * table does not FORCE) nor reads through a permissive policy of `true`.
+ */
+const HIDDEN_FROM_ME = `
+  SELECT c.relname AS table_name
+  FROM pg_class c
+  WHERE c.relnamespace = current_schema()::regnamespace
+    AND c.relkind IN ('r', 'p')
+    AND c.relrowsecurity
+    AND NOT (SELECT rolsuper OR rolbypassrls FROM pg_roles WHERE rolname = current_user)
+    AND NOT (NOT c.relforcerowsecurity AND pg_has_role(current_user, c.relowner, 'USAGE'))
+    AND NOT EXISTS (
+      SELECT FROM pg_policy p
+      WHERE p.polrelid = c.oid AND p.polpermissive AND p.polcmd IN ('r', '*')
+        AND pg_get_expr(p.polqual, p.polrelid) = 'true'
+        AND EXISTS (SELECT FROM unnest(p.polroles) AS r(oid)
+                    WHERE r.oid = 0 OR pg_has_role(current_user, r.oid, 'USAGE')))
+  ORDER BY 1`;
+
 export async function runPreflight(
   databaseUrl: string,
 ): Promise<PreflightReport> {
@@ -110,6 +140,20 @@ export async function runPreflight(
       await client.query(
         "SELECT set_config('search_path', quote_ident($1), true)",
         [schema],
+      );
+    }
+
+    const hidden = (
+      await client.query<{ table_name: string }>(HIDDEN_FROM_ME)
+    ).rows.map((row) => row.table_name);
+    if (hidden.length > 0) {
+      const { rows } = await client.query<{ role: string }>(
+        'SELECT current_user AS role',
+      );
+      throw new PreflightRefused(
+        `row-level security hides rows of ${hidden.join(', ')} from ${rows[0].role}, ` +
+          'so a report would miss them: the preflight runs as the migrator ' +
+          '(MIGRATION_DATABASE_URL), and each table needs its owner read policy',
       );
     }
 
@@ -198,12 +242,19 @@ async function lastMigration(client: Client): Promise<string | null> {
 }
 
 async function main(): Promise<void> {
-  const databaseUrl = process.env.DATABASE_URL;
+  const databaseUrl = process.env.MIGRATION_DATABASE_URL;
   if (!databaseUrl) {
-    process.stderr.write('preflight: DATABASE_URL is not set\n');
+    process.stderr.write('preflight: MIGRATION_DATABASE_URL is not set\n');
     process.exit(2);
   }
-  const report = await runPreflight(databaseUrl);
+  let report: PreflightReport;
+  try {
+    report = await runPreflight(databaseUrl);
+  } catch (error) {
+    if (!(error instanceof PreflightRefused)) throw error;
+    process.stderr.write(`preflight: REFUSED — ${error.message}\n`);
+    process.exit(2);
+  }
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   process.exit(report.violations.length > 0 ? 1 : 0);
 }

@@ -1,7 +1,12 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { bootApp, type BootedApp } from '../harness/app';
-import { createMember, createTenant, runPrisma } from '../harness/fixtures';
+import {
+  asTenant,
+  createMember,
+  createTenant,
+  runPrisma,
+} from '../harness/fixtures';
 
 describe('the API test harness', () => {
   let booted: BootedApp;
@@ -21,12 +26,17 @@ describe('the API test harness', () => {
     // The whole HTTP pipeline answers.
     await booted.http.get('/health/live').expect(200);
 
-    // A fixture written to the run's schema is what the app itself reads.
+    // A fixture written to the run's schema is what the app itself reads, as
+    // the fixture's tenant.
     const tenant = await createTenant();
     const member = await createMember(tenant, 'COACH');
     const prisma = booted.app.get(PrismaService);
     await expect(
-      prisma.user.findUnique({ where: { id: member.id } }),
+      asTenant(
+        tenant.id,
+        (tx) => tx.user.findUnique({ where: { id: member.id } }),
+        prisma,
+      ),
     ).resolves.toMatchObject({
       tenantId: tenant.id,
     });

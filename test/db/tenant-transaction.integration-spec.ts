@@ -11,7 +11,7 @@ import {
   type TenantTx,
 } from '../../src/common/tenancy/tenant-transaction';
 import { prismaFor } from '../harness/db';
-import { createTenant, runPrisma } from '../harness/fixtures';
+import { asTenant, createTenant } from '../harness/fixtures';
 
 // The tenant transaction (0.4.3), run as the runtime role on this run's schema.
 // The harness stands in for the minters (the session guard, the job loader):
@@ -80,7 +80,9 @@ describe('the tenant transaction', () => {
         }),
       ).rejects.toThrow('the use case failed');
       expect(
-        await runPrisma().player.count({ where: { fullName: name } }),
+        await asTenant(a.id, (tx) =>
+          tx.player.count({ where: { fullName: name } }),
+        ),
       ).toBe(0);
     } finally {
       await client.close();

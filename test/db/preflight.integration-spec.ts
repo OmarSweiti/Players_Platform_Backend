@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient, type Tenant } from '@prisma/client';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import type { TenantTx } from '../../src/common/tenancy/tenant-transaction';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
 import {
+  PreflightRefused,
   runPreflight,
   type PreflightReport,
   type Violation,
@@ -13,10 +15,12 @@ import {
   prismaFor,
   type IsolatedSchema,
 } from '../harness/db';
+import { asTenant } from '../harness/fixtures';
 
 // The preflight inspects a whole schema, so it gets schemas of its own: one
 // seeded with a counter-example for every rule, one clean. Every value is
-// synthetic; the personal-looking ones exist to prove none of them leaks.
+// synthetic; the personal-looking ones exist to prove none of them leaks. It
+// runs as the migrator, which reads every tenant's rows (0.4.5).
 
 const day = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
@@ -103,226 +107,254 @@ async function seedCounterExamples(
   prisma: PrismaClient,
   schema: IsolatedSchema,
 ): Promise<Seeded> {
-  const a = await prisma.tenant.create({
-    data: { name: 'Agency One', slug: `one-${randomUUID().slice(0, 8)}` },
-  });
-  const b = await prisma.tenant.create({
-    data: { name: 'Agency Two', slug: `two-${randomUUID().slice(0, 8)}` },
-  });
-  const member = (tenantId: string, email: string) =>
-    prisma.user.create({
+  // Row-level security (0.4.5): each row is written as its own tenant.
+  const tenant = (name: string, slug: string) => {
+    const id = randomUUID();
+    return asTenant(
+      id,
+      (tx) => tx.tenant.create({ data: { id, name, slug } }),
+      prisma,
+    );
+  };
+  const a = await tenant('Agency One', `one-${randomUUID().slice(0, 8)}`);
+  const b = await tenant('Agency Two', `two-${randomUUID().slice(0, 8)}`);
+  const member = (tx: TenantTx, tenantId: string, email: string) =>
+    tx.user.create({
       data: {
         tenantId,
         email,
         role: 'COACH',
       },
     });
-  const memberA = await member(a.id, PERSONAL.memberEmail);
-  const memberB = await member(b.id, PERSONAL.otherTenantEmail);
-  const duplicate = await member(a.id, PERSONAL.duplicateEmail);
-  const realAccount = await member(a.id, PERSONAL.realLookingEmail);
 
-  const seasonB = await prisma.season.create({
-    data: {
-      tenantId: b.id,
-      name: '2026/27',
-      startDate: day('2026-08-01'),
-      endDate: day('2027-05-31'),
-    },
-  });
-  const player = await prisma.player.create({
-    data: { tenantId: a.id, fullName: PERSONAL.playerName },
-  });
-  const otherPlayer = await prisma.player.create({
-    data: { tenantId: a.id, fullName: PERSONAL.otherPlayerName },
-  });
+  // Tenant B's rows, which tenant A's name across the boundary.
+  const [memberB, seasonB] = await asTenant(
+    b.id,
+    async (tx) =>
+      [
+        await member(tx, b.id, PERSONAL.otherTenantEmail),
+        await tx.season.create({
+          data: {
+            tenantId: b.id,
+            name: '2026/27',
+            startDate: day('2026-08-01'),
+            endDate: day('2027-05-31'),
+          },
+        }),
+      ] as const,
+    prisma,
+  );
 
-  // The six single-column references, each pointing into tenant B.
-  const contract = await prisma.contract.create({
-    data: {
-      tenantId: a.id,
-      playerId: player.id,
-      createdById: memberA.id,
-      seasonId: seasonB.id,
-      title: 'Professional contract',
-      startDate: day('2026-08-01'),
-      endDate: day('2028-06-30'),
-      salaryAmount: new Prisma.Decimal(PERSONAL.salary),
-    },
-  });
-  const performance = await prisma.performanceRecord.create({
-    data: {
-      tenantId: a.id,
-      playerId: player.id,
-      seasonId: seasonB.id,
-      matchDate: day('2026-09-12'),
-    },
-  });
-  const training = await prisma.training.create({
-    data: {
-      tenantId: a.id,
-      seasonId: seasonB.id,
-      title: 'Pre-season',
-      startDate: day('2026-07-01'),
-      endDate: day('2026-07-31'),
-    },
-  });
-  const ticket = await prisma.legalTicket.create({
-    data: {
-      tenantId: a.id,
-      playerId: player.id,
-      createdById: memberA.id,
-      assignedToId: memberB.id,
-      subject: PERSONAL.ticketSubject,
-      description: PERSONAL.ticketDescription,
-    },
-  });
-  const conversation = await prisma.conversation.create({
-    data: { tenantId: a.id },
-  });
-  const message = await prisma.message.create({
-    data: {
-      tenantId: a.id,
-      conversationId: conversation.id,
-      senderId: memberB.id,
-      type: 'TEXT',
-    },
-  });
-  const audit = await prisma.auditLog.create({
-    data: {
-      tenantId: a.id,
-      userId: memberB.id,
-      action: 'UPDATE',
-      entityType: 'Player',
-      entityId: player.id,
-    },
-  });
+  const seeded = await asTenant(
+    a.id,
+    async (tx) => {
+      const memberA = await member(tx, a.id, PERSONAL.memberEmail);
+      const duplicate = await member(tx, a.id, PERSONAL.duplicateEmail);
+      const realAccount = await member(tx, a.id, PERSONAL.realLookingEmail);
+      const player = await tx.player.create({
+        data: { tenantId: a.id, fullName: PERSONAL.playerName },
+      });
+      const otherPlayer = await tx.player.create({
+        data: { tenantId: a.id, fullName: PERSONAL.otherPlayerName },
+      });
 
-  // Same tenant, different parents.
-  const record = await prisma.medicalRecord.create({
-    data: {
-      tenantId: a.id,
-      playerId: otherPlayer.id,
-      createdById: memberA.id,
-      injuryType: PERSONAL.injury,
-    },
-  });
-  const treatment = await prisma.treatmentSession.create({
-    data: {
-      tenantId: a.id,
-      playerId: player.id,
-      medicalRecordId: record.id,
-      conductedBy: memberA.id,
-      sessionDate: day('2026-09-20'),
-      treatmentType: 'Physiotherapy',
-    },
-  });
-  const programOne = await prisma.training.create({
-    data: {
-      tenantId: a.id,
-      title: 'Programme one',
-      startDate: day('2026-09-01'),
-      endDate: day('2026-09-30'),
-    },
-  });
-  const programTwo = await prisma.training.create({
-    data: {
-      tenantId: a.id,
-      title: 'Programme two',
-      startDate: day('2026-10-01'),
-      endDate: day('2026-10-31'),
-    },
-  });
-  const enrollment = await prisma.enrollment.create({
-    data: {
-      tenantId: a.id,
-      trainingId: programOne.id,
-      playerId: player.id,
-      paidAmount: new Prisma.Decimal('-50.00'),
-    },
-  });
-  const session = await prisma.trainingSession.create({
-    data: {
-      tenantId: a.id,
-      trainingId: programTwo.id,
-      date: day('2026-10-05'),
-    },
-  });
-  const attendance = await prisma.attendance.create({
-    data: {
-      tenantId: a.id,
-      enrollmentId: enrollment.id,
-      trainingSessionId: session.id,
-      trainingId: programOne.id, // the enrollment's; the session is programme two's
-      date: day('2026-10-05'),
-    },
-  });
+      // The six single-column references, each pointing into tenant B.
+      const contract = await tx.contract.create({
+        data: {
+          tenantId: a.id,
+          playerId: player.id,
+          createdById: memberA.id,
+          seasonId: seasonB.id,
+          title: 'Professional contract',
+          startDate: day('2026-08-01'),
+          endDate: day('2028-06-30'),
+          salaryAmount: new Prisma.Decimal(PERSONAL.salary),
+        },
+      });
+      const performance = await tx.performanceRecord.create({
+        data: {
+          tenantId: a.id,
+          playerId: player.id,
+          seasonId: seasonB.id,
+          matchDate: day('2026-09-12'),
+        },
+      });
+      const training = await tx.training.create({
+        data: {
+          tenantId: a.id,
+          seasonId: seasonB.id,
+          title: 'Pre-season',
+          startDate: day('2026-07-01'),
+          endDate: day('2026-07-31'),
+        },
+      });
+      const ticket = await tx.legalTicket.create({
+        data: {
+          tenantId: a.id,
+          playerId: player.id,
+          createdById: memberA.id,
+          assignedToId: memberB.id,
+          subject: PERSONAL.ticketSubject,
+          description: PERSONAL.ticketDescription,
+        },
+      });
+      const conversation = await tx.conversation.create({
+        data: { tenantId: a.id },
+      });
+      const message = await tx.message.create({
+        data: {
+          tenantId: a.id,
+          conversationId: conversation.id,
+          senderId: memberB.id,
+          type: 'TEXT',
+        },
+      });
+      const audit = await tx.auditLog.create({
+        data: {
+          tenantId: a.id,
+          userId: memberB.id,
+          action: 'UPDATE',
+          entityType: 'Player',
+          entityId: player.id,
+        },
+      });
 
-  // References no foreign key protects, naming nothing.
-  const missingEntity = await prisma.document.create({
-    data: {
-      tenantId: a.id,
-      entityType: 'PLAYER',
-      entityId: randomUUID(),
-      fileUrl: 'objects/x',
-      fileName: PERSONAL.fileName,
-    },
-  });
-  const missingUploader = await prisma.document.create({
-    data: {
-      tenantId: a.id,
-      entityType: 'PLAYER',
-      entityId: player.id,
-      uploadedById: randomUUID(),
-      fileUrl: 'objects/y',
-      fileName: PERSONAL.fileName,
-    },
-  });
+      // Same tenant, different parents.
+      const record = await tx.medicalRecord.create({
+        data: {
+          tenantId: a.id,
+          playerId: otherPlayer.id,
+          createdById: memberA.id,
+          injuryType: PERSONAL.injury,
+        },
+      });
+      const treatment = await tx.treatmentSession.create({
+        data: {
+          tenantId: a.id,
+          playerId: player.id,
+          medicalRecordId: record.id,
+          conductedBy: memberA.id,
+          sessionDate: day('2026-09-20'),
+          treatmentType: 'Physiotherapy',
+        },
+      });
+      const programOne = await tx.training.create({
+        data: {
+          tenantId: a.id,
+          title: 'Programme one',
+          startDate: day('2026-09-01'),
+          endDate: day('2026-09-30'),
+        },
+      });
+      const programTwo = await tx.training.create({
+        data: {
+          tenantId: a.id,
+          title: 'Programme two',
+          startDate: day('2026-10-01'),
+          endDate: day('2026-10-31'),
+        },
+      });
+      const enrollment = await tx.enrollment.create({
+        data: {
+          tenantId: a.id,
+          trainingId: programOne.id,
+          playerId: player.id,
+          paidAmount: new Prisma.Decimal('-50.00'),
+        },
+      });
+      const session = await tx.trainingSession.create({
+        data: {
+          tenantId: a.id,
+          trainingId: programTwo.id,
+          date: day('2026-10-05'),
+        },
+      });
+      const attendance = await tx.attendance.create({
+        data: {
+          tenantId: a.id,
+          enrollmentId: enrollment.id,
+          trainingSessionId: session.id,
+          trainingId: programOne.id, // the enrollment's; the session is programme two's
+          date: day('2026-10-05'),
+        },
+      });
 
-  // Money: NaN cannot be written through Prisma, a negative amount can.
+      // References no foreign key protects, naming nothing.
+      const missingEntity = await tx.document.create({
+        data: {
+          tenantId: a.id,
+          entityType: 'PLAYER',
+          entityId: randomUUID(),
+          fileUrl: 'objects/x',
+          fileName: PERSONAL.fileName,
+        },
+      });
+      const missingUploader = await tx.document.create({
+        data: {
+          tenantId: a.id,
+          entityType: 'PLAYER',
+          entityId: player.id,
+          uploadedById: randomUUID(),
+          fileUrl: 'objects/y',
+          fileName: PERSONAL.fileName,
+        },
+      });
+
+      const deletedAudit = await tx.auditLog.create({
+        data: {
+          tenantId: a.id,
+          userId: memberA.id,
+          action: 'DELETE',
+          entityType: 'Player',
+          entityId: player.id,
+          deletedAt: new Date(),
+        },
+      });
+      await tx.notification.create({
+        data: {
+          tenantId: a.id,
+          userId: memberA.id,
+          type: 'CONTRACT_EXPIRING',
+          content: PERSONAL.notification,
+          referenceType: 'contract',
+          referenceId: contract.id,
+        },
+      });
+
+      return {
+        crossTenant: {
+          contracts: contract.id,
+          performance_records: performance.id,
+          trainings: training.id,
+          legal_tickets: ticket.id,
+          messages: message.id,
+          audit_logs: audit.id,
+        },
+        sameParent: {
+          treatment_sessions: treatment.id,
+          attendance: attendance.id,
+        },
+        orphans: [missingEntity.id, missingUploader.id],
+        duplicates: [memberA.id, duplicate.id],
+        money: [contract.id, enrollment.id],
+        deletedAudit: deletedAudit.id,
+        realAccount: realAccount.id,
+      };
+    },
+    prisma,
+  );
+
+  // Money: NaN cannot be written through Prisma, a negative amount can. Written
+  // once the rows above are committed, as tenant A.
   await sqlIn(schema, [
-    [`UPDATE contracts SET signing_fee = 'NaN' WHERE id = $1`, [contract.id]],
+    ["SELECT set_config('app.tenant_id', $1, false)", [a.id]],
+    [
+      `UPDATE contracts SET signing_fee = 'NaN' WHERE id = $1`,
+      [seeded.crossTenant.contracts],
+    ],
   ]);
 
-  const deletedAudit = await prisma.auditLog.create({
-    data: {
-      tenantId: a.id,
-      userId: memberA.id,
-      action: 'DELETE',
-      entityType: 'Player',
-      entityId: player.id,
-      deletedAt: new Date(),
-    },
-  });
-  await prisma.notification.create({
-    data: {
-      tenantId: a.id,
-      userId: memberA.id,
-      type: 'CONTRACT_EXPIRING',
-      content: PERSONAL.notification,
-      referenceType: 'contract',
-      referenceId: contract.id,
-    },
-  });
-
-  return {
-    a,
-    b,
-    crossTenant: {
-      contracts: contract.id,
-      performance_records: performance.id,
-      trainings: training.id,
-      legal_tickets: ticket.id,
-      messages: message.id,
-      audit_logs: audit.id,
-    },
-    sameParent: { treatment_sessions: treatment.id, attendance: attendance.id },
-    orphans: [missingEntity.id, missingUploader.id],
-    duplicates: [memberA.id, duplicate.id],
-    money: [contract.id, enrollment.id],
-    deletedAudit: deletedAudit.id,
-    realAccount: realAccount.id,
-  };
+  return { a, b, ...seeded };
 }
 
 const ofRule = (report: PreflightReport, rule: string): Violation[] =>
@@ -350,7 +382,7 @@ describe('the preflight report', () => {
     } finally {
       await db.close();
     }
-    report = await runPreflight(dirty.url);
+    report = await runPreflight(dirty.migrationUrl);
   });
 
   afterAll(async () => {
@@ -446,7 +478,7 @@ describe('the preflight report', () => {
   });
 
   it('reports zero on a clean database', async () => {
-    const tidy = await runPreflight(clean.url);
+    const tidy = await runPreflight(clean.migrationUrl);
     expect(tidy.violations).toEqual([]);
     expect(Object.values(tidy.counts).every((count) => count === 0)).toBe(true);
     expect(Object.keys(tidy.counts).sort()).toEqual(
@@ -455,9 +487,18 @@ describe('the preflight report', () => {
     expect(tidy.unknowns).toEqual([]);
   });
 
+  it('refuses a role that row-level security hides rows from', async () => {
+    // The runtime role sees no tenant's rows without one: as it, the dirty
+    // schema would look clean.
+    await expect(runPreflight(dirty.url)).rejects.toThrow(PreflightRefused);
+    await expect(runPreflight(dirty.url)).rejects.toThrow(
+      /hides rows of .*\bplayers\b.* from sadara_app/,
+    );
+  });
+
   it('changes nothing it inspects', async () => {
     const before = JSON.stringify(report.violations);
-    const again = await runPreflight(dirty.url);
+    const again = await runPreflight(dirty.migrationUrl);
     expect(JSON.stringify(again.violations)).toBe(before);
   });
 });

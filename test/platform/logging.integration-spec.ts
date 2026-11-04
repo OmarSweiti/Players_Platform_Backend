@@ -11,7 +11,7 @@ import {
 import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { LogCapture } from '../harness/log-capture';
-import { TEST_MEMBER_HEADER } from '../harness/session';
+import { signedInAs } from '../harness/session';
 
 const connection = {
   host: process.env.REDIS_HOST ?? '127.0.0.1',
@@ -133,7 +133,7 @@ describe('structured logs, correlated from the request to the worker', () => {
       const response = await booted.http
         .get(`/api/v1/probe/logging/players/${playerId}`)
         .query({ search: CANARY })
-        .set(TEST_MEMBER_HEADER, member.id)
+        .set(signedInAs(member))
         .expect(200);
       reads.push({
         member,
