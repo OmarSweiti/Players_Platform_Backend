@@ -259,20 +259,29 @@ merge $pr='':
       echo "merge: merged, but its card on the board is not Done: run just gh-project-item $target" >&2
 
 # Open the development → staging promotion (a release candidate)
-promote-staging:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-    GH_TOKEN="$(bash ./scripts/engineering-token.sh "$repo")" gh pr create --assignee "${repo%%/*}" --reviewer "${repo%%/*}" \
-      --base staging --head development --title "promote development to staging" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
+promote-staging: (_promote 'staging' 'development' 'promote development to staging')
 
 # Open the staging → main promotion (production)
-promote-main:
+promote-main: (_promote 'main' 'staging' 'promote staging to main')
+
+# A promotion, opened as the engineering app and assigned to the maintainer, whose review is then
+# requested as `pr` requests it: once the PR exists, never with `gh pr create --reviewer`, whose
+# request can race CODEOWNERS' and fail the recipe after the PR is open.
+_promote $base $head $title:
     #!/usr/bin/env bash
     set -euo pipefail
     repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
-    GH_TOKEN="$(bash ./scripts/engineering-token.sh "$repo")" gh pr create --assignee "${repo%%/*}" --reviewer "${repo%%/*}" \
-      --base main --head staging --title "promote staging to main" --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md
+    maintainer=${repo%%/*}
+    app_token=$(bash ./scripts/engineering-token.sh "$repo")
+    as_app() { GH_TOKEN="$app_token" "$@"; }
+    url=$(as_app gh pr create --assignee "$maintainer" --base "$base" --head "$head" --title "$title" \
+      --body-file .github/PULL_REQUEST_TEMPLATE/promotion.md)
+    for attempt in 1 2 3; do
+      as_app gh api -X POST "repos/$repo/pulls/${url##*/}/requested_reviewers" -f "reviewers[]=$maintainer" --silent && break
+      [ "$attempt" -lt 3 ] || { echo "promote: REFUSED — the maintainer's review could not be requested: request it on $url" >&2; exit 1; }
+      sleep 5
+    done
+    echo "$url"
 
 # Merge an approved promotion with a MERGE COMMIT once every required check is green: just promote-merge 42
 promote-merge $pr:
