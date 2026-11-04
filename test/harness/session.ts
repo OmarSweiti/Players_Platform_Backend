@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   CanActivate,
   ExecutionContext,
@@ -8,6 +9,10 @@ import { Reflector } from '@nestjs/core';
 import type { User } from '@prisma/client';
 import type { Request } from 'express';
 import { IS_PUBLIC_KEY } from '../../src/common/decorators/public.decorator';
+import {
+  type AuthorizedTenantContext,
+  mintTenantContext,
+} from '../../src/common/tenancy/tenant-context';
 import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
 import { testContext } from './fixtures';
 
@@ -31,7 +36,9 @@ export function signedInAs(
  * member's, and any other request is refused, as the placeholder SessionGuard
  * refuses them all. The member is looked up as their tenant, the way 0.5.2
  * scopes the sign-in lookup to the tenant of the host: row-level security
- * (0.4.5) shows nothing without one. Installed by bootApp({ testSessions:
+ * (0.4.5) shows nothing without one. Like the guard of 0.5.6, it mints the
+ * request's tenant context for that member, which handlers receive through
+ * @CurrentTenantContext() (0.4.12). Installed by bootApp({ testSessions:
  * true }); never in the application.
  */
 @Injectable()
@@ -48,9 +55,13 @@ export class TestSessionGuard implements CanActivate {
     ]);
     if (isPublic) return true;
 
-    const request = context
-      .switchToHttp()
-      .getRequest<Request & { user?: User; tenantId?: string }>();
+    const request = context.switchToHttp().getRequest<
+      Request & {
+        user?: User;
+        tenantId?: string;
+        tenantContext?: AuthorizedTenantContext;
+      }
+    >();
     const member = await this.memberOf(
       request.header(TEST_MEMBER_HEADER),
       request.header(TEST_TENANT_HEADER),
@@ -59,6 +70,12 @@ export class TestSessionGuard implements CanActivate {
 
     request.user = member;
     request.tenantId = member.tenantId;
+    request.tenantContext = mintTenantContext({
+      tenantId: member.tenantId,
+      actor: { kind: 'USER', userId: member.id, sessionId: randomUUID() },
+      requestId: randomUUID(),
+      locale: 'en',
+    });
     return true;
   }
 

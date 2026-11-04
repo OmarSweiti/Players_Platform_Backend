@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ForbiddenError } from '../errors/domain-error';
 
 // The tenant a piece of work runs for (0.4.3; ADR-0004). It is never read
 // from a request: a context is minted only by the session guard (0.5.6), the
@@ -91,4 +92,15 @@ export function assertAuthorizedTenantContext(
   value: unknown,
 ): asserts value is AuthorizedTenantContext {
   if (!isAuthorizedTenantContext(value)) throw new TenantContextRefused();
+}
+
+/**
+ * The member a context acts for: a job is not a member, so work that records
+ * who did it (a report's scout, a record's author) refuses one.
+ */
+export function actingMemberOf(ctx: AuthorizedTenantContext): UserId {
+  if (ctx.actor.kind !== 'USER') {
+    throw new ForbiddenError('Only a signed-in member can do this');
+  }
+  return ctx.actor.userId;
 }
