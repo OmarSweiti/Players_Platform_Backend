@@ -179,6 +179,35 @@ jobs:
       - name: Every guard still refuses what it must
         run: bash ./scripts/test-policy.sh
 
+  # The production image (0.2.6): it builds, carries no critical vulnerability
+  # that has a fix, starts as an unprivileged user, and answers. To gate merges
+  # on it, add `image` to the rulesets' required checks.
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the test runner from the reviewed lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Build the production image
+        run: docker build -t sadara-backend:ci .
+      # Trivy, pinned by digest, reads the image through the runner's Docker.
+      # A critical vulnerability that has a fixed version fails the job; one
+      # with no fix yet is reported by the scan but cannot be acted on here.
+      - name: No critical vulnerability with a fix in the image
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c \
+            image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress sadara-backend:ci
+      - name: The image starts as an unprivileged user and answers
+        run: IMAGE=sadara-backend:ci bash ./scripts/smoke-start.sh
+
   # REQUIRED CHECK. Secrets and attribution over what this change adds.
   supply-chain:
     runs-on: ubuntu-latest

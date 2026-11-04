@@ -1,9 +1,10 @@
 import swc from 'unplugin-swc';
 import { defineConfig, type TestUserConfig } from 'vitest/config';
 
-// One runner, three projects with disjoint globs (ADR-0024): unit tests beside
+// One runner, four projects with disjoint globs (ADR-0024): unit tests beside
 // the code; integration and API tests under test/, against a real PostgreSQL in
-// a schema of their own per run. SWC compiles the TypeScript so Nest's
+// a schema of their own per run; and the production image's test, which
+// scripts/smoke-start.sh runs against the container it starts. SWC compiles the TypeScript so Nest's
 // decorator metadata survives; Vitest loads ES-module packages natively.
 const compile = () => swc.vite({ module: { type: 'es6' } });
 
@@ -52,6 +53,14 @@ export default defineConfig({
           name: 'e2e',
           include: ['test/**/*.e2e-spec.ts'],
           ...onDatabase,
+        },
+      },
+      {
+        test: {
+          name: 'image',
+          include: ['test/**/*.image-spec.ts'],
+          environment: 'node',
+          testTimeout: 30_000,
         },
       },
     ],
