@@ -29,6 +29,13 @@ datasource db {
 // scripts/generate-rls.ts writes it for a new table, and
 // test/db/rls.integration-spec.ts holds the catalog to it.
 
+// Every index on a tenant-owned table leads with tenantId, so it narrows to one
+// tenant before anything else (0.4.6); only the row's own id may lead instead,
+// and a few uniqueness rules over a parent's id (allowlisted with their
+// reasons). An index serves every foreign key, and no plain index repeats the
+// leading columns of another. test/db/indexes.integration-spec.ts holds the
+// catalog to this.
+
 //////////////////////////
 // ENUMS
 //////////////////////////
@@ -388,7 +395,6 @@ model Tenant {
 
   @@map("tenants")
   @@index([isActive])
-  @@index([slug])
 }
 
 model User {
@@ -457,10 +463,8 @@ model User {
   @@unique([id, tenantId])
 
   @@map("users")
-  @@index([tenantId])
-  @@index([email])
-  @@index([tenantId, role])
   @@index([tenantId, isActive])
+  @@index([tenantId, role])
 }
 
 //////////////////////////
@@ -489,7 +493,6 @@ model Season {
   @@unique([id, tenantId])
 
   @@map("seasons")
-  @@index([tenantId])
   @@index([tenantId, isCurrent])
 }
 
@@ -523,9 +526,8 @@ model Document {
   @@unique([id, tenantId])
 
   @@map("documents")
-  @@index([tenantId])
-  @@index([entityType, entityId])
-  @@index([tenantId, entityType])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, uploadedById])
 }
 
 //////////////////////////
@@ -584,9 +586,8 @@ model Player {
   @@unique([id, tenantId])
 
   @@map("players")
-  @@index([tenantId])
   @@index([tenantId, fullName])
-  @@index([position])
+  @@index([tenantId, position])
   @@index([tenantId, status])
 }
 
@@ -612,8 +613,7 @@ model PlayerMedia {
   @@unique([id, tenantId])
 
   @@map("player_media")
-  @@index([tenantId])
-  @@index([playerId])
+  @@index([tenantId, playerId])
 }
 
 model MedicalRecord {
@@ -650,9 +650,8 @@ model MedicalRecord {
   @@unique([id, tenantId, playerId])
 
   @@map("medical_records")
-  @@index([tenantId])
+  @@index([tenantId, createdById])
   @@index([tenantId, playerId])
-  @@index([createdById])
 }
 
 //////////////////////////
@@ -709,15 +708,13 @@ model Contract {
   @@unique([id, tenantId])
 
   @@map("contracts")
-  @@index([tenantId])
-  @@index([tenantId, playerId])
-  @@index([tenantId, status])
-  @@index([tenantId, startDate])
-  @@index([tenantId, endDate])
   @@index([tenantId, createdAt])
-  @@index([seasonId])
-  @@index([tenantId, status, createdAt])
+  @@index([tenantId, createdById])
+  @@index([tenantId, endDate])
   @@index([tenantId, playerId, status])
+  @@index([tenantId, seasonId])
+  @@index([tenantId, startDate])
+  @@index([tenantId, status, createdAt])
 }
 
 model ContractVersion {
@@ -746,9 +743,7 @@ model ContractVersion {
   @@unique([id, tenantId])
 
   @@map("contract_versions")
-  @@index([tenantId])
-  @@index([contractId])
-  @@index([createdById])
+  @@index([tenantId, createdById])
 }
 
 model ContractApproval {
@@ -777,9 +772,7 @@ model ContractApproval {
   @@unique([id, tenantId])
 
   @@map("contract_approvals")
-  @@index([tenantId])
-  @@index([contractId])
-  @@index([approvedById])
+  @@index([tenantId, approvedById])
 }
 
 //////////////////////////
@@ -824,11 +817,9 @@ model PerformanceRecord {
   @@unique([id, tenantId])
 
   @@map("performance_records")
-  @@index([tenantId])
-  @@index([tenantId, playerId])
   @@index([tenantId, matchDate])
-  @@index([seasonId])
   @@index([tenantId, playerId, matchDate])
+  @@index([tenantId, seasonId])
 }
 
 model Rating {
@@ -861,9 +852,8 @@ model Rating {
   @@unique([id, tenantId])
 
   @@map("ratings")
-  @@index([tenantId])
+  @@index([tenantId, createdById])
   @@index([tenantId, playerId])
-  @@index([createdById])
 }
 
 //////////////////////////
@@ -905,11 +895,10 @@ model Training {
   @@unique([id, tenantId])
 
   @@map("trainings")
-  @@index([tenantId])
   @@index([tenantId, createdAt])
-  @@index([seasonId])
-  @@index([tenantId, startDate, endDate])
   @@index([tenantId, isRecurring])
+  @@index([tenantId, seasonId])
+  @@index([tenantId, startDate, endDate])
 }
 
 /// Individual sessions within a training program (supports recurring / multi-session trainings)
@@ -941,9 +930,8 @@ model TrainingSession {
   @@unique([id, tenantId, trainingId])
 
   @@map("training_sessions")
-  @@index([tenantId])
-  @@index([trainingId])
   @@index([tenantId, date])
+  @@index([tenantId, trainingId])
 }
 
 model Enrollment {
@@ -977,9 +965,7 @@ model Enrollment {
   @@unique([id, tenantId, trainingId])
 
   @@map("enrollments")
-  @@index([tenantId])
-  @@index([trainingId])
-  @@index([playerId])
+  @@index([tenantId, playerId])
 }
 
 model Attendance {
@@ -1008,10 +994,9 @@ model Attendance {
   @@unique([id, tenantId])
 
   @@map("attendance")
-  @@index([tenantId])
-  @@index([date])
-  @@index([trainingSessionId])
+  @@index([tenantId, date])
   @@index([tenantId, enrollmentId, status])
+  @@index([tenantId, trainingSessionId])
 }
 
 //////////////////////////
@@ -1052,11 +1037,11 @@ model LegalTicket {
   @@unique([id, tenantId])
 
   @@map("legal_tickets")
-  @@index([tenantId])
-  @@index([tenantId, status])
-  @@index([tenantId, priority])
+  @@index([tenantId, assignedToId])
   @@index([tenantId, createdAt])
-  @@index([assignedToId])
+  @@index([tenantId, createdById])
+  @@index([tenantId, playerId])
+  @@index([tenantId, priority])
   @@index([tenantId, status, createdAt])
 }
 
@@ -1080,9 +1065,8 @@ model LegalNote {
   @@unique([id, tenantId])
 
   @@map("legal_notes")
-  @@index([tenantId])
-  @@index([ticketId])
-  @@index([createdById])
+  @@index([tenantId, createdById])
+  @@index([tenantId, ticketId])
 }
 
 //////////////////////////
@@ -1112,7 +1096,6 @@ model Conversation {
   @@unique([id, tenantId])
 
   @@map("conversations")
-  @@index([tenantId])
   @@index([tenantId, lastMessageAt])
 }
 
@@ -1137,8 +1120,7 @@ model ConversationMember {
   @@unique([conversationId, userId])
 
   @@map("conversation_members")
-  @@index([tenantId])
-  @@index([userId])
+  @@index([tenantId, userId])
 }
 
 //////////////////////////
@@ -1190,11 +1172,10 @@ model ScoutingReport {
   
   @@unique([id, tenantId])
   @@map("scouting_reports")
-  @@index([tenantId])
-  @@index([scoutId])
-  @@index([playerId])
-  @@index([status])
-  @@index([recommendation])
+  @@index([tenantId, playerId])
+  @@index([tenantId, recommendation])
+  @@index([tenantId, scoutId])
+  @@index([tenantId, status])
 }
 
 model PlayerWatchlist {
@@ -1216,8 +1197,7 @@ model PlayerWatchlist {
   @@unique([userId, playerId])
   @@unique([id, tenantId])
   @@map("player_watchlists")
-  @@index([tenantId])
-  @@index([userId])
+  @@index([tenantId, playerId])
 }
 
 model ScoutingAssignment {
@@ -1246,9 +1226,9 @@ model ScoutingAssignment {
   
   @@unique([id, tenantId])
   @@map("scouting_assignments")
-  @@index([tenantId])
-  @@index([assignedToId])
-  @@index([status])
+  @@index([tenantId, assignedById])
+  @@index([tenantId, assignedToId])
+  @@index([tenantId, status])
 }
 
 //////////////////////////
@@ -1283,11 +1263,11 @@ model TreatmentSession {
   
   @@unique([id, tenantId])
   @@map("treatment_sessions")
-  @@index([tenantId])
-  @@index([playerId])
-  @@index([medicalRecordId])
-  @@index([sessionDate])
-  @@index([status])
+  @@index([tenantId, conductedBy])
+  @@index([tenantId, medicalRecordId])
+  @@index([tenantId, playerId])
+  @@index([tenantId, sessionDate])
+  @@index([tenantId, status])
 }
 
 //////////////////////////
@@ -1307,8 +1287,8 @@ model Permission {
   updatedAt   DateTime          @updatedAt @map("updated_at")
   
   @@map("permissions")
-  @@index([category])
   @@index([action])
+  @@index([category])
 }
 
 model RolePermission {
@@ -1322,7 +1302,6 @@ model RolePermission {
   
   @@unique([roleId, permissionId])
   @@map("role_permissions")
-  @@index([roleId])
   @@index([permissionId])
 }
 
@@ -1361,9 +1340,7 @@ model Message {
   @@unique([id, tenantId])
 
   @@map("messages")
-  @@index([tenantId])
-  @@index([tenantId, conversationId])
-  @@index([conversationId, createdAt])
+  @@index([tenantId, conversationId, createdAt])
   @@index([tenantId, senderId])
 }
 
@@ -1397,9 +1374,8 @@ model Notification {
   @@unique([id, tenantId])
 
   @@map("notifications")
-  @@index([tenantId])
+  @@index([tenantId, referenceType, referenceId])
   @@index([tenantId, userId, isRead])
-  @@index([referenceType, referenceId])
 }
 
 //////////////////////////
@@ -1431,8 +1407,7 @@ model AuditLog {
   @@unique([id, tenantId])
 
   @@map("audit_logs")
-  @@index([tenantId])
-  @@index([entityType, entityId])
   @@index([tenantId, createdAt])
-  @@index([userId])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, userId])
 }
