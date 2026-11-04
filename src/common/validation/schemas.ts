@@ -20,8 +20,14 @@ export type PlayerIdParams = z.infer<typeof PlayerIdParams>;
 /** One line a person typed — a name, a type, a region: trimmed, never empty. */
 export const line = (max: number) => z.string().trim().min(1).max(max);
 
+/**
+ * The longest prose the API takes, in characters: every TEXT column's CHECK
+ * holds the database to the same bound (0.4.10; DB-56).
+ */
+export const PROSE_MAX = 10_000;
+
 /** Prose a person wrote — notes, a description: bounded, its whitespace kept. */
-export const prose = (max = 10_000) => z.string().max(max);
+export const prose = (max = PROSE_MAX) => z.string().max(max);
 
 /** A calendar day: `2026-10-03`. */
 export const day = z.iso.date();
