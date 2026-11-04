@@ -15,6 +15,7 @@ import {
   prismaFor,
   type IsolatedSchema,
 } from '../harness/db';
+import { normalizeEmail } from '../../src/modules/users/domain/email';
 import { asTenant } from '../harness/fixtures';
 
 // The preflight inspects a whole schema, so it gets schemas of its own: one
@@ -74,6 +75,13 @@ const KEYS_BEFORE_0_4_4 = [
     ' ADD FOREIGN KEY (medical_record_id, tenant_id) REFERENCES medical_records (id, tenant_id)',
 ];
 
+// And the unique key on the raw address it had before 0.4.9, which lets two
+// addresses that differ only in case and spacing be seeded.
+const EMAILS_BEFORE_0_4_9 = [
+  'DROP INDEX users_tenant_id_normalized_email_key',
+  'CREATE UNIQUE INDEX users_tenant_id_email_key ON users (tenant_id, email)',
+];
+
 // And one timestamp without a time zone, as every instant was before 0.4.8:
 // the provenance rule has nothing to report on a schema after it.
 const TIMESTAMPS_BEFORE_0_4_8 = [
@@ -129,6 +137,7 @@ async function seedCounterExamples(
       data: {
         tenantId,
         email,
+        normalizedEmail: normalizeEmail(email),
         role: 'COACH',
       },
     });
@@ -394,9 +403,11 @@ describe('the preflight report', () => {
     ]);
     await sqlIn(
       dirty,
-      [...KEYS_BEFORE_0_4_4, ...TIMESTAMPS_BEFORE_0_4_8].map((statement) => [
-        statement,
-      ]),
+      [
+        ...KEYS_BEFORE_0_4_4,
+        ...EMAILS_BEFORE_0_4_9,
+        ...TIMESTAMPS_BEFORE_0_4_8,
+      ].map((statement) => [statement]),
       dirty.migrationUrl,
     );
     const db = prismaFor(dirty.url);

@@ -89,7 +89,12 @@ class ErrorsProbeController {
     const tenantId = randomUUID();
     return this.as(tenantId, (tx) =>
       tx.user.create({
-        data: { tenantId, email: 'orphan@agency.test', role: 'COACH' },
+        data: {
+          tenantId,
+          email: 'orphan@agency.test',
+          normalizedEmail: 'orphan@agency.test',
+          role: 'COACH',
+        },
       }),
     );
   }

@@ -15,6 +15,7 @@ import {
   TenantTransactions,
   type TenantTx,
 } from '../../src/common/tenancy/tenant-transaction';
+import { normalizeEmail } from '../../src/modules/users/domain/email';
 import { prismaFor } from './db';
 
 // Fixtures write straight to the run's schema — never through the seed — and
@@ -116,14 +117,15 @@ export function createMember(
   role: UserRole,
   prisma: PrismaClient = runPrisma(),
 ): Promise<User> {
-  const handle = `${role.toLowerCase()}-${suffix()}`;
+  const email = `${role.toLowerCase()}-${suffix()}@${tenant.slug}.test`;
   return asTenant(
     tenant.id,
     (tx) =>
       tx.user.create({
         data: {
           tenantId: tenant.id,
-          email: `${handle}@${tenant.slug}.test`,
+          email,
+          normalizedEmail: normalizeEmail(email),
           role,
         },
       }),

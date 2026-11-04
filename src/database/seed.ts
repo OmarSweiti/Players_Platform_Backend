@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from '../app.module';
 import { PermissionService } from '../modules/users/application/services/permission.service';
+import { normalizeEmail } from '../modules/users/domain/email';
 import { PrismaService } from '../infrastructure/prisma/prisma.service';
 import { UserRole } from '@prisma/client';
 
@@ -40,9 +41,9 @@ async function bootstrap() {
   const superAdminEmail = 'admin@players-platform.com';
   let superAdminUser = await prisma.user.findUnique({
     where: {
-      tenantId_email: {
+      tenantId_normalizedEmail: {
         tenantId: superAdminTenant.id,
-        email: superAdminEmail,
+        normalizedEmail: normalizeEmail(superAdminEmail),
       },
     },
   });
@@ -52,6 +53,7 @@ async function bootstrap() {
     superAdminUser = await prisma.user.create({
       data: {
         email: superAdminEmail,
+        normalizedEmail: normalizeEmail(superAdminEmail),
         role: UserRole.SUPER_ADMIN,
         firstName: 'Platform',
         lastName: 'Administrator',
@@ -103,9 +105,9 @@ async function bootstrap() {
     const adminEmail = `admin@${tenant.slug}.com`;
     const existingAdmin = await prisma.user.findUnique({
       where: {
-        tenantId_email: {
+        tenantId_normalizedEmail: {
           tenantId: tenant.id,
-          email: adminEmail,
+          normalizedEmail: normalizeEmail(adminEmail),
         },
       },
     });
@@ -114,6 +116,7 @@ async function bootstrap() {
       const admin = await prisma.user.create({
         data: {
           email: adminEmail,
+          normalizedEmail: normalizeEmail(adminEmail),
           role: UserRole.ADMIN,
           firstName: 'Club',
           lastName: 'Administrator',

@@ -83,15 +83,16 @@ WHERE d.uploaded_by_id IS NOT NULL
 -- audit_logs.entity_id is history: it may outlive what it names, so it is not checked.
 
 -- violations: duplicate_email
--- Two members of one tenant whose addresses differ only in case or surrounding
--- spaces; both rows are reported, never the address.
+-- Two members of one tenant whose addresses are one once normalised (NFKC,
+-- trimmed, lower case: the form unique since 0.4.9); both rows are reported,
+-- never the address.
 SELECT 'users' AS table_name, u.id AS row_id, u.tenant_id AS tenant_id,
        'users.email equals another member''s address once case and spaces are normalised' AS reason
 FROM users u
 WHERE EXISTS (
   SELECT 1 FROM users o
   WHERE o.tenant_id = u.tenant_id AND o.id <> u.id
-    AND lower(btrim(o.email)) = lower(btrim(u.email))
+    AND lower(btrim(normalize(o.email, NFKC), E' \t\r\n')) = lower(btrim(normalize(u.email, NFKC), E' \t\r\n'))
 );
 
 -- violations: money_out_of_range
