@@ -7,7 +7,7 @@ import { Prisma } from '@prisma/client';
  *   only the row of the tenant in `app.tenant_id`; host resolution and job
  *   discovery read the narrow `tenant_directory` view instead.
  * - `read-only`: reference data the migrations write (permissions, the default
- *   role matrix). The runtime role may read it and change nothing.
+ *   role matrix, the currencies). The runtime role may read it and change nothing.
  */
 export type GlobalAccess = 'own-tenant-row' | 'read-only';
 
@@ -36,6 +36,7 @@ export const MODEL_CLASSIFICATION: Readonly<
   Tenant: { kind: 'global', runtime: 'own-tenant-row' },
   Permission: { kind: 'global', runtime: 'read-only' },
   RolePermission: { kind: 'global', runtime: 'read-only' },
+  CurrencyDefinition: { kind: 'global', runtime: 'read-only' },
 
   User: TENANT_OWNED,
   Season: TENANT_OWNED,

@@ -228,15 +228,6 @@ enum AttendanceStatus {
   @@map("attendance_status")
 }
 
-enum Currency {
-  USD
-  EUR
-  GBP
-  JOD
-
-  @@map("currency")
-}
-
 enum SalaryPeriod {
   WEEKLY
   MONTHLY
@@ -672,14 +663,15 @@ model Contract {
   startDate         DateTime @map("start_date")
   endDate           DateTime @map("end_date")
 
-  /// Gross salary per pay period. Stored as Decimal(16,2).
-  /// For high-precision arithmetic (e.g., bonus calculations), consider minor-unit integer storage in application layer.
-  salaryAmount      Decimal?       @db.Decimal(16, 2) @map("salary_amount")
-  salaryCurrency    Currency       @default(USD) @map("salary_currency")
+  /// Gross salary per pay period, exact: NUMERIC(19,4) holds every currency's
+  /// decimals, and code handles it as a Money (src/common/money; 0.4.7).
+  salaryAmount      Decimal?       @db.Decimal(19, 4) @map("salary_amount")
+  /// An ISO 4217 code of currency_definitions; JOD, the tenant's default (OPEN-09).
+  salaryCurrency    String         @default("JOD") @db.Char(3) @map("salary_currency")
   salaryPeriod      SalaryPeriod? @map("salary_period")
 
   bonusDetails      Json? @map("bonus_details")
-  signingFee        Decimal?       @db.Decimal(14, 2) @map("signing_fee")
+  signingFee        Decimal?       @db.Decimal(19, 4) @map("signing_fee")
 
   /// Primary file stored in Document model; this field is kept for quick access to latest version
   fileUrl           String?        @db.VarChar(500) @map("file_url")
@@ -697,6 +689,7 @@ model Contract {
   player            Player         @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   createdBy         User           @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   season            Season?        @relation(fields: [seasonId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  salaryCurrencyDefinition CurrencyDefinition @relation(fields: [salaryCurrency], references: [code], onDelete: Restrict, onUpdate: Restrict)
 
   versions          ContractVersion[]
   approvals         ContractApproval[]
@@ -874,8 +867,9 @@ model Training {
   location     String?  @db.VarChar(255)
   capacity     Int?
 
-  price        Decimal? @db.Decimal(10, 2)
-  currency     Currency @default(USD)
+  price        Decimal? @db.Decimal(19, 4)
+  /// An ISO 4217 code of currency_definitions; JOD, the tenant's default (OPEN-09).
+  currency     String   @default("JOD") @db.Char(3)
 
   isRecurring  Boolean  @default(false) @map("is_recurring")
 
@@ -884,6 +878,7 @@ model Training {
 
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   season       Season?  @relation(fields: [seasonId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  currencyDefinition CurrencyDefinition @relation(fields: [currency], references: [code], onDelete: Restrict, onUpdate: Restrict)
 
   sessions     TrainingSession[]
   enrollments  Enrollment[]
@@ -947,10 +942,14 @@ model Enrollment {
   notes           String?          @db.Text
 
   paidAt          DateTime? @map("paid_at")
-  paidAmount      Decimal?         @db.Decimal(10, 2) @map("paid_amount")
+  paidAmount      Decimal?         @db.Decimal(19, 4) @map("paid_amount")
+  /// The payment's own currency, whatever the programme's (0.4.7). A CHECK
+  /// (hand-written SQL) requires it with an amount.
+  paidCurrency    String?          @db.Char(3) @map("paid_currency")
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   training        Training         @relation(fields: [trainingId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  paidCurrencyDefinition CurrencyDefinition? @relation(fields: [paidCurrency], references: [code], onDelete: Restrict, onUpdate: Restrict)
   player          Player           @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   attendance      Attendance[]
@@ -1273,6 +1272,22 @@ model TreatmentSession {
 //////////////////////////
 // PERMISSION SYSTEM
 //////////////////////////
+
+/// Every ISO 4217 code an amount may carry, with its official decimals (0.4.7;
+/// ADR-0006). src/common/money/iso-4217.ts is the list and the money migration
+/// seeds it; the runtime role only reads it. CHECKs (hand-written SQL): a code
+/// is three capital letters, an exponent is 0 to 4.
+model CurrencyDefinition {
+  code              String       @id @db.Char(3)
+  minorUnitExponent Int          @db.SmallInt @map("minor_unit_exponent")
+  enabled           Boolean      @default(true)
+
+  contracts         Contract[]
+  trainings         Training[]
+  enrollments       Enrollment[]
+
+  @@map("currency_definitions")
+}
 
 model Permission {
   id          String            @id @default(uuid()) @db.Uuid
