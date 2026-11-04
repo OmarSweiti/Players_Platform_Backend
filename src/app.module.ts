@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { configOptions } from './config/env.schema';
+import { BodyParsingModule } from './common/http/body-parsing.module';
 import { LoggingModule } from './infrastructure/logging/logging.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { EventsModule } from './infrastructure/events/events.module';
@@ -30,6 +31,8 @@ import { RolesGuard } from './common/guards/roles.guard';
     ConfigModule.forRoot(configOptions),
     // Structured logs: the access log, and every other line as JSON.
     LoggingModule,
+    // Request bodies, read once the access log has started.
+    BodyParsingModule,
     PrismaModule,
     EventsModule,
     MailModule,

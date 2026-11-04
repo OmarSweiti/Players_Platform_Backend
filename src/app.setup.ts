@@ -1,5 +1,6 @@
 import {
   INestApplication,
+  type NestApplicationOptions,
   NotFoundException,
   RequestMethod,
   StandardSchemaValidationPipe,
@@ -27,6 +28,13 @@ export const API_VERSION = '1';
 
 /** The routes served outside the API prefix and its version: the probes. */
 export const UNPREFIXED_ROUTES = ['health/live', 'health/ready'];
+
+/**
+ * How every API application is created, by main.ts and by the test harness.
+ * Nest's own body parsers are off: BodyParsingModule mounts the same parsers
+ * after the access log has started, so a refused body is logged too.
+ */
+export const APP_OPTIONS: NestApplicationOptions = { bodyParser: false };
 
 /**
  * The HTTP pipeline: middleware, interceptors, CORS, the route prefix,
