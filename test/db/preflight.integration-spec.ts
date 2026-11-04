@@ -74,6 +74,12 @@ const KEYS_BEFORE_0_4_4 = [
     ' ADD FOREIGN KEY (medical_record_id, tenant_id) REFERENCES medical_records (id, tenant_id)',
 ];
 
+// And one timestamp without a time zone, as every instant was before 0.4.8:
+// the provenance rule has nothing to report on a schema after it.
+const TIMESTAMPS_BEFORE_0_4_8 = [
+  "ALTER TABLE users ALTER COLUMN created_at TYPE TIMESTAMP(3) USING created_at AT TIME ZONE 'UTC'",
+];
+
 const PERSONAL = {
   memberEmail: 'Layla.Haddad@agency-one.test',
   duplicateEmail: ' layla.haddad@agency-one.test',
@@ -281,6 +287,7 @@ async function seedCounterExamples(
           tenantId: a.id,
           trainingId: programTwo.id,
           date: day('2026-10-05'),
+          timeZone: 'Asia/Amman',
         },
       });
       const attendance = await tx.attendance.create({
@@ -387,7 +394,9 @@ describe('the preflight report', () => {
     ]);
     await sqlIn(
       dirty,
-      KEYS_BEFORE_0_4_4.map((statement) => [statement]),
+      [...KEYS_BEFORE_0_4_4, ...TIMESTAMPS_BEFORE_0_4_8].map((statement) => [
+        statement,
+      ]),
       dirty.migrationUrl,
     );
     const db = prismaFor(dirty.url);

@@ -201,7 +201,8 @@ ORDER BY c.column_name;
 
 -- generate unknowns: timestamp_provenance
 -- A timestamp without time zone does not say which zone it was written in:
--- 0.4.8 converts these only once the owner confirms their provenance.
+-- 0.4.8 converted the application's own, written as UTC (OPEN-11); a column
+-- still without a time zone is one whose provenance someone must confirm.
 SELECT format(
   'SELECT %L AS table_name, %L AS column_name, count(%I) AS count, %L AS reason '
   'FROM %I HAVING count(%I) > 0',

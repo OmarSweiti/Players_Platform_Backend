@@ -369,7 +369,7 @@ describe('row-level security on every tenant-owned table', () => {
 
   it('tenant_ids_cannot_be_updated', async () => {
     // Every guarded table has the trigger, enabled, on the column it guards,
-    // and the schema has no other trigger of its own.
+    // and no other table has one.
     const schema = inject('databaseSchema');
     const { rows: triggers } = await app.query<{
       table: string;
@@ -380,6 +380,7 @@ describe('row-level security on every tenant-owned table', () => {
               pg_get_triggerdef(t.oid) AS definition
          FROM pg_trigger t JOIN pg_class c ON c.oid = t.tgrelid
         WHERE c.relnamespace = current_schema()::regnamespace AND NOT t.tgisinternal
+          AND t.tgfoid = 'refuse_tenant_change'::regproc
         ORDER BY 1`,
     );
     expect(triggers).toEqual(

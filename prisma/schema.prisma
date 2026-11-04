@@ -40,6 +40,14 @@ datasource db {
 // ENUMS
 //////////////////////////
 
+/// The two languages Sadara ships in (ADR-0008).
+enum Locale {
+  ar
+  en
+
+  @@map("locale")
+}
+
 enum UserRole {
   SUPER_ADMIN        // Platform-level admin (multi-tenant SaaS)
   OWNER              // Club/academy owner
@@ -351,7 +359,16 @@ model Tenant {
   logoUrl     String? @db.VarChar(500) @map("logo_url")
   isActive    Boolean @default(true) @map("is_active")
 
-  /// Flexible per-tenant configuration (timezone, currency, feature flags, etc.)
+  /// Typed settings, out of the settings JSON (0.4.8): the IANA zone dates and
+  /// times are shown in (a trigger, hand-written SQL, refuses any other value),
+  /// the language a member starts in, and the currency amounts default to.
+  timezone        String             @default("UTC")
+  defaultLocale   Locale             @default(ar) @map("default_locale")
+  defaultCurrency String             @default("JOD") @db.Char(3) @map("default_currency")
+  defaultCurrencyDefinition CurrencyDefinition @relation(fields: [defaultCurrency], references: [code], onDelete: Restrict, onUpdate: Restrict)
+
+  /// Untyped per-tenant configuration. The time zone, locale and currency live
+  /// in their own columns; a CHECK (hand-written SQL) keeps them out of here.
   settings    Json?
 
   users                User[]
@@ -381,8 +398,8 @@ model Tenant {
   scoutingAssignments ScoutingAssignment[]
   treatmentSessions   TreatmentSession[]
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@map("tenants")
   @@index([isActive])
@@ -404,7 +421,7 @@ model User {
   avatarUrl             String?   @db.VarChar(500) @map("avatar_url")
   phone                 String?   @db.VarChar(20)
 
-  lastLoginAt           DateTime? @map("last_login_at")
+  lastLoginAt           DateTime? @map("last_login_at") @db.Timestamptz(3)
 
   isActive              Boolean   @default(true) @map("is_active")
 
@@ -415,8 +432,8 @@ model User {
   department            String?   @db.VarChar(100) // e.g., "Coaching", "Medical", "Legal"
   position              String?   @db.VarChar(150) // Job title
   certifications        Json?     // Array of certifications/licenses
-  employmentStartDate   DateTime? @map("employment_start_date")
-  employmentEndDate     DateTime? @map("employment_end_date")
+  employmentStartDate   DateTime? @map("employment_start_date") @db.Date
+  employmentEndDate     DateTime? @map("employment_end_date") @db.Date
   bio                   String?   @db.Text
   emergencyContact      String?   @db.VarChar(150) @map("emergency_contact")
   emergencyPhone        String?   @db.VarChar(20) @map("emergency_phone")
@@ -446,9 +463,9 @@ model User {
   treatmentSessions     TreatmentSession[]   @relation("TreatmentSessionConductor")
   uploadedDocuments     Document[]
 
-  createdAt             DateTime  @default(now()) @map("created_at")
-  updatedAt             DateTime  @updatedAt @map("updated_at")
-  deletedAt             DateTime? @map("deleted_at")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt             DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([tenantId, email])
   @@unique([id, tenantId])
@@ -467,8 +484,8 @@ model Season {
   tenantId    String   @db.Uuid @map("tenant_id")
 
   name        String   @db.VarChar(255)
-  startDate   DateTime @map("start_date")
-  endDate     DateTime @map("end_date")
+  startDate   DateTime @map("start_date") @db.Date
+  endDate     DateTime @map("end_date") @db.Date
   isCurrent   Boolean  @default(false) @map("is_current")
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -477,9 +494,9 @@ model Season {
   trainings   Training[]
   performances PerformanceRecord[]
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -510,9 +527,9 @@ model Document {
   tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   uploadedBy  User?              @relation(fields: [uploadedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt   DateTime           @default(now()) @map("created_at")
-  updatedAt   DateTime           @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -530,7 +547,7 @@ model Player {
   tenantId          String          @db.Uuid @map("tenant_id")
 
   fullName          String          @db.VarChar(255) @map("full_name")
-  dateOfBirth       DateTime? @map("date_of_birth")
+  dateOfBirth       DateTime? @map("date_of_birth") @db.Date
   nationality       String?         @db.VarChar(100)
   secondNationality String?         @db.VarChar(100) @map("second_nationality")
   position          PlayerPosition?
@@ -544,7 +561,7 @@ model Player {
   weight            Float?
 
   passportNumber    String?         @db.VarChar(20) @map("passport_number")
-  passportExpiry    DateTime? @map("passport_expiry")
+  passportExpiry    DateTime? @map("passport_expiry") @db.Date
 
   agentName         String?         @db.VarChar(150) @map("agent_name")
   agentEmail        String?         @db.VarChar(255) @map("agent_email")
@@ -570,9 +587,9 @@ model Player {
   watchlists         PlayerWatchlist[]
   treatmentSessions  TreatmentSession[]
 
-  createdAt         DateTime        @default(now()) @map("created_at")
-  updatedAt         DateTime        @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -597,9 +614,9 @@ model PlayerMedia {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -618,9 +635,9 @@ model MedicalRecord {
   severity         String?   @db.VarChar(50)
   description      String?   @db.Text
   treatment        String?   @db.Text
-  injuryDate       DateTime? @map("injury_date")
-  recoveryDate     DateTime? @map("recovery_date")
-  returnToPlayDate DateTime? @map("return_to_play_date")
+  injuryDate       DateTime? @map("injury_date") @db.Date
+  recoveryDate     DateTime? @map("recovery_date") @db.Date
+  returnToPlayDate DateTime? @map("return_to_play_date") @db.Date
 
   isConfidential   Boolean   @default(true) @map("is_confidential")
 
@@ -632,9 +649,9 @@ model MedicalRecord {
   createdBy        User      @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   treatmentSessions TreatmentSession[]
 
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  deletedAt        DateTime? @map("deleted_at")
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
   /// The parent key of a treatment session's record: the same player's (0.4.4)
@@ -660,8 +677,8 @@ model Contract {
   type              ContractType   @default(PROFESSIONAL)
   status            ContractStatus @default(DRAFT)
 
-  startDate         DateTime @map("start_date")
-  endDate           DateTime @map("end_date")
+  startDate         DateTime @map("start_date") @db.Date
+  endDate           DateTime @map("end_date") @db.Date
 
   /// Gross salary per pay period, exact: NUMERIC(19,4) holds every currency's
   /// decimals, and code handles it as a Money (src/common/money; 0.4.7).
@@ -676,11 +693,11 @@ model Contract {
   /// Primary file stored in Document model; this field is kept for quick access to latest version
   fileUrl           String?        @db.VarChar(500) @map("file_url")
 
-  signedAt          DateTime? @map("signed_at")
-  approvedAt        DateTime? @map("approved_at")
-  expiresNotifiedAt DateTime? @map("expires_notified_at")
+  signedAt          DateTime? @map("signed_at") @db.Timestamptz(3)
+  approvedAt        DateTime? @map("approved_at") @db.Timestamptz(3)
+  expiresNotifiedAt DateTime? @map("expires_notified_at") @db.Timestamptz(3)
 
-  terminationDate   DateTime? @map("termination_date")
+  terminationDate   DateTime? @map("termination_date") @db.Date
   terminationReason String?        @db.VarChar(500) @map("termination_reason")
 
   metadata          Json?
@@ -694,9 +711,9 @@ model Contract {
   versions          ContractVersion[]
   approvals         ContractApproval[]
 
-  createdAt         DateTime       @default(now()) @map("created_at")
-  updatedAt         DateTime       @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -728,9 +745,9 @@ model ContractVersion {
   createdBy    User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([contractId, version])
   @@unique([id, tenantId])
@@ -751,15 +768,15 @@ model ContractApproval {
   /// For ordered approval workflows (step 1 = legal, step 2 = owner, etc.)
   stepOrder     Int            @default(1) @map("step_order")
 
-  respondedAt   DateTime? @map("responded_at")
+  respondedAt   DateTime? @map("responded_at") @db.Timestamptz(3)
 
   contract      Contract @relation(fields: [contractId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   approvedBy    User     @relation(fields: [approvedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([contractId, approvedById])
   @@unique([id, tenantId])
@@ -778,7 +795,7 @@ model PerformanceRecord {
   playerId        String    @db.Uuid @map("player_id")
   seasonId        String?   @db.Uuid @map("season_id")
 
-  matchDate       DateTime @map("match_date")
+  matchDate       DateTime @map("match_date") @db.Date
   opponent        String?   @db.VarChar(150)
   venue           String?   @db.VarChar(200)
   competition     String?   @db.VarChar(200)
@@ -803,9 +820,9 @@ model PerformanceRecord {
   player          Player    @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   season          Season?   @relation(fields: [seasonId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -838,9 +855,9 @@ model Rating {
   player          Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   createdBy       User     @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -861,8 +878,8 @@ model Training {
   title        String   @db.VarChar(255)
   description  String?  @db.Text
 
-  startDate    DateTime @map("start_date")
-  endDate      DateTime @map("end_date")
+  startDate    DateTime @map("start_date") @db.Date
+  endDate      DateTime @map("end_date") @db.Date
 
   location     String?  @db.VarChar(255)
   capacity     Int?
@@ -883,9 +900,9 @@ model Training {
   sessions     TrainingSession[]
   enrollments  Enrollment[]
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -903,9 +920,13 @@ model TrainingSession {
   trainingId   String   @db.Uuid @map("training_id")
 
   title        String?  @db.VarChar(255)
-  date         DateTime
-  startTime    DateTime? @map("start_time")
-  endTime      DateTime? @map("end_time")
+  /// The session's day, and when it starts and ends: instants, with the IANA
+  /// zone its wall times are in (0.4.8; ADR-0007). A trigger (hand-written SQL)
+  /// refuses a zone that is not one.
+  date         DateTime @db.Date
+  startsAt     DateTime? @db.Timestamptz(3) @map("starts_at")
+  endsAt       DateTime? @db.Timestamptz(3) @map("ends_at")
+  timeZone     String   @map("time_zone")
   location     String?  @db.VarChar(255)
 
   isCancelled  Boolean  @default(false) @map("is_cancelled")
@@ -916,9 +937,9 @@ model TrainingSession {
 
   attendance   Attendance[]
 
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt    DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
   /// The parent key of attendance: a session of the same program (0.4.4)
@@ -941,7 +962,7 @@ model Enrollment {
   rejectionReason String?          @db.VarChar(500) @map("rejection_reason")
   notes           String?          @db.Text
 
-  paidAt          DateTime? @map("paid_at")
+  paidAt          DateTime? @map("paid_at") @db.Timestamptz(3)
   paidAmount      Decimal?         @db.Decimal(19, 4) @map("paid_amount")
   /// The payment's own currency, whatever the programme's (0.4.7). A CHECK
   /// (hand-written SQL) requires it with an amount.
@@ -954,9 +975,9 @@ model Enrollment {
 
   attendance      Attendance[]
 
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([trainingId, playerId])
   @@unique([id, tenantId])
@@ -977,7 +998,7 @@ model Attendance {
   trainingId        String           @db.Uuid @map("training_id")
 
   /// Denormalized from TrainingSession for query convenience
-  date              DateTime
+  date              DateTime @db.Date
   status            AttendanceStatus @default(ABSENT)
   note              String?          @db.VarChar(500)
 
@@ -985,9 +1006,9 @@ model Attendance {
   enrollment        Enrollment       @relation(fields: [enrollmentId, tenantId, trainingId], references: [id, tenantId, trainingId], onDelete: Restrict, onUpdate: Restrict)
   trainingSession   TrainingSession  @relation(fields: [trainingSessionId, tenantId, trainingId], references: [id, tenantId, trainingId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt         DateTime         @default(now()) @map("created_at")
-  updatedAt         DateTime         @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt         DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([enrollmentId, trainingSessionId])
   @@unique([id, tenantId])
@@ -1015,9 +1036,9 @@ model LegalTicket {
   status        LegalTicketStatus   @default(OPEN)
   priority      LegalTicketPriority @default(MEDIUM)
 
-  resolvedAt    DateTime? @map("resolved_at")
-  closedAt      DateTime? @map("closed_at")
-  dueDate       DateTime? @map("due_date")
+  resolvedAt    DateTime? @map("resolved_at") @db.Timestamptz(3)
+  closedAt      DateTime? @map("closed_at") @db.Timestamptz(3)
+  dueDate       DateTime? @map("due_date") @db.Date
 
   /// For linking to external legal case IDs, contract refs, etc.
   metadata      Json?
@@ -1029,9 +1050,9 @@ model LegalTicket {
 
   notes         LegalNote[]
 
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -1057,9 +1078,9 @@ model LegalNote {
   ticket        LegalTicket @relation(fields: [ticketId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   createdBy     User        @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt     DateTime    @default(now()) @map("created_at")
-  updatedAt     DateTime    @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -1081,16 +1102,16 @@ model Conversation {
   imageUrl       String?  @db.VarChar(500) @map("image_url")
   description    String?  @db.VarChar(500)
 
-  lastMessageAt  DateTime? @map("last_message_at")
+  lastMessageAt  DateTime? @map("last_message_at") @db.Timestamptz(3)
 
   tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   messages       Message[]
   members        ConversationMember[]
 
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -1107,14 +1128,14 @@ model ConversationMember {
   role           ConversationMemberRole @default(MEMBER)
 
   /// For unread message count / read receipts
-  lastReadAt     DateTime? @map("last_read_at")
+  lastReadAt     DateTime? @map("last_read_at") @db.Timestamptz(3)
 
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   user           User         @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt      DateTime     @default(now()) @map("created_at")
-  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([conversationId, userId])
 
@@ -1156,7 +1177,7 @@ model ScoutingReport {
   overallRating   Decimal?           @db.Decimal(3, 1) @map("overall_rating")
   potentialRating Decimal?           @db.Decimal(3, 1) @map("potential_rating")
   
-  reportDate      DateTime @map("report_date")
+  reportDate      DateTime @map("report_date") @db.Date
   matchObserved   String?            @db.VarChar(255) @map("match_observed")
   
   metadata        Json?
@@ -1165,9 +1186,9 @@ model ScoutingReport {
   scout           User               @relation(fields: [scoutId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   player          Player?            @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
   
   @@unique([id, tenantId])
   @@map("scouting_reports")
@@ -1190,8 +1211,8 @@ model PlayerWatchlist {
   user        User     @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   player      Player   @relation(fields: [playerId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   
   @@unique([userId, playerId])
   @@unique([id, tenantId])
@@ -1211,7 +1232,7 @@ model ScoutingAssignment {
   minAge        Int? @map("min_age")
   maxAge        Int? @map("max_age")
   
-  dueDate       DateTime? @map("due_date")
+  dueDate       DateTime? @map("due_date") @db.Date
   status        String   @db.VarChar(50) @default("OPEN")
   
   notes         String?  @db.Text
@@ -1220,8 +1241,8 @@ model ScoutingAssignment {
   assignedTo    User     @relation("ScoutingAssignmentTo", fields: [assignedToId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   assignedBy    User     @relation("ScoutingAssignmentBy", fields: [assignedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
   
   @@unique([id, tenantId])
   @@map("scouting_assignments")
@@ -1240,7 +1261,7 @@ model TreatmentSession {
   playerId        String             @db.Uuid @map("player_id")
   medicalRecordId String?            @db.Uuid @map("medical_record_id")  // Link to injury/treatment record
   
-  sessionDate     DateTime @map("session_date")
+  sessionDate     DateTime @map("session_date") @db.Date
   duration        Int?               // Duration in minutes
   status          TreatmentStatus    @default(SCHEDULED)
   
@@ -1257,8 +1278,8 @@ model TreatmentSession {
   medicalRecord   MedicalRecord?     @relation(fields: [medicalRecordId, tenantId, playerId], references: [id, tenantId, playerId], onDelete: Restrict, onUpdate: Restrict)
   conductor       User               @relation("TreatmentSessionConductor", fields: [conductedBy, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
   
-  createdAt       DateTime           @default(now()) @map("created_at")
-  updatedAt       DateTime           @updatedAt @map("updated_at")
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
   
   @@unique([id, tenantId])
   @@map("treatment_sessions")
@@ -1285,6 +1306,7 @@ model CurrencyDefinition {
   contracts         Contract[]
   trainings         Training[]
   enrollments       Enrollment[]
+  tenants           Tenant[]
 
   @@map("currency_definitions")
 }
@@ -1298,8 +1320,8 @@ model Permission {
   
   roles       RolePermission[]
   
-  createdAt   DateTime          @default(now()) @map("created_at")
-  updatedAt   DateTime          @updatedAt @map("updated_at")
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
   
   @@map("permissions")
   @@index([action])
@@ -1313,7 +1335,7 @@ model RolePermission {
   
   permission     Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade, onUpdate: Restrict)
   
-  createdAt      DateTime   @default(now()) @map("created_at")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
   
   @@unique([roleId, permissionId])
   @@map("role_permissions")
@@ -1339,18 +1361,18 @@ model Message {
   type           MessageType
 
   isEdited       Boolean     @default(false) @map("is_edited")
-  editedAt       DateTime? @map("edited_at")
+  editedAt       DateTime? @map("edited_at") @db.Timestamptz(3)
 
   /// Soft delete (message recalled)
-  deletedAt      DateTime? @map("deleted_at")
+  deletedAt      DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   conversation   Conversation @relation(fields: [conversationId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
   sender         User?        @relation(fields: [senderId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime     @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -1377,14 +1399,14 @@ model Notification {
   referenceId     String?          @db.Uuid @map("reference_id")
 
   isRead          Boolean          @default(false) @map("is_read")
-  readAt          DateTime? @map("read_at")
+  readAt          DateTime? @map("read_at") @db.Timestamptz(3)
 
   tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   user            User             @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 
@@ -1416,8 +1438,8 @@ model AuditLog {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   user        User?    @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt   DateTime @default(now()) @map("created_at")
-  deletedAt   DateTime? @map("deleted_at")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
 

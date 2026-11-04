@@ -371,6 +371,7 @@ describe('composite and same-parent foreign keys', () => {
             tenantId: a.id,
             trainingId: training.id,
             date: day('2026-10-05'),
+            timeZone: 'Asia/Amman',
           },
         }),
       );
