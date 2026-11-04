@@ -19,6 +19,28 @@ const proxy = z.union([
   z.enum(['loopback', 'linklocal', 'uniquelocal']),
 ]);
 
+// A host as a tenant's is stored and as a browser sends it, lower case
+// (0.4.10): DNS labels of letters, digits and inner hyphens, dot-separated.
+const LABEL = '[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?';
+export const DNS_LABEL = new RegExp(`^${LABEL}$`);
+export const HOST_NAME = new RegExp(`^(?=.{1,253}$)(${LABEL}\\.)*${LABEL}$`);
+// An optional setting left empty (`NAME=` in .env) is unset, not a value.
+const optional = <T extends z.ZodType>(schema: T) =>
+  z.preprocess(
+    (value) => (value === '' ? undefined : value),
+    schema.optional(),
+  );
+const hostList = z
+  .string()
+  .default('')
+  .transform((list) =>
+    list
+      .split(',')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry !== ''),
+  )
+  .pipe(z.array(z.string().regex(HOST_NAME, 'lower-case host names')));
+
 // The API connects as the runtime role only (0.4.2): never as the role that
 // owns the schema, the one that migrates it, or the image's superuser.
 const PRIVILEGED_ROLES = new Set([
@@ -45,35 +67,58 @@ const database = z
 /** Where the API's routes live; the committed contract names this one. */
 export const DEFAULT_API_PREFIX = 'api';
 
-export const Env = z.object({
-  NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
-  PORT: port.default(3000),
-  API_PREFIX: z
-    .string()
-    .regex(/^[a-z0-9-]+$/)
-    .default(DEFAULT_API_PREFIX),
-  DATABASE_URL: database,
-  REDIS_HOST: z.string().min(1).default('localhost'),
-  REDIS_PORT: port.default(6379),
-  // The proxies whose X-Forwarded-For names the client (0.3.8), comma-
-  // separated. None by default: the client is whoever connected.
-  TRUSTED_PROXIES: z
-    .string()
-    .default('')
-    .transform((list) =>
-      list
-        .split(',')
-        .map((entry) => entry.trim())
-        .filter((entry) => entry !== ''),
-    )
-    .pipe(z.array(proxy)),
-  // The web app's origin: CORS allows it, and links in emails point to it.
-  CORS_ORIGIN: z.url({ protocol: /^https?$/ }),
-  MAIL_FROM: z.email(),
-  // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
-  FEATURE_MEDICAL: flag.default(false),
-  FEATURE_SCOUTING: flag.default(false),
-});
+export const Env = z
+  .object({
+    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
+    PORT: port.default(3000),
+    API_PREFIX: z
+      .string()
+      .regex(/^[a-z0-9-]+$/, 'lower-case letters, digits and hyphens')
+      .default(DEFAULT_API_PREFIX),
+    DATABASE_URL: database,
+    REDIS_HOST: z.string().min(1).default('localhost'),
+    REDIS_PORT: port.default(6379),
+    // The proxies whose X-Forwarded-For names the client (0.3.8), comma-
+    // separated. None by default: the client is whoever connected.
+    TRUSTED_PROXIES: z
+      .string()
+      .default('')
+      .transform((list) =>
+        list
+          .split(',')
+          .map((entry) => entry.trim())
+          .filter((entry) => entry !== ''),
+      )
+      .pipe(z.array(proxy)),
+    // The web app's origin: CORS allows it, and links in emails point to it.
+    CORS_ORIGIN: z.url({ protocol: /^https?$/ }),
+    // Before sign-in the tenant is the host's (0.5.2): an exact tenant domain,
+    // else {slug}.APEX_DOMAIN. Unset: only exact domains resolve.
+    APEX_DOMAIN: optional(
+      z.string().regex(HOST_NAME, 'a lower-case host name'),
+    ),
+    // The single-agency launch: the hosts, comma-separated, that belong to the
+    // tenant DEFAULT_TENANT_SLUG. Both set, or neither; every other host that
+    // names no tenant is refused.
+    DEFAULT_TENANT_SLUG: optional(
+      z.string().regex(DNS_LABEL, 'a lower-case DNS label'),
+    ),
+    DEFAULT_TENANT_HOSTS: hostList,
+    MAIL_FROM: z.email(),
+    // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
+    FEATURE_MEDICAL: flag.default(false),
+    FEATURE_SCOUTING: flag.default(false),
+  })
+  .superRefine((env, issues) => {
+    const hosts = env.DEFAULT_TENANT_HOSTS.length > 0;
+    if (hosts !== (env.DEFAULT_TENANT_SLUG !== undefined)) {
+      issues.addIssue({
+        code: 'custom',
+        path: [hosts ? 'DEFAULT_TENANT_SLUG' : 'DEFAULT_TENANT_HOSTS'],
+        message: 'must be set together with the other',
+      });
+    }
+  });
 export type Env = z.infer<typeof Env>;
 
 /** What is wrong with one variable, in words that never repeat its value. */
@@ -93,8 +138,10 @@ function problemOf(
         : `${name} must be at least ${issue.minimum}`;
     case 'too_big':
       return `${name} must be at most ${issue.maximum}`;
-    case 'invalid_format':
-      return `${name} must be a valid ${issue.format}`;
+    case 'invalid_format': // a pattern says what it wants; a format names itself
+      return issue.format === 'regex'
+        ? `${name} must be ${issue.message}`
+        : `${name} must be a valid ${issue.format}`;
     case 'invalid_type':
       return `${name} must be a ${issue.expected}`;
     case 'custom': // a refinement's message, written above, never the value

@@ -99,6 +99,53 @@ describe('the environment schema', () => {
     }
   });
 
+  it('takes the hosts that name a tenant in lower case, the launch pair together', () => {
+    expect(parseEnv(valid)).toMatchObject({ DEFAULT_TENANT_HOSTS: [] });
+    expect(
+      parseEnv({
+        ...valid,
+        APEX_DOMAIN: 'sadara.example',
+        DEFAULT_TENANT_SLUG: 'launch-agency',
+        DEFAULT_TENANT_HOSTS: ' app.agency.test ,agency.test',
+      }),
+    ).toMatchObject({
+      APEX_DOMAIN: 'sadara.example',
+      DEFAULT_TENANT_SLUG: 'launch-agency',
+      DEFAULT_TENANT_HOSTS: ['app.agency.test', 'agency.test'],
+    });
+    for (const [name, value] of [
+      ['APEX_DOMAIN', 'Sadara.example'],
+      ['APEX_DOMAIN', 'https://sadara.example'],
+      ['DEFAULT_TENANT_SLUG', 'Launch_Agency'],
+    ] as const) {
+      expect([name, failureOf({ ...valid, [name]: value })]).toEqual([
+        name,
+        expect.stringMatching(
+          new RegExp(`${name} must be a lower-case (host name|DNS label)`),
+        ),
+      ]);
+    }
+    expect(
+      failureOf({ ...valid, DEFAULT_TENANT_HOSTS: 'agency.test:443' }),
+    ).toContain('DEFAULT_TENANT_HOSTS must be lower-case host names');
+    // Left empty in .env, they are unset.
+    expect(
+      parseEnv({
+        ...valid,
+        APEX_DOMAIN: '',
+        DEFAULT_TENANT_SLUG: '',
+        DEFAULT_TENANT_HOSTS: '',
+      }),
+    ).toMatchObject({ DEFAULT_TENANT_HOSTS: [] });
+    // One without the other maps no host, or maps hosts to no tenant.
+    expect(failureOf({ ...valid, DEFAULT_TENANT_SLUG: 'launch' })).toContain(
+      'DEFAULT_TENANT_HOSTS is missing',
+    );
+    expect(
+      failureOf({ ...valid, DEFAULT_TENANT_HOSTS: 'agency.test' }),
+    ).toContain('DEFAULT_TENANT_SLUG is missing');
+  });
+
   it('refuses a database connection as the owner, the migrator or the superuser', () => {
     for (const role of [
       'sadara_owner',
