@@ -410,6 +410,12 @@ model User {
   tenantId              String    @db.Uuid @map("tenant_id")
 
   email                 String    @db.VarChar(255)
+  /// The address as it is unique within the tenant, for the life of the
+  /// membership: an archived member keeps it, and comes back through
+  /// reactivation, never as a second account (0.4.9). NFKC, trimmed, lower
+  /// case (src/modules/users/domain/email.ts); a CHECK (hand-written SQL)
+  /// holds it equal to that form of email.
+  normalizedEmail       String    @db.VarChar(255) @map("normalized_email")
   // No credential is stored here: passwords, second factors, reset and
   // verification tokens and lockouts belong to the identity provider
   // (ADR-0002); the local credential columns were dropped in 0.1.6.
@@ -467,7 +473,7 @@ model User {
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
   deletedAt             DateTime? @map("deleted_at") @db.Timestamptz(3)
 
-  @@unique([tenantId, email])
+  @@unique([tenantId, normalizedEmail])
   @@unique([id, tenantId])
 
   @@map("users")
