@@ -1,0 +1,12 @@
+# Only what the image build reads goes to the daemon: never a secret, a local
+# database or a build of this machine's own.
+*
+!package.json
+!package-lock.json
+!nest-cli.json
+!tsconfig.json
+!tsconfig.build.json
+!prisma.config.ts
+!prisma/
+!src/
+src/**/*.spec.ts
