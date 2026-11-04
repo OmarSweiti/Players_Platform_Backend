@@ -149,6 +149,55 @@ WHERE NOT (
   )
 );
 
+-- generate violations: check_violation
+-- A row that breaks a CHECK of 0.4.10: a negative count, an end before its
+-- start, a score off its scale, a value that is not finite, a tenant key not in
+-- lower case, prose longer than the API takes, JSON of the wrong shape or size.
+-- The checks come from scripts/integrity-checks.ts through scripts/
+-- preflight.ts, so the report and the migration hold the same rules; a CHECK
+-- passes on NULL, and so does this. The reason names the constraint, never a
+-- value.
+SELECT format(
+  'SELECT %L AS table_name, id AS row_id, %s AS tenant_id, %L AS reason FROM %I WHERE NOT (%s)',
+  c ->> 'table',
+  CASE WHEN c ->> 'table' = 'tenants' THEN 'id' ELSE 'tenant_id' END,
+  format('%s does not hold', c ->> 'name'),
+  c ->> 'table',
+  c ->> 'holds'
+) AS sql
+FROM jsonb_array_elements(current_setting('sadara.integrity_checks')::jsonb) AS c
+WHERE to_regclass(c ->> 'table') IS NOT NULL;
+
+-- violations: duplicate_current_season
+-- One current season per tenant (OPEN-13): every live current season of a
+-- tenant that has more than one. The owner decides which stays current.
+SELECT 'seasons' AS table_name, s.id AS row_id, s.tenant_id AS tenant_id,
+       'seasons row is one of several current seasons of its tenant' AS reason
+FROM seasons s
+WHERE s.is_current AND s.deleted_at IS NULL
+  AND (SELECT count(*) FROM seasons o
+       WHERE o.tenant_id = s.tenant_id AND o.is_current AND o.deleted_at IS NULL) > 1;
+
+-- violations: duplicate_season_name
+-- Live seasons of one tenant sharing a name (DB-55); the name is not reported.
+SELECT 'seasons' AS table_name, s.id AS row_id, s.tenant_id AS tenant_id,
+       'seasons row shares its name with another live season of its tenant' AS reason
+FROM seasons s
+WHERE s.deleted_at IS NULL
+  AND (SELECT count(*) FROM seasons o
+       WHERE o.tenant_id = s.tenant_id AND o.name = s.name AND o.deleted_at IS NULL) > 1;
+
+-- violations: duplicate_featured_media
+-- One featured image per player among live rows: every featured image of a
+-- player that has more than one.
+SELECT 'player_media' AS table_name, m.id AS row_id, m.tenant_id AS tenant_id,
+       'player_media row is one of several featured images of its player' AS reason
+FROM player_media m
+WHERE m.is_featured AND m.deleted_at IS NULL
+  AND (SELECT count(*) FROM player_media o
+       WHERE o.tenant_id = m.tenant_id AND o.player_id = m.player_id
+         AND o.is_featured AND o.deleted_at IS NULL) > 1;
+
 -- unknowns: unverifiable_reference
 SELECT 'notifications' AS table_name, 'reference_id' AS column_name, count(*) AS count,
        'notifications.reference_id names an entity by a free-text type: it cannot be checked' AS reason

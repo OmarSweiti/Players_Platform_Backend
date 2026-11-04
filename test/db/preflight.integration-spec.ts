@@ -16,6 +16,7 @@ import {
   type IsolatedSchema,
 } from '../harness/db';
 import { normalizeEmail } from '../../src/modules/users/domain/email';
+import { INTEGRITY_CHECKS } from '../../scripts/integrity-checks';
 import { asTenant } from '../harness/fixtures';
 
 // The preflight inspects a whole schema, so it gets schemas of its own: one
@@ -88,6 +89,24 @@ const TIMESTAMPS_BEFORE_0_4_8 = [
   "ALTER TABLE users ALTER COLUMN created_at TYPE TIMESTAMP(3) USING created_at AT TIME ZONE 'UTC'",
 ];
 
+// And none of the integrity constraints of 0.4.10, which refuse the very rows
+// the money, check and uniqueness rules must find.
+const CONSTRAINTS_BEFORE_0_4_10 = [
+  ...[...new Set(INTEGRITY_CHECKS.map((c) => c.table))].map(
+    (table) =>
+      `ALTER TABLE ${table} ` +
+      INTEGRITY_CHECKS.filter((c) => c.table === table)
+        .map((c) => `DROP CONSTRAINT ${c.name}`)
+        .join(', '),
+  ),
+  'DROP TRIGGER contracts_amounts_within_currency ON contracts',
+  'DROP TRIGGER enrollments_paid_amount_within_currency ON enrollments',
+  'DROP TRIGGER trainings_price_within_currency ON trainings',
+  'DROP INDEX seasons_tenant_id_current_key',
+  'DROP INDEX seasons_tenant_id_name_key',
+  'DROP INDEX player_media_tenant_id_player_id_featured_key',
+];
+
 const PERSONAL = {
   memberEmail: 'Layla.Haddad@agency-one.test',
   duplicateEmail: ' layla.haddad@agency-one.test',
@@ -115,6 +134,10 @@ interface Seeded {
   money: string[];
   deletedAudit: string;
   realAccount: string;
+  checks: Array<[table: string, rowId: string, reason: string]>;
+  currentSeasons: string[];
+  seasonNames: string[];
+  featured: string[];
 }
 
 async function seedCounterExamples(
@@ -351,6 +374,44 @@ async function seedCounterExamples(
         },
       });
 
+      // Two current seasons; two live seasons of one name; an archived one,
+      // current and of the same name, that counts for neither; tenant B's
+      // season of the same name as one of these.
+      const season = (name: string, isCurrent: boolean, deletedAt?: Date) =>
+        tx.season.create({
+          data: {
+            tenantId: a.id,
+            name,
+            startDate: day('2026-08-01'),
+            endDate: day('2027-05-31'),
+            isCurrent,
+            deletedAt,
+          },
+        });
+      const currentSeasons = [
+        await season('2025/26', true),
+        await season('2026/27', true),
+      ];
+      const namesakes = [
+        await season('2027/28', false),
+        await season('2027/28', false),
+      ];
+      await season('2027/28', true, new Date());
+
+      // Two featured images of one player, and an archived third.
+      const media = (deletedAt?: Date) =>
+        tx.playerMedia.create({
+          data: {
+            tenantId: a.id,
+            playerId: player.id,
+            fileUrl: 'objects/media',
+            isFeatured: true,
+            deletedAt,
+          },
+        });
+      const featured = [await media(), await media()];
+      await media(new Date());
+
       return {
         crossTenant: {
           contracts: contract.id,
@@ -369,22 +430,62 @@ async function seedCounterExamples(
         money: [contract.id, enrollment.id, programTwo.id, overPrecise.id],
         deletedAudit: deletedAudit.id,
         realAccount: realAccount.id,
+        currentSeasons: currentSeasons.map((s) => s.id),
+        seasonNames: namesakes.map((s) => s.id),
+        featured: featured.map((m) => m.id),
+        enrollment: enrollment.id,
       };
     },
     prisma,
   );
 
   // Money: NaN cannot be written through Prisma, a negative amount can. Written
-  // once the rows above are committed, as tenant A.
+  // once the rows above are committed, as tenant A; with a negative goal count
+  // and a domain in capitals.
   await sqlIn(schema, [
     ["SELECT set_config('app.tenant_id', $1, false)", [a.id]],
     [
       `UPDATE contracts SET signing_fee = 'NaN' WHERE id = $1`,
       [seeded.crossTenant.contracts],
     ],
+    [
+      'UPDATE performance_records SET goals = -1 WHERE id = $1',
+      [seeded.crossTenant.performance_records],
+    ],
+    ["UPDATE tenants SET domain = 'Agency-One.test' WHERE id = $1", [a.id]],
   ]);
 
-  return { a, b, ...seeded };
+  const { enrollment, ...rest } = seeded;
+  return {
+    a,
+    b,
+    ...rest,
+    // What the CHECKs of 0.4.10 refuse, the money rule's rows among them; the
+    // contract has a salary but no period.
+    checks: [
+      [
+        'contracts',
+        rest.crossTenant.contracts,
+        'contracts_salary_period_check does not hold',
+      ],
+      [
+        'contracts',
+        rest.crossTenant.contracts,
+        'contracts_signing_fee_check does not hold',
+      ],
+      [
+        'enrollments',
+        enrollment,
+        'enrollments_paid_amount_check does not hold',
+      ],
+      [
+        'performance_records',
+        rest.crossTenant.performance_records,
+        'performance_records_goals_check does not hold',
+      ],
+      ['tenants', a.id, 'tenants_domain_check does not hold'],
+    ],
+  };
 }
 
 const ofRule = (report: PreflightReport, rule: string): Violation[] =>
@@ -407,6 +508,7 @@ describe('the preflight report', () => {
         ...KEYS_BEFORE_0_4_4,
         ...EMAILS_BEFORE_0_4_9,
         ...TIMESTAMPS_BEFORE_0_4_8,
+        ...CONSTRAINTS_BEFORE_0_4_10,
       ].map((statement) => [statement]),
       dirty.migrationUrl,
     );
@@ -473,6 +575,31 @@ describe('the preflight report', () => {
     expect(ofRule(report, 'real_account').map((v) => v.rowId)).toEqual([
       seeded.realAccount,
     ]);
+    expect(
+      ofRule(report, 'check_violation')
+        .map((v) => [v.table, v.rowId, v.reason])
+        .sort(),
+    ).toEqual([...seeded.checks].sort());
+    // The tenants row is its own tenant.
+    expect(
+      ofRule(report, 'check_violation').find((v) => v.table === 'tenants')
+        ?.tenantId,
+    ).toBe(seeded.a.id);
+    expect(
+      ofRule(report, 'duplicate_current_season')
+        .map((v) => v.rowId)
+        .sort(),
+    ).toEqual([...seeded.currentSeasons].sort());
+    expect(
+      ofRule(report, 'duplicate_season_name')
+        .map((v) => v.rowId)
+        .sort(),
+    ).toEqual([...seeded.seasonNames].sort());
+    expect(
+      ofRule(report, 'duplicate_featured_media')
+        .map((v) => v.rowId)
+        .sort(),
+    ).toEqual([...seeded.featured].sort());
     expect(report.counts).toEqual({
       cross_tenant_edge: 6,
       same_parent: 2,
@@ -481,6 +608,10 @@ describe('the preflight report', () => {
       money_out_of_range: 4,
       deleted_audit_row: 1,
       real_account: 1,
+      check_violation: 5,
+      duplicate_current_season: 2,
+      duplicate_season_name: 2,
+      duplicate_featured_media: 2,
     });
 
     const unknown = (rule: string, table: string, column: string) =>
