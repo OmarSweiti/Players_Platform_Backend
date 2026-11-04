@@ -36,6 +36,13 @@ datasource db {
 // leading columns of another. test/db/indexes.integration-spec.ts holds the
 // catalog to this.
 
+// The database refuses impossible values whatever writes them (0.4.10): CHECKs
+// on counts, measures, scores, money, date order, tenant keys, prose length
+// (the API's bound) and JSON shape and size, listed in
+// scripts/integrity-checks.ts; a trigger holding each amount to its currency's
+// minor units; and partial unique indexes among live rows, noted on their
+// models. test/db/constraints.integration-spec.ts holds the catalog to this.
+
 //////////////////////////
 // ENUMS
 //////////////////////////
@@ -354,6 +361,8 @@ enum MedicalRecordType {
 model Tenant {
   id          String  @id @default(uuid()) @db.Uuid
   name        String  @db.VarChar(255)
+  /// Lower case, as a Host header carries them (CHECKs, hand-written SQL): the
+  /// slug a DNS label, the domain ASCII, in punycode for an Arabic name.
   slug        String  @unique @db.VarChar(100)
   domain      String? @unique @db.VarChar(255)
   logoUrl     String? @db.VarChar(500) @map("logo_url")
@@ -492,6 +501,8 @@ model Season {
   name        String   @db.VarChar(255)
   startDate   DateTime @map("start_date") @db.Date
   endDate     DateTime @map("end_date") @db.Date
+  /// One current season per tenant, and live seasons unique by name: partial
+  /// unique indexes over rows not archived (hand-written SQL; OPEN-13).
   isCurrent   Boolean  @default(false) @map("is_current")
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -615,6 +626,8 @@ model PlayerMedia {
   fileSize    Int? @map("file_size")
   mimeType    String?  @db.VarChar(100) @map("mime_type")
   caption     String?  @db.VarChar(255)
+  /// One featured image per player among live rows: a partial unique index
+  /// (hand-written SQL).
   isFeatured  Boolean  @default(false) @map("is_featured")
 
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
@@ -687,7 +700,9 @@ model Contract {
   endDate           DateTime @map("end_date") @db.Date
 
   /// Gross salary per pay period, exact: NUMERIC(19,4) holds every currency's
-  /// decimals, and code handles it as a Money (src/common/money; 0.4.7).
+  /// decimals, and code handles it as a Money (src/common/money; 0.4.7). A
+  /// trigger (hand-written SQL) holds it and the signing fee to the currency's
+  /// minor units; a salary needs its period.
   salaryAmount      Decimal?       @db.Decimal(19, 4) @map("salary_amount")
   /// An ISO 4217 code of currency_definitions; JOD, the tenant's default (OPEN-09).
   salaryCurrency    String         @default("JOD") @db.Char(3) @map("salary_currency")
@@ -1078,7 +1093,8 @@ model LegalNote {
   createdById   String      @db.Uuid @map("created_by_id")
 
   note          String      @db.Text
-  isInternal    Boolean     @default(false) @map("is_internal")
+  /// Internal unless its author says otherwise (0.4.10; DB-18).
+  isInternal    Boolean     @default(true) @map("is_internal")
 
   tenant        Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   ticket        LegalTicket @relation(fields: [ticketId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
@@ -1303,7 +1319,8 @@ model TreatmentSession {
 /// Every ISO 4217 code an amount may carry, with its official decimals (0.4.7;
 /// ADR-0006). src/common/money/iso-4217.ts is the list and the money migration
 /// seeds it; the runtime role only reads it. CHECKs (hand-written SQL): a code
-/// is three capital letters, an exponent is 0 to 4.
+/// is three capital letters, an exponent is 0 to 4. A trigger refuses an
+/// exponent change while any amount is in the currency (0.4.10).
 model CurrencyDefinition {
   code              String       @id @db.Char(3)
   minorUnitExponent Int          @db.SmallInt @map("minor_unit_exponent")

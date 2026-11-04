@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Client } from 'pg';
 import { databaseConnectionOf } from '../src/infrastructure/prisma/database-url';
+import { INTEGRITY_CHECKS } from './integrity-checks';
 
 export interface Violation {
   rule: string;
@@ -163,6 +164,11 @@ export async function runPreflight(
     await client.query(
       "SELECT set_config('sadara.currency_exponents', $1, true)",
       [JSON.stringify(await currencyExponents(client))],
+    );
+    // The CHECKs of 0.4.10, for check_violation: the migration's own list.
+    await client.query(
+      "SELECT set_config('sadara.integrity_checks', $1, true)",
+      [JSON.stringify(INTEGRITY_CHECKS)],
     );
 
     const report: PreflightReport = {
