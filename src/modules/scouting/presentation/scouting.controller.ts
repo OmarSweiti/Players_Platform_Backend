@@ -16,7 +16,10 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import type { User } from '@prisma/client';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
+import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
 import { CreateScoutingReportDto } from './dto/create-scouting-report.dto';
@@ -38,8 +41,8 @@ import { ApproveScoutingReportUseCase } from '../application/use-cases/approve-s
 import { RejectScoutingReportUseCase } from '../application/use-cases/reject-scouting-report.usecase';
 import { ManageWatchlistUseCase } from '../application/use-cases/manage-watchlist.usecase';
 import { ManageAssignmentUseCase } from '../application/use-cases/manage-assignment.usecase';
-import { ScoutingReportRepository } from '../infrastructure/repositories/scouting-report.repository';
-import { NotFoundError } from '../../../common/errors/domain-error';
+import { ReadScoutingReportsUseCase } from '../application/use-cases/read-scouting-reports.usecase';
+import { ArchiveScoutingReportUseCase } from '../application/use-cases/archive-scouting-report.usecase';
 
 @ApiTags('Scouting')
 @ApiBearerAuth()
@@ -53,7 +56,8 @@ export class ScoutingController {
     private readonly rejectReportUseCase: RejectScoutingReportUseCase,
     private readonly manageWatchlistUseCase: ManageWatchlistUseCase,
     private readonly manageAssignmentUseCase: ManageAssignmentUseCase,
-    private readonly scoutingReportRepo: ScoutingReportRepository,
+    private readonly readReports: ReadScoutingReportsUseCase,
+    private readonly archiveReport: ArchiveScoutingReportUseCase,
   ) {}
 
   // ==================== SCOUTING REPORTS ====================
@@ -66,14 +70,10 @@ export class ScoutingController {
     description: 'Report created successfully',
   })
   async createReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Body({ schema: CreateScoutingReportDto }) dto: CreateScoutingReportDto,
   ) {
-    const report = await this.createReportUseCase.execute({
-      ...dto,
-      scoutId: user.id,
-      tenantId: user.tenantId,
-    });
+    const report = await this.createReportUseCase.execute(ctx, dto);
     return report;
   }
 
@@ -85,7 +85,7 @@ export class ScoutingController {
     description: 'List of scouting reports',
   })
   async getReports(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Query({ schema: QueryScoutingReportsDto }) query: QueryScoutingReportsDto,
   ) {
     const { page, limit } = query;
@@ -100,13 +100,7 @@ export class ScoutingController {
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
     };
 
-    const { reports } = await this.scoutingReportRepo.findMany(
-      user.tenantId,
-      filters,
-      { skip, take: limit },
-    );
-
-    return reports;
+    return this.readReports.list(ctx, filters, { skip, take: limit });
   }
 
   @Get('reports/:id')
@@ -117,16 +111,10 @@ export class ScoutingController {
     description: 'Scouting report details',
   })
   async getReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    const report = await this.scoutingReportRepo.findById(id, user.tenantId);
-
-    if (!report) {
-      throw new NotFoundError('Scouting report not found');
-    }
-
-    return report;
+    return this.readReports.get(ctx, id);
   }
 
   @Patch('reports/:id')
@@ -137,19 +125,14 @@ export class ScoutingController {
     description: 'Report updated successfully',
   })
   async updateReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: UpdateScoutingReportDto }) dto: UpdateScoutingReportDto,
   ) {
-    const report = await this.updateReportUseCase.execute(
-      id,
-      user.tenantId,
-      {
-        ...dto,
-        status: dto.status,
-      },
-      user.id,
-    );
+    const report = await this.updateReportUseCase.execute(ctx, id, {
+      ...dto,
+      status: dto.status,
+    });
 
     return report;
   }
@@ -163,14 +146,10 @@ export class ScoutingController {
     description: 'Report submitted successfully',
   })
   async submitReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    const report = await this.submitReportUseCase.execute(
-      id,
-      user.tenantId,
-      user.id,
-    );
+    const report = await this.submitReportUseCase.execute(ctx, id);
 
     return report;
   }
@@ -184,14 +163,14 @@ export class ScoutingController {
     description: 'Report approved successfully',
   })
   async approveReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: ApproveScoutingReportDto })
     { recommendation }: ApproveScoutingReportDto,
   ) {
     const report = await this.approveReportUseCase.execute(
+      ctx,
       id,
-      user.tenantId,
       recommendation,
     );
 
@@ -207,10 +186,10 @@ export class ScoutingController {
     description: 'Report rejected successfully',
   })
   async rejectReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    const report = await this.rejectReportUseCase.execute(id, user.tenantId);
+    const report = await this.rejectReportUseCase.execute(ctx, id);
 
     return report;
   }
@@ -223,23 +202,20 @@ export class ScoutingController {
     description: 'Report deleted successfully',
   })
   async deleteReport(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    await this.scoutingReportRepo.softDelete(id, user.tenantId);
+    await this.archiveReport.execute(ctx, id);
   }
 
   @Get('reports/stats/my-stats')
   @Permissions(PERMISSIONS.REPORT_VIEW)
   @ApiOperation({ summary: 'Get my scouting report statistics' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Scout statistics' })
-  async getMyStats(@CurrentUser() user: any): Promise<unknown> {
-    const stats = await this.scoutingReportRepo.getStatsByScout(
-      user.id,
-      user.tenantId,
-    );
-
-    return stats;
+  async getMyStats(
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+  ): Promise<unknown> {
+    return this.readReports.myStats(ctx);
   }
 
   // ==================== WATCHLIST ====================
@@ -252,12 +228,11 @@ export class ScoutingController {
     description: 'Player added to watchlist',
   })
   async addToWatchlist(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Body({ schema: AddToWatchlistDto }) dto: AddToWatchlistDto,
   ) {
     const entry = await this.manageWatchlistUseCase.addToWatchlist(
-      user.id,
-      user.tenantId,
+      ctx,
       dto.playerId,
       dto.priority,
       dto.notes,
@@ -273,11 +248,8 @@ export class ScoutingController {
     status: HttpStatus.OK,
     description: 'List of watched players',
   })
-  async getWatchlist(@CurrentUser() user: any) {
-    const watchlist = await this.manageWatchlistUseCase.getWatchlist(
-      user.id,
-      user.tenantId,
-    );
+  async getWatchlist(@CurrentTenantContext() ctx: AuthorizedTenantContext) {
+    const watchlist = await this.manageWatchlistUseCase.getWatchlist(ctx);
 
     return watchlist;
   }
@@ -290,14 +262,10 @@ export class ScoutingController {
     description: 'Player removed from watchlist',
   })
   async removeFromWatchlist(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ) {
-    await this.manageWatchlistUseCase.removeFromWatchlist(
-      user.id,
-      user.tenantId,
-      playerId,
-    );
+    await this.manageWatchlistUseCase.removeFromWatchlist(ctx, playerId);
   }
 
   @Get('watchlist/check/:playerId')
@@ -305,12 +273,11 @@ export class ScoutingController {
   @ApiOperation({ summary: 'Check if player is in watchlist' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Watchlist check result' })
   async checkWatchlist(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ) {
     const isInWatchlist = await this.manageWatchlistUseCase.isInWatchlist(
-      user.id,
-      user.tenantId,
+      ctx,
       playerId,
     );
 
@@ -327,15 +294,16 @@ export class ScoutingController {
     description: 'Assignment created successfully',
   })
   async createAssignment(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Body({ schema: CreateAssignmentDto }) dto: CreateAssignmentDto,
   ) {
-    const assignment = await this.manageAssignmentUseCase.createAssignment({
-      ...dto,
-      assignedById: user.id,
-      tenantId: user.tenantId,
-      dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
-    });
+    const assignment = await this.manageAssignmentUseCase.createAssignment(
+      ctx,
+      {
+        ...dto,
+        dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
+      },
+    );
 
     return assignment;
   }
@@ -345,15 +313,11 @@ export class ScoutingController {
   @ApiOperation({ summary: 'Get my assignments (for scouts)' })
   @ApiResponse({ status: HttpStatus.OK, description: 'List of assignments' })
   async getMyAssignments(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Query({ schema: AssignmentsQuery }) { status }: AssignmentsQuery,
   ) {
     const assignments =
-      await this.manageAssignmentUseCase.getAssignmentsByScout(
-        user.id,
-        user.tenantId,
-        status,
-      );
+      await this.manageAssignmentUseCase.getAssignmentsByScout(ctx, status);
 
     return assignments;
   }
@@ -363,15 +327,11 @@ export class ScoutingController {
   @ApiOperation({ summary: 'Get assignments created by director' })
   @ApiResponse({ status: HttpStatus.OK, description: 'List of assignments' })
   async getDirectorAssignments(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Query({ schema: AssignmentsQuery }) { status }: AssignmentsQuery,
   ) {
     const assignments =
-      await this.manageAssignmentUseCase.getAssignmentsByDirector(
-        user.id,
-        user.tenantId,
-        status,
-      );
+      await this.manageAssignmentUseCase.getAssignmentsByDirector(ctx, status);
 
     return assignments;
   }
@@ -384,19 +344,18 @@ export class ScoutingController {
     description: 'Assignment updated successfully',
   })
   async updateAssignment(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: UpdateAssignmentDto }) dto: UpdateAssignmentDto,
   ) {
     const assignment = await this.manageAssignmentUseCase.updateAssignment(
+      ctx,
       id,
-      user.tenantId,
       {
         ...dto,
         dueDate: dto.dueDate ? new Date(dto.dueDate) : undefined,
         status: dto.status || undefined,
       },
-      user.id,
     );
 
     return assignment;
@@ -410,16 +369,16 @@ export class ScoutingController {
     description: 'Status updated successfully',
   })
   async updateAssignmentStatus(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @CurrentUser() member: User,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: AssignmentStatusDto }) { status }: AssignmentStatusDto,
   ) {
     const assignment = await this.manageAssignmentUseCase.updateStatus(
+      ctx,
       id,
-      user.tenantId,
       status,
-      user.id,
-      user.role,
+      member.role,
     );
 
     return assignment;
@@ -433,13 +392,9 @@ export class ScoutingController {
     description: 'Assignment deleted successfully',
   })
   async deleteAssignment(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    await this.manageAssignmentUseCase.deleteAssignment(
-      id,
-      user.tenantId,
-      user.id,
-    );
+    await this.manageAssignmentUseCase.deleteAssignment(ctx, id);
   }
 }

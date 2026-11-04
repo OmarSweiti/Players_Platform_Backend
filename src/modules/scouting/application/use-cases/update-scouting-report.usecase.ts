@@ -1,44 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import {
-  ScoutingReportRepository,
+  ScoutingReports,
   UpdateScoutingReportInput,
-} from '../../infrastructure/repositories/scouting-report.repository';
+} from '../ports/scouting-reports.port';
 import {
   ForbiddenError,
   InvalidTransitionError,
   NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
+import {
+  actingMemberOf,
+  type AuthorizedTenantContext,
+} from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 
 @Injectable()
 export class UpdateScoutingReportUseCase {
-  constructor(private readonly scoutingReportRepo: ScoutingReportRepository) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly scoutingReportRepo: ScoutingReports,
+  ) {}
 
   async execute(
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     input: UpdateScoutingReportInput,
-    scoutId: string,
   ) {
-    // Verify ownership - only the scout who created the report can update it (unless DRAFT status)
-    const report = await this.scoutingReportRepo.findById(id, tenantId);
-
-    if (!report) {
-      throw new NotFoundError('Scouting report not found');
-    }
-
-    if (report.scoutId !== scoutId && report.status !== 'DRAFT') {
-      throw new ForbiddenError(
-        'Only the assigned scout can update this report',
-      );
-    }
-
-    if (report.status !== 'DRAFT') {
-      throw new InvalidTransitionError(
-        'Cannot update a report that has already been submitted',
-      );
-    }
-
     // Validate evaluation scores if provided
     if (
       input.technicalScore &&
@@ -92,6 +80,28 @@ export class UpdateScoutingReportUseCase {
       input.overallRating = average;
     }
 
-    return await this.scoutingReportRepo.update(id, tenantId, input);
+    const scoutId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      // Verify ownership - only the scout who created the report can update it (unless DRAFT status)
+      const report = await this.scoutingReportRepo.findById(tx, ctx, id);
+
+      if (!report) {
+        throw new NotFoundError('Scouting report not found');
+      }
+
+      if (report.scoutId !== scoutId && report.status !== 'DRAFT') {
+        throw new ForbiddenError(
+          'Only the assigned scout can update this report',
+        );
+      }
+
+      if (report.status !== 'DRAFT') {
+        throw new InvalidTransitionError(
+          'Cannot update a report that has already been submitted',
+        );
+      }
+
+      return this.scoutingReportRepo.update(tx, ctx, id, input);
+    });
   }
 }

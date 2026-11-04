@@ -1,36 +1,39 @@
 import { Injectable } from '@nestjs/common';
-import { ScoutingReportRepository } from '../../infrastructure/repositories/scouting-report.repository';
+import { ScoutingReports } from '../ports/scouting-reports.port';
 import { RecommendationLevel } from '@prisma/client';
 import {
   InvalidTransitionError,
   NotFoundError,
 } from '../../../../common/errors/domain-error';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 
 @Injectable()
 export class ApproveScoutingReportUseCase {
-  constructor(private readonly scoutingReportRepo: ScoutingReportRepository) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly scoutingReportRepo: ScoutingReports,
+  ) {}
 
   async execute(
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     recommendation: RecommendationLevel,
   ) {
-    const report = await this.scoutingReportRepo.findById(id, tenantId);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      const report = await this.scoutingReportRepo.findById(tx, ctx, id);
 
-    if (!report) {
-      throw new NotFoundError('Scouting report not found');
-    }
+      if (!report) {
+        throw new NotFoundError('Scouting report not found');
+      }
 
-    if (report.status !== 'SUBMITTED') {
-      throw new InvalidTransitionError(
-        'Only SUBMITTED reports can be approved',
-      );
-    }
+      if (report.status !== 'SUBMITTED') {
+        throw new InvalidTransitionError(
+          'Only SUBMITTED reports can be approved',
+        );
+      }
 
-    return await this.scoutingReportRepo.approveReport(
-      id,
-      tenantId,
-      recommendation,
-    );
+      return this.scoutingReportRepo.approveReport(tx, ctx, id, recommendation);
+    });
   }
 }

@@ -1,23 +1,39 @@
 import { Injectable } from '@nestjs/common';
 import {
-  AssignmentRepository,
-  CreateScoutingAssignmentInput,
-  UpdateScoutingAssignmentInput,
-} from '../../infrastructure/repositories/assignment.repository';
-import {
   ForbiddenError,
   NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
+import {
+  actingMemberOf,
+  type AuthorizedTenantContext,
+} from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import {
+  Assignments,
+  type CreateScoutingAssignmentInput,
+  type UpdateScoutingAssignmentInput,
+} from '../ports/assignments.port';
 
+/**
+ * Scouting assignments in the context's tenant (0.4.12): the acting member
+ * gives them, as the director, or works them, as the scout. `memberRole` is
+ * the signed-in member's, from the session.
+ */
 @Injectable()
 export class ManageAssignmentUseCase {
-  constructor(private readonly assignmentRepo: AssignmentRepository) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly assignmentRepo: Assignments,
+  ) {}
 
   /**
-   * Create a new scouting assignment
+   * Create a new scouting assignment, given by the acting member
    */
-  async createAssignment(input: CreateScoutingAssignmentInput) {
+  async createAssignment(
+    ctx: AuthorizedTenantContext,
+    input: Omit<CreateScoutingAssignmentInput, 'assignedById'>,
+  ) {
     // Validate age range
     if (input.minAge && input.maxAge && input.minAge > input.maxAge) {
       throw new ValidationFailedError(
@@ -46,31 +62,20 @@ export class ManageAssignmentUseCase {
       ]);
     }
 
-    return await this.assignmentRepo.create(input);
+    const assignedById = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.assignmentRepo.create(tx, ctx, { ...input, assignedById }),
+    );
   }
 
   /**
    * Update assignment details
    */
   async updateAssignment(
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     input: UpdateScoutingAssignmentInput,
-    directorId: string,
   ) {
-    const assignment = await this.assignmentRepo.findById(id, tenantId);
-
-    if (!assignment) {
-      throw new NotFoundError('Assignment not found');
-    }
-
-    // Only the creator (sporting director) can update
-    if (assignment.assignedById !== directorId) {
-      throw new ForbiddenError(
-        'Only the assigning director can update this assignment',
-      );
-    }
-
     // Validate age range if updating
     if (input.minAge && input.maxAge && input.minAge > input.maxAge) {
       throw new ValidationFailedError(
@@ -79,25 +84,33 @@ export class ManageAssignmentUseCase {
       );
     }
 
-    return await this.assignmentRepo.update(id, tenantId, input);
+    const directorId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      const assignment = await this.assignmentRepo.findById(tx, ctx, id);
+      if (!assignment) {
+        throw new NotFoundError('Assignment not found');
+      }
+
+      // Only the creator (sporting director) can update
+      if (assignment.assignedById !== directorId) {
+        throw new ForbiddenError(
+          'Only the assigning director can update this assignment',
+        );
+      }
+
+      return this.assignmentRepo.update(tx, ctx, id, input);
+    });
   }
 
   /**
    * Update assignment status
    */
   async updateStatus(
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     status: string,
-    userId: string,
-    userRole: string,
+    memberRole: string,
   ) {
-    const assignment = await this.assignmentRepo.findById(id, tenantId);
-
-    if (!assignment) {
-      throw new NotFoundError('Assignment not found');
-    }
-
     // Validate status transition
     const validStatuses = ['OPEN', 'IN_PROGRESS', 'COMPLETED'];
     if (!validStatuses.includes(status)) {
@@ -107,75 +120,71 @@ export class ManageAssignmentUseCase {
       );
     }
 
-    // Scout can only update their own assignments to IN_PROGRESS or COMPLETED
-    if (userRole === 'SCOUT' && assignment.assignedToId !== userId) {
-      throw new ForbiddenError('You can only update your own assignments');
-    }
+    const memberId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      const assignment = await this.assignmentRepo.findById(tx, ctx, id);
+      if (!assignment) {
+        throw new NotFoundError('Assignment not found');
+      }
 
-    // Sporting Director can update any assignment
-    if (userRole !== 'SPORTING_DIRECTOR' && userRole !== 'SCOUT') {
-      throw new ForbiddenError(
-        'Insufficient permissions to update assignment status',
-      );
-    }
+      // Scout can only update their own assignments to IN_PROGRESS or COMPLETED
+      if (memberRole === 'SCOUT' && assignment.assignedToId !== memberId) {
+        throw new ForbiddenError('You can only update your own assignments');
+      }
 
-    return await this.assignmentRepo.updateStatus(id, tenantId, status);
+      // Sporting Director can update any assignment
+      if (memberRole !== 'SPORTING_DIRECTOR' && memberRole !== 'SCOUT') {
+        throw new ForbiddenError(
+          'Insufficient permissions to update assignment status',
+        );
+      }
+
+      return this.assignmentRepo.updateStatus(tx, ctx, id, status);
+    });
   }
 
   /**
-   * Get assignments for a scout
+   * The assignments given to the acting member, as a scout
    */
-  async getAssignmentsByScout(
-    scoutId: string,
-    tenantId: string,
-    status?: string,
-  ) {
-    return await this.assignmentRepo.getAssignmentsByScout(
-      scoutId,
-      tenantId,
-      status,
+  async getAssignmentsByScout(ctx: AuthorizedTenantContext, status?: string) {
+    const scoutId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.assignmentRepo.getAssignmentsByScout(tx, ctx, scoutId, status),
     );
   }
 
   /**
-   * Get assignments created by a director
+   * The assignments the acting member gave, as a director
    */
   async getAssignmentsByDirector(
-    directorId: string,
-    tenantId: string,
+    ctx: AuthorizedTenantContext,
     status?: string,
   ) {
-    return await this.assignmentRepo.getAssignmentsByDirector(
-      directorId,
-      tenantId,
-      status,
+    const directorId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.assignmentRepo.getAssignmentsByDirector(tx, ctx, directorId, status),
     );
-  }
-
-  /**
-   * Get open assignments count for a scout
-   */
-  async getOpenAssignmentsCount(scoutId: string, tenantId: string) {
-    return await this.assignmentRepo.getOpenAssignmentsCount(scoutId, tenantId);
   }
 
   /**
    * Delete assignment
    */
-  async deleteAssignment(id: string, tenantId: string, directorId: string) {
-    const assignment = await this.assignmentRepo.findById(id, tenantId);
+  async deleteAssignment(ctx: AuthorizedTenantContext, id: string) {
+    const directorId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      const assignment = await this.assignmentRepo.findById(tx, ctx, id);
+      if (!assignment) {
+        throw new NotFoundError('Assignment not found');
+      }
 
-    if (!assignment) {
-      throw new NotFoundError('Assignment not found');
-    }
+      // Only the creator can delete
+      if (assignment.assignedById !== directorId) {
+        throw new ForbiddenError(
+          'Only the assigning director can delete this assignment',
+        );
+      }
 
-    // Only the creator can delete
-    if (assignment.assignedById !== directorId) {
-      throw new ForbiddenError(
-        'Only the assigning director can delete this assignment',
-      );
-    }
-
-    return await this.assignmentRepo.delete(id, tenantId);
+      return this.assignmentRepo.delete(tx, ctx, id);
+    });
   }
 }

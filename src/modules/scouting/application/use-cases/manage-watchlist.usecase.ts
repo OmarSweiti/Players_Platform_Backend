@@ -1,17 +1,25 @@
 import { Injectable } from '@nestjs/common';
-import { WatchlistRepository } from '../../infrastructure/repositories/watchlist.repository';
 import { ValidationFailedError } from '../../../../common/errors/domain-error';
+import {
+  actingMemberOf,
+  type AuthorizedTenantContext,
+} from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { Watchlists } from '../ports/watchlists.port';
 
+/** The acting member's own watchlist, in the context's tenant (0.4.12). */
 @Injectable()
 export class ManageWatchlistUseCase {
-  constructor(private readonly watchlistRepo: WatchlistRepository) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly watchlistRepo: Watchlists,
+  ) {}
 
   /**
    * Add player to watchlist
    */
   async addToWatchlist(
-    userId: string,
-    tenantId: string,
+    ctx: AuthorizedTenantContext,
     playerId: string,
     priority?: string,
     notes?: string,
@@ -23,41 +31,46 @@ export class ManageWatchlistUseCase {
       ]);
     }
 
-    return await this.watchlistRepo.addToWatchlist(
-      userId,
-      tenantId,
-      playerId,
-      priority,
-      notes,
+    const memberId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.watchlistRepo.addToWatchlist(
+        tx,
+        ctx,
+        memberId,
+        playerId,
+        priority,
+        notes,
+      ),
     );
   }
 
   /**
    * Remove player from watchlist
    */
-  async removeFromWatchlist(
-    userId: string,
-    tenantId: string,
-    playerId: string,
-  ) {
-    return await this.watchlistRepo.removeFromWatchlist(
-      userId,
-      tenantId,
-      playerId,
+  async removeFromWatchlist(ctx: AuthorizedTenantContext, playerId: string) {
+    const memberId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.watchlistRepo.removeFromWatchlist(tx, ctx, memberId, playerId),
     );
   }
 
   /**
-   * Get user's watchlist
+   * Get the member's watchlist
    */
-  async getWatchlist(userId: string, tenantId: string) {
-    return await this.watchlistRepo.getUserWatchlist(userId, tenantId);
+  async getWatchlist(ctx: AuthorizedTenantContext) {
+    const memberId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.watchlistRepo.getUserWatchlist(tx, ctx, memberId),
+    );
   }
 
   /**
    * Check if player is in watchlist
    */
-  async isInWatchlist(userId: string, tenantId: string, playerId: string) {
-    return await this.watchlistRepo.isInWatchlist(userId, tenantId, playerId);
+  async isInWatchlist(ctx: AuthorizedTenantContext, playerId: string) {
+    const memberId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.watchlistRepo.isInWatchlist(tx, ctx, memberId, playerId),
+    );
   }
 }

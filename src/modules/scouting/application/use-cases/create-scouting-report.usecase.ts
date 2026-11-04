@@ -1,19 +1,32 @@
 import { Injectable } from '@nestjs/common';
 import {
-  ScoutingReportRepository,
+  ScoutingReports,
   CreateScoutingReportInput,
-} from '../../infrastructure/repositories/scouting-report.repository';
-import { WatchlistRepository } from '../../infrastructure/repositories/watchlist.repository';
+} from '../ports/scouting-reports.port';
+import { Watchlists } from '../ports/watchlists.port';
 import { ValidationFailedError } from '../../../../common/errors/domain-error';
+import {
+  actingMemberOf,
+  type AuthorizedTenantContext,
+} from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 
 @Injectable()
 export class CreateScoutingReportUseCase {
   constructor(
-    private readonly scoutingReportRepo: ScoutingReportRepository,
-    private readonly watchlistRepo: WatchlistRepository,
+    private readonly tenants: TenantTransactions,
+    private readonly scoutingReportRepo: ScoutingReports,
+    private readonly watchlistRepo: Watchlists,
   ) {}
 
-  async execute(input: CreateScoutingReportInput) {
+  /**
+   * The report is the context's tenant's, by the acting member as its scout;
+   * with its automatic watchlist entry, in one transaction.
+   */
+  async execute(
+    ctx: AuthorizedTenantContext,
+    input: Omit<CreateScoutingReportInput, 'scoutId'>,
+  ) {
     // Validate evaluation scores (1-10 range)
     if (
       input.technicalScore &&
@@ -67,25 +80,31 @@ export class CreateScoutingReportUseCase {
       input.overallRating = average;
     }
 
-    // Create the report
-    const report = await this.scoutingReportRepo.create(input);
+    const scoutId = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      const report = await this.scoutingReportRepo.create(tx, ctx, {
+        ...input,
+        scoutId,
+      });
 
-    // If recommendation is STRONG_SIGN or SIGN, automatically add to watchlist
-    if (
-      input.recommendation &&
-      (input.recommendation === 'STRONG_SIGN' ||
-        input.recommendation === 'SIGN') &&
-      input.playerId
-    ) {
-      await this.watchlistRepo.addToWatchlist(
-        input.scoutId,
-        input.tenantId,
-        input.playerId,
-        'HIGH',
-        `Auto-added from scouting report: ${report.id}`,
-      );
-    }
+      // If recommendation is STRONG_SIGN or SIGN, automatically add to watchlist
+      if (
+        input.recommendation &&
+        (input.recommendation === 'STRONG_SIGN' ||
+          input.recommendation === 'SIGN') &&
+        input.playerId
+      ) {
+        await this.watchlistRepo.addToWatchlist(
+          tx,
+          ctx,
+          scoutId,
+          input.playerId,
+          'HIGH',
+          `Auto-added from scouting report: ${report.id}`,
+        );
+      }
 
-    return report;
+      return report;
+    });
   }
 }
