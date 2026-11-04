@@ -11,8 +11,13 @@ import {
   problemTypeOf,
 } from '../../src/common/errors/error-codes';
 import type { ProblemDetails } from '../../src/common/filters/problem-details.filter';
+import {
+  TenantTransactions,
+  type TenantTx,
+} from '../../src/common/tenancy/tenant-transaction';
 import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { bootApp, type BootedApp } from '../harness/app';
+import { testContext } from '../harness/fixtures';
 import { LogCapture } from '../harness/log-capture';
 
 // A random value that must never come back in an error or reach a log.
@@ -27,7 +32,15 @@ const NewMember = z.strictObject({
 // Test-only routes, served through the real pipeline (test/harness/app.ts).
 @Controller('probe/errors')
 class ErrorsProbeController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly tenants: TenantTransactions,
+  ) {}
+
+  /** Writes as `tenantId`: row-level security (0.4.5) refuses a write with no tenant. */
+  private as<T>(tenantId: string, work: (tx: TenantTx) => Promise<T>) {
+    return this.tenants.withTenantTransaction(testContext(tenantId), work);
+  }
 
   @Public()
   @Post('members')
@@ -58,21 +71,27 @@ class ErrorsProbeController {
   @Public()
   @Post('duplicate')
   async createTwice() {
+    // Two tenants, each writing its own row, with one slug between them.
     const slug = `probe-${randomBytes(4).toString('hex')}`;
-    await this.prisma.tenant.create({ data: { name: 'Probe agency', slug } });
-    return this.prisma.tenant.create({ data: { name: 'Probe agency', slug } });
+    const agency = (id: string) =>
+      this.as(id, (tx) =>
+        tx.tenant.create({ data: { id, name: 'Probe agency', slug } }),
+      );
+    await agency(randomUUID());
+    return agency(randomUUID());
   }
 
   @Public()
   @Post('orphan')
   createOrphan() {
-    return this.prisma.user.create({
-      data: {
-        tenantId: randomUUID(),
-        email: 'orphan@agency.test',
-        role: 'COACH',
-      },
-    });
+    // A member of a tenant that does not exist: the policy lets the row
+    // through, and the foreign key refuses it.
+    const tenantId = randomUUID();
+    return this.as(tenantId, (tx) =>
+      tx.user.create({
+        data: { tenantId, email: 'orphan@agency.test', role: 'COACH' },
+      }),
+    );
   }
 }
 

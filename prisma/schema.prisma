@@ -19,6 +19,16 @@ datasource db {
 // every relation is onUpdate: Restrict (0.4.4).
 // test/db/foreign-keys.integration-spec.ts holds the catalog to this.
 
+// Every model is classified tenant-owned or global in
+// src/infrastructure/prisma/model-classification.ts (0.4.5). A tenant-owned
+// table has ENABLE and FORCE ROW LEVEL SECURITY, the runtime role's tenant
+// policy on app.tenant_id, the owner's read-only policy, and a trigger that
+// refuses any change of tenant_id; tenants is held the same way by its id and
+// read before sign-in through the tenant_directory view. Reference data is
+// read-only to the runtime role. Prisma's drift check sees none of this:
+// scripts/generate-rls.ts writes it for a new table, and
+// test/db/rls.integration-spec.ts holds the catalog to it.
+
 //////////////////////////
 // ENUMS
 //////////////////////////

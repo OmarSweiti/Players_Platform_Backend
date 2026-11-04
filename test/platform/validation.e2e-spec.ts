@@ -16,7 +16,7 @@ import { PermissionService } from '../../src/modules/users/application/services/
 import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { controllersOf, routesOf, withParams } from '../harness/routes';
-import { TEST_MEMBER_HEADER } from '../harness/session';
+import { signedInAs } from '../harness/session';
 
 // Both quarantined modules switched on before AppModule loads: their routes
 // are the ones that take bodies, queries and path ids today.
@@ -67,7 +67,7 @@ describe('strict validation, one mechanism', () => {
     booted = await bootApp({ testSessions: true });
     const tenant = await createTenant();
     const admin = await createMember(tenant, 'SUPER_ADMIN');
-    member = { [TEST_MEMBER_HEADER]: admin.id };
+    member = signedInAs(admin);
     // Every permission, so that only validation can refuse.
     vi.spyOn(PermissionService.prototype, 'hasPermission').mockResolvedValue(
       true,

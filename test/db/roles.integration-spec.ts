@@ -1,7 +1,7 @@
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
-import { createTenant, runPrisma } from '../harness/fixtures';
+import { asTenant, createTenant } from '../harness/fixtures';
 
 // The runtime role (0.4.2; scripts/database-roles.sql): what the API, the
 // worker and these tests connect as. Every assertion runs as that role, on a
@@ -72,12 +72,15 @@ describe('the runtime role', () => {
   });
 
   it('the_runtime_role_cannot_run_ddl', async () => {
-    // Data is the runtime role's: it writes and reads two tenants' rows.
+    // Data is the runtime role's: it writes and reads two tenants' rows, each
+    // as its own tenant (row-level security, 0.4.5).
     const tenants = [await createTenant(), await createTenant()];
-    const seen = await runPrisma().tenant.count({
-      where: { id: { in: tenants.map(({ id }) => id) } },
-    });
-    expect(seen).toBe(2);
+    const seen = await Promise.all(
+      tenants.map(({ id }) =>
+        asTenant(id, (tx) => tx.tenant.count({ where: { id } })),
+      ),
+    );
+    expect(seen).toEqual([1, 1]);
 
     const refused = {
       'CREATE TABLE probe_ddl (id int)': INSUFFICIENT_PRIVILEGE,

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Controller, Get } from '@nestjs/common';
+import type { User } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Public } from '../../src/common/decorators/public.decorator';
 import {
@@ -13,7 +14,7 @@ import {
 import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { controllersOf } from '../harness/routes';
-import { TEST_MEMBER_HEADER } from '../harness/session';
+import { signedInAs } from '../harness/session';
 
 // Test-only routes, one per category; the undecorated one is `default`.
 @Public()
@@ -205,9 +206,7 @@ describe('rate limits by category, shared through Valkey', () => {
       createMember(tenant, 'COACH'),
       createMember(tenant, 'COACH'),
     ]);
-    const as = (member: { id: string }) => () => ({
-      [TEST_MEMBER_HEADER]: member.id,
-    });
+    const as = (member: User) => () => signedInAs(member);
 
     // Two members on one network: one's exports leave the other's whole.
     const members = '/api/v1/probe/members';

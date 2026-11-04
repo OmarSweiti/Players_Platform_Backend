@@ -109,11 +109,11 @@ contract:
 # CI's required `test` check, except the migration replay (that is `just migrations`)
 check: prisma lint build typecheck boundaries test contract
 
-# Read-only integrity report on DATABASE_URL (or .env): exits 1 on any violation — run before every constraint or data migration
+# Read-only integrity report, as the migrator (MIGRATION_DATABASE_URL, or .env): exits 1 on any violation — run before every constraint or data migration
 preflight:
     #!/usr/bin/env bash
     set -euo pipefail
-    if [ -z "${DATABASE_URL:-}" ] && [ -f .env ]; then set -a; source ./.env; set +a; fi
+    if [ -z "${MIGRATION_DATABASE_URL:-}" ] && [ -f .env ]; then set -a; source ./.env; set +a; fi
     npx --no-install ts-node --transpile-only scripts/preflight.ts
 
 # Apply the migrations to your development database, as the migrator (MIGRATION_DATABASE_URL in .env)

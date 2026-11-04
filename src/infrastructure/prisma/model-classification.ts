@@ -1,0 +1,98 @@
+import { Prisma } from '@prisma/client';
+
+/**
+ * What the runtime role may do with a global table, chosen table by table.
+ *
+ * - `own-tenant-row`: the tenants table. Row-level security shows and accepts
+ *   only the row of the tenant in `app.tenant_id`; host resolution and job
+ *   discovery read the narrow `tenant_directory` view instead.
+ * - `read-only`: reference data the migrations write (permissions, the default
+ *   role matrix). The runtime role may read it and change nothing.
+ */
+export type GlobalAccess = 'own-tenant-row' | 'read-only';
+
+export type ModelClass =
+  /**
+   * One tenant's rows, by `tenant_id`: forced row-level security with the
+   * tenant policy, and a `tenant_id` that never changes.
+   */
+  | { readonly kind: 'tenant-owned' }
+  /** No tenant's alone: no `tenant_id`, and the runtime role's access is `runtime`. */
+  | { readonly kind: 'global'; readonly runtime: GlobalAccess };
+
+const TENANT_OWNED = { kind: 'tenant-owned' } as const;
+
+/**
+ * Every Prisma model, classified once (0.4.5; ADR-0004). The type refuses an
+ * unclassified model at compile time; test/db/rls.integration-spec.ts refuses
+ * one at run time, a model whose `tenantId` disagrees with its class, and any
+ * table with a `tenant_id` column that lacks its policy. A new model enters
+ * here in the migration that creates its table, and scripts/generate-rls.ts
+ * writes that table's policy, trigger and grants from this entry.
+ */
+export const MODEL_CLASSIFICATION: Readonly<
+  Record<Prisma.ModelName, ModelClass>
+> = {
+  Tenant: { kind: 'global', runtime: 'own-tenant-row' },
+  Permission: { kind: 'global', runtime: 'read-only' },
+  RolePermission: { kind: 'global', runtime: 'read-only' },
+
+  User: TENANT_OWNED,
+  Season: TENANT_OWNED,
+  Document: TENANT_OWNED,
+  Player: TENANT_OWNED,
+  PlayerMedia: TENANT_OWNED,
+  MedicalRecord: TENANT_OWNED,
+  Contract: TENANT_OWNED,
+  ContractVersion: TENANT_OWNED,
+  ContractApproval: TENANT_OWNED,
+  PerformanceRecord: TENANT_OWNED,
+  Rating: TENANT_OWNED,
+  Training: TENANT_OWNED,
+  TrainingSession: TENANT_OWNED,
+  Enrollment: TENANT_OWNED,
+  Attendance: TENANT_OWNED,
+  LegalTicket: TENANT_OWNED,
+  LegalNote: TENANT_OWNED,
+  Conversation: TENANT_OWNED,
+  ConversationMember: TENANT_OWNED,
+  ScoutingReport: TENANT_OWNED,
+  PlayerWatchlist: TENANT_OWNED,
+  ScoutingAssignment: TENANT_OWNED,
+  TreatmentSession: TENANT_OWNED,
+  Message: TENANT_OWNED,
+  Notification: TENANT_OWNED,
+  AuditLog: TENANT_OWNED,
+};
+
+/** A model as the database knows it: its table, and the column that names its tenant. */
+export interface ClassifiedTable {
+  model: Prisma.ModelName;
+  table: string;
+  class: ModelClass;
+  /** `tenant_id` on a tenant-owned table; `id` on the tenants table itself; null otherwise. */
+  tenantColumn: string | null;
+}
+
+/** Every classified model with its table, in the schema's order. */
+export function classifiedTables(): ClassifiedTable[] {
+  return Prisma.dmmf.datamodel.models.map((model) => {
+    const name = model.name as Prisma.ModelName;
+    const modelClass = MODEL_CLASSIFICATION[name];
+    if (!modelClass) {
+      throw new Error(`model ${model.name} is not in MODEL_CLASSIFICATION`);
+    }
+    const tenantColumn =
+      modelClass.kind === 'tenant-owned'
+        ? 'tenant_id'
+        : modelClass.runtime === 'own-tenant-row'
+          ? 'id'
+          : null;
+    return {
+      model: name,
+      table: model.dbName ?? model.name,
+      class: modelClass,
+      tenantColumn,
+    };
+  });
+}
