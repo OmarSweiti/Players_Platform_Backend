@@ -16,7 +16,7 @@ import { PermissionService } from '../../src/modules/users/application/services/
 import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { controllersOf, routesOf, withParams } from '../harness/routes';
-import { signedInAs } from '../harness/session';
+import { signedInAs, TEST_TENANT_HEADER } from '../harness/session';
 
 // Both quarantined modules switched on before AppModule loads: their routes
 // are the ones that take bodies, queries and path ids today.
@@ -208,9 +208,11 @@ describe('strict validation, one mechanism', () => {
       isConfidential: 'false',
     });
     expect(valid.status).toBe(200);
-    // Numbers and a boolean by the time the repository sees them.
+    // Numbers and a boolean by the time the repository sees them, on the
+    // tenant transaction, for the signed-in member's tenant (0.4.12).
     expect(findAll).toHaveBeenCalledWith(
-      expect.any(String),
+      expect.anything(),
+      expect.objectContaining({ tenantId: member[TEST_TENANT_HEADER] }),
       expect.objectContaining({ isConfidential: false }),
       { skip: 5, take: 5 },
     );

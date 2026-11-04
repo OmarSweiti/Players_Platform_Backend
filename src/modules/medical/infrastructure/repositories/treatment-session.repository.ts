@@ -1,253 +1,156 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
-import { TreatmentSession, TreatmentStatus } from '@prisma/client';
+import type { Prisma, TreatmentSession, TreatmentStatus } from '@prisma/client';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
+import type { TenantTx } from '../../../../common/tenancy/tenant-transaction';
+import {
+  TreatmentSessions,
+  type CreateTreatmentSessionInput,
+  type UpdateTreatmentSessionInput,
+} from '../../application/ports/treatment-sessions.port';
 
-export interface CreateTreatmentSessionInput {
-  playerId: string;
-  tenantId: string;
-  medicalRecordId?: string;
-  sessionDate: Date;
-  duration?: number;
-  status?: TreatmentStatus;
-  treatmentType: string;
-  description?: string;
-  exercises?: string;
-  progressNotes?: string;
-  conductedBy: string;
-}
+const CONDUCTOR = {
+  select: { id: true, firstName: true, lastName: true, role: true },
+};
+const DETAIL = {
+  player: { select: { id: true, fullName: true, position: true } },
+  medicalRecord: { select: { id: true, injuryType: true, bodyPart: true } },
+  conductor: CONDUCTOR,
+};
 
-export interface UpdateTreatmentSessionInput {
-  sessionDate?: Date;
-  duration?: number;
-  status?: TreatmentStatus;
-  treatmentType?: string;
-  description?: string;
-  exercises?: string;
-  progressNotes?: string;
-}
-
+/**
+ * Treatment sessions, on the tenant transaction (0.4.12): every method takes
+ * the transaction and the verified context, and writes `ctx.tenantId` into
+ * its predicate. A session has no archive yet; `0.6.8` replaces its deletion.
+ */
 @Injectable()
-export class TreatmentSessionRepository {
-  constructor(private readonly prisma: PrismaService) {}
-
-  async create(data: CreateTreatmentSessionInput): Promise<TreatmentSession> {
-    return this.prisma.treatmentSession.create({
+export class TreatmentSessionRepository implements TreatmentSessions {
+  async create(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    data: CreateTreatmentSessionInput,
+  ): Promise<TreatmentSession> {
+    return tx.treatmentSession.create({
       data: {
         ...data,
-        status: data.status || 'SCHEDULED',
+        tenantId: ctx.tenantId,
+        status: data.status ?? 'SCHEDULED',
       },
-      include: {
-        player: {
-          select: {
-            id: true,
-            fullName: true,
-            position: true,
-          },
-        },
-        medicalRecord: {
-          select: {
-            id: true,
-            injuryType: true,
-            bodyPart: true,
-          },
-        },
-        conductor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
+      include: DETAIL,
     });
   }
 
   async findById(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
   ): Promise<TreatmentSession | null> {
-    return this.prisma.treatmentSession.findUnique({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
-      include: {
-        player: {
-          select: {
-            id: true,
-            fullName: true,
-            position: true,
-          },
-        },
-        medicalRecord: {
-          select: {
-            id: true,
-            injuryType: true,
-            bodyPart: true,
-          },
-        },
-        conductor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
+    return tx.treatmentSession.findUnique({
+      where: { id_tenantId: { id, tenantId: ctx.tenantId } },
+      include: DETAIL,
     });
   }
 
   async findByPlayer(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     playerId: string,
-    tenantId: string,
-    filters?: {
+    filters: {
       status?: TreatmentStatus;
       medicalRecordId?: string;
       dateFrom?: Date;
       dateTo?: Date;
-    },
-    pagination?: { skip?: number; take?: number },
+    } = {},
+    pagination: { skip?: number; take?: number } = {},
   ): Promise<{ sessions: TreatmentSession[]; total: number }> {
-    const where: any = {
+    const where: Prisma.TreatmentSessionWhereInput = {
       playerId,
-      tenantId,
+      tenantId: ctx.tenantId,
+      status: filters.status,
+      medicalRecordId: filters.medicalRecordId,
+      sessionDate:
+        filters.dateFrom || filters.dateTo
+          ? { gte: filters.dateFrom, lte: filters.dateTo }
+          : undefined,
     };
-
-    if (filters?.status) where.status = filters.status;
-    if (filters?.medicalRecordId)
-      where.medicalRecordId = filters.medicalRecordId;
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.sessionDate = {};
-      if (filters.dateFrom) where.sessionDate.gte = filters.dateFrom;
-      if (filters.dateTo) where.sessionDate.lte = filters.dateTo;
-    }
-
-    const [sessions, total] = await Promise.all([
-      this.prisma.treatmentSession.findMany({
-        where,
-        include: {
-          conductor: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-              role: true,
-            },
-          },
-        },
-        orderBy: { sessionDate: 'desc' },
-        skip: pagination?.skip,
-        take: pagination?.take,
-      }),
-      this.prisma.treatmentSession.count({ where }),
-    ]);
-
-    return { sessions, total };
-  }
-
-  async findByMedicalRecord(
-    medicalRecordId: string,
-    tenantId: string,
-  ): Promise<TreatmentSession[]> {
-    return this.prisma.treatmentSession.findMany({
-      where: {
-        medicalRecordId,
-        tenantId,
-      },
-      include: {
-        conductor: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            role: true,
-          },
-        },
-      },
-      orderBy: { sessionDate: 'asc' },
+    const sessions = await tx.treatmentSession.findMany({
+      where,
+      include: { conductor: CONDUCTOR },
+      orderBy: { sessionDate: 'desc' },
+      skip: pagination.skip,
+      take: pagination.take,
     });
+    return { sessions, total: await tx.treatmentSession.count({ where }) };
   }
 
   async update(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     data: UpdateTreatmentSessionInput,
   ): Promise<TreatmentSession> {
-    return this.prisma.treatmentSession.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
+    return tx.treatmentSession.update({
+      where: { id_tenantId: { id, tenantId: ctx.tenantId } },
       data,
     });
   }
 
   async updateStatus(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     status: TreatmentStatus,
   ): Promise<TreatmentSession> {
-    return this.prisma.treatmentSession.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
+    return tx.treatmentSession.update({
+      where: { id_tenantId: { id, tenantId: ctx.tenantId } },
       data: { status },
     });
   }
 
-  async delete(id: string, tenantId: string): Promise<TreatmentSession> {
-    return this.prisma.treatmentSession.delete({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
+  async delete(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    id: string,
+  ): Promise<TreatmentSession> {
+    return tx.treatmentSession.delete({
+      where: { id_tenantId: { id, tenantId: ctx.tenantId } },
     });
   }
 
   async getUpcomingSessions(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     playerId: string,
-    tenantId: string,
   ): Promise<TreatmentSession[]> {
-    return this.prisma.treatmentSession.findMany({
+    return tx.treatmentSession.findMany({
       where: {
         playerId,
-        tenantId,
+        tenantId: ctx.tenantId,
         status: 'SCHEDULED',
-        sessionDate: {
-          gte: new Date(),
-        },
+        sessionDate: { gte: new Date() },
       },
       orderBy: { sessionDate: 'asc' },
     });
   }
 
-  async getSessionStats(playerId: string, tenantId: string): Promise<any> {
-    const [total, scheduled, inProgress, completed] = await Promise.all([
-      this.prisma.treatmentSession.count({
-        where: { playerId, tenantId },
-      }),
-      this.prisma.treatmentSession.count({
-        where: { playerId, tenantId, status: 'SCHEDULED' },
-      }),
-      this.prisma.treatmentSession.count({
-        where: { playerId, tenantId, status: 'IN_PROGRESS' },
-      }),
-      this.prisma.treatmentSession.count({
-        where: { playerId, tenantId, status: 'COMPLETED' },
-      }),
-    ]);
-
-    return { total, scheduled, inProgress, completed };
+  async getSessionStats(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    playerId: string,
+  ): Promise<{
+    total: number;
+    scheduled: number;
+    inProgress: number;
+    completed: number;
+  }> {
+    const where = { playerId, tenantId: ctx.tenantId };
+    const count = (status?: TreatmentStatus) =>
+      tx.treatmentSession.count({ where: { ...where, status } });
+    // One after another: a transaction is one connection.
+    return {
+      total: await count(),
+      scheduled: await count('SCHEDULED'),
+      inProgress: await count('IN_PROGRESS'),
+      completed: await count('COMPLETED'),
+    };
   }
 }

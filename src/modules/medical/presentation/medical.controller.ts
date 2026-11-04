@@ -9,7 +9,10 @@ import {
   Patch,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import type { User } from '@prisma/client';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
+import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
@@ -27,9 +30,10 @@ import { CreateMedicalRecordUseCase } from '../application/use-cases/create-medi
 import { UpdateMedicalRecordUseCase } from '../application/use-cases/update-medical-record.usecase';
 import { CreateTreatmentSessionUseCase } from '../application/use-cases/create-treatment-session.usecase';
 import { UpdateTreatmentSessionUseCase } from '../application/use-cases/update-treatment-session.usecase';
-import { MedicalRecordRepository } from '../infrastructure/repositories/medical-record.repository';
-import { TreatmentSessionRepository } from '../infrastructure/repositories/treatment-session.repository';
-import { NotFoundError } from '../../../common/errors/domain-error';
+import { ReadMedicalRecordsUseCase } from '../application/use-cases/read-medical-records.usecase';
+import { ArchiveMedicalRecordUseCase } from '../application/use-cases/archive-medical-record.usecase';
+import { ReadTreatmentSessionsUseCase } from '../application/use-cases/read-treatment-sessions.usecase';
+import { ChangeTreatmentSessionUseCase } from '../application/use-cases/change-treatment-session.usecase';
 
 @ApiTags('Medical')
 @ApiBearerAuth()
@@ -40,8 +44,10 @@ export class MedicalController {
     private readonly updateMedicalRecordUseCase: UpdateMedicalRecordUseCase,
     private readonly createTreatmentSessionUseCase: CreateTreatmentSessionUseCase,
     private readonly updateTreatmentSessionUseCase: UpdateTreatmentSessionUseCase,
-    private readonly medicalRecordRepo: MedicalRecordRepository,
-    private readonly treatmentSessionRepo: TreatmentSessionRepository,
+    private readonly readMedicalRecords: ReadMedicalRecordsUseCase,
+    private readonly archiveMedicalRecord: ArchiveMedicalRecordUseCase,
+    private readonly readTreatmentSessions: ReadTreatmentSessionsUseCase,
+    private readonly changeTreatmentSession: ChangeTreatmentSessionUseCase,
   ) {}
 
   // ==================== MEDICAL RECORDS ====================
@@ -50,13 +56,11 @@ export class MedicalController {
   @Permissions(PERMISSIONS.MEDICAL_CREATE)
   @ApiOperation({ summary: 'Create medical record' })
   async createRecord(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Body({ schema: CreateMedicalRecordDto }) dto: CreateMedicalRecordDto,
   ) {
-    const record = await this.createMedicalRecordUseCase.execute({
+    const record = await this.createMedicalRecordUseCase.execute(ctx, {
       ...dto,
-      createdById: user.id,
-      tenantId: user.tenantId,
       injuryDate: dto.injuryDate ? new Date(dto.injuryDate) : undefined,
       recoveryDate: dto.recoveryDate ? new Date(dto.recoveryDate) : undefined,
       returnToPlayDate: dto.returnToPlayDate
@@ -71,7 +75,7 @@ export class MedicalController {
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get all medical records' })
   async getRecords(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Query({ schema: MedicalRecordsQuery }) query: MedicalRecordsQuery,
   ) {
     const { page, limit } = query;
@@ -83,20 +87,14 @@ export class MedicalController {
       isConfidential: query.isConfidential,
     };
 
-    const { records } = await this.medicalRecordRepo.findAll(
-      user.tenantId,
-      filters,
-      { skip, take: limit },
-    );
-
-    return records;
+    return this.readMedicalRecords.list(ctx, filters, { skip, take: limit });
   }
 
   @Get('records/player/:playerId')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get medical records for a player' })
   async getPlayerRecords(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
     @Query({ schema: PlayerMedicalRecordsQuery })
     query: PlayerMedicalRecordsQuery,
@@ -109,43 +107,34 @@ export class MedicalController {
       isConfidential: query.isConfidential,
     };
 
-    const { records } = await this.medicalRecordRepo.findByPlayer(
-      playerId,
-      user.tenantId,
-      filters,
-      { skip, take: limit },
-    );
-
-    return records;
+    return this.readMedicalRecords.forPlayer(ctx, playerId, filters, {
+      skip,
+      take: limit,
+    });
   }
 
   @Get('records/:id')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get medical record by ID' })
   async getRecord(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    const record = await this.medicalRecordRepo.findById(id, user.tenantId);
-
-    if (!record) {
-      throw new NotFoundError('Medical record not found');
-    }
-
-    return record;
+    return this.readMedicalRecords.get(ctx, id);
   }
 
   @Patch('records/:id')
   @Permissions(PERMISSIONS.MEDICAL_UPDATE)
   @ApiOperation({ summary: 'Update medical record' })
   async updateRecord(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @CurrentUser() member: User,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: UpdateMedicalRecordDto }) dto: UpdateMedicalRecordDto,
   ) {
     const record = await this.updateMedicalRecordUseCase.execute(
+      ctx,
       id,
-      user.tenantId,
       {
         ...dto,
         injuryDate: dto.injuryDate ? new Date(dto.injuryDate) : undefined,
@@ -154,8 +143,7 @@ export class MedicalController {
           ? new Date(dto.returnToPlayDate)
           : undefined,
       },
-      user.id,
-      user.role,
+      member.role,
     );
 
     return record;
@@ -165,40 +153,30 @@ export class MedicalController {
   @Permissions(PERMISSIONS.MEDICAL_UPDATE)
   @ApiOperation({ summary: 'Delete medical record' })
   async deleteRecord(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    await this.medicalRecordRepo.softDelete(id, user.tenantId);
+    await this.archiveMedicalRecord.execute(ctx, id);
   }
 
   @Get('records/player/:playerId/active-injuries')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get active injuries for a player' })
   async getActiveInjuries(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ) {
-    const injuries = await this.medicalRecordRepo.getActiveInjuries(
-      playerId,
-      user.tenantId,
-    );
-
-    return injuries;
+    return this.readMedicalRecords.activeInjuries(ctx, playerId);
   }
 
   @Get('records/player/:playerId/history')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get player injury history statistics' })
   async getInjuryHistory(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ): Promise<unknown> {
-    const stats = await this.medicalRecordRepo.getPlayerInjuryHistory(
-      playerId,
-      user.tenantId,
-    );
-
-    return stats;
+    return this.readMedicalRecords.injuryHistory(ctx, playerId);
   }
 
   // ==================== TREATMENT SESSIONS ====================
@@ -207,13 +185,11 @@ export class MedicalController {
   @Permissions(PERMISSIONS.MEDICAL_CREATE)
   @ApiOperation({ summary: 'Create treatment session' })
   async createSession(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Body({ schema: CreateTreatmentSessionDto }) dto: CreateTreatmentSessionDto,
   ) {
-    const session = await this.createTreatmentSessionUseCase.execute({
+    const session = await this.createTreatmentSessionUseCase.execute(ctx, {
       ...dto,
-      conductedBy: user.id,
-      tenantId: user.tenantId,
       sessionDate: new Date(dto.sessionDate),
       status: dto.status,
     });
@@ -225,7 +201,7 @@ export class MedicalController {
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get treatment sessions for a player' })
   async getPlayerSessions(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
     @Query({ schema: PlayerTreatmentSessionsQuery })
     query: PlayerTreatmentSessionsQuery,
@@ -240,50 +216,40 @@ export class MedicalController {
       dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
     };
 
-    const { sessions } = await this.treatmentSessionRepo.findByPlayer(
-      playerId,
-      user.tenantId,
-      filters,
-      { skip, take: limit },
-    );
-
-    return sessions;
+    return this.readTreatmentSessions.forPlayer(ctx, playerId, filters, {
+      skip,
+      take: limit,
+    });
   }
 
   @Get('sessions/:id')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get treatment session by ID' })
   async getSession(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    const session = await this.treatmentSessionRepo.findById(id, user.tenantId);
-
-    if (!session) {
-      throw new NotFoundError('Treatment session not found');
-    }
-
-    return session;
+    return this.readTreatmentSessions.get(ctx, id);
   }
 
   @Patch('sessions/:id')
   @Permissions(PERMISSIONS.MEDICAL_UPDATE)
   @ApiOperation({ summary: 'Update treatment session' })
   async updateSession(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @CurrentUser() member: User,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: UpdateTreatmentSessionDto }) dto: UpdateTreatmentSessionDto,
   ) {
     const session = await this.updateTreatmentSessionUseCase.execute(
+      ctx,
       id,
-      user.tenantId,
       {
         ...dto,
         sessionDate: dto.sessionDate ? new Date(dto.sessionDate) : undefined,
         status: dto.status,
       },
-      user.id,
-      user.role,
+      member.role,
     );
 
     return session;
@@ -293,57 +259,41 @@ export class MedicalController {
   @Permissions(PERMISSIONS.MEDICAL_UPDATE)
   @ApiOperation({ summary: 'Update treatment session status' })
   async updateSessionStatus(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: TreatmentSessionStatusDto })
     { status }: TreatmentSessionStatusDto,
   ) {
-    const session = await this.treatmentSessionRepo.updateStatus(
-      id,
-      user.tenantId,
-      status,
-    );
-
-    return session;
+    return this.changeTreatmentSession.setStatus(ctx, id, status);
   }
 
   @Delete('sessions/:id')
   @Permissions(PERMISSIONS.MEDICAL_UPDATE)
   @ApiOperation({ summary: 'Delete treatment session' })
   async deleteSession(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: IdParams }) { id }: IdParams,
   ) {
-    await this.treatmentSessionRepo.delete(id, user.tenantId);
+    await this.changeTreatmentSession.delete(ctx, id);
   }
 
   @Get('sessions/player/:playerId/upcoming')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get upcoming treatment sessions' })
   async getUpcomingSessions(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ) {
-    const sessions = await this.treatmentSessionRepo.getUpcomingSessions(
-      playerId,
-      user.tenantId,
-    );
-
-    return sessions;
+    return this.readTreatmentSessions.upcoming(ctx, playerId);
   }
 
   @Get('sessions/player/:playerId/stats')
   @Permissions(PERMISSIONS.MEDICAL_READ)
   @ApiOperation({ summary: 'Get treatment session statistics' })
   async getSessionStats(
-    @CurrentUser() user: any,
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Param({ schema: PlayerIdParams }) { playerId }: PlayerIdParams,
   ): Promise<unknown> {
-    const stats = await this.treatmentSessionRepo.getSessionStats(
-      playerId,
-      user.tenantId,
-    );
-
-    return stats;
+    return this.readTreatmentSessions.stats(ctx, playerId);
   }
 }

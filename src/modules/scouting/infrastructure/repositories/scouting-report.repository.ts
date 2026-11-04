@@ -1,253 +1,180 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../../infrastructure/prisma/prisma.service';
-import { ScoutingReport, ScoutReportStatus } from '@prisma/client';
+import type {
+  Prisma,
+  RecommendationLevel,
+  ScoutingReport,
+  ScoutReportStatus,
+} from '@prisma/client';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
+import type { TenantTx } from '../../../../common/tenancy/tenant-transaction';
+import {
+  ScoutingReports,
+  type CreateScoutingReportInput,
+  type UpdateScoutingReportInput,
+} from '../../application/ports/scouting-reports.port';
 
-export interface CreateScoutingReportInput {
-  scoutId: string;
-  tenantId: string;
-  playerId?: string;
-  prospectName?: string;
-  prospectAge?: number;
-  prospectClub?: string;
-  prospectPosition?: any;
-  prospectNationality?: string;
-  recommendation?: any;
-  technicalScore?: number;
-  physicalScore?: number;
-  tacticalScore?: number;
-  mentalScore?: number;
-  strengths?: string;
-  weaknesses?: string;
-  personalityNotes?: string;
-  tacticalFit?: string;
-  overallRating?: number;
-  potentialRating?: number;
-  matchObserved?: string;
-  metadata?: any;
-}
+const SCOUT = { select: { id: true, firstName: true, lastName: true } };
+const SCOUT_WITH_EMAIL = {
+  select: { id: true, firstName: true, lastName: true, email: true },
+};
 
-export interface UpdateScoutingReportInput {
-  status?: ScoutReportStatus;
-  recommendation?: any;
-  technicalScore?: number;
-  physicalScore?: number;
-  tacticalScore?: number;
-  mentalScore?: number;
-  strengths?: string;
-  weaknesses?: string;
-  personalityNotes?: string;
-  tacticalFit?: string;
-  overallRating?: number;
-  potentialRating?: number;
-}
-
+/**
+ * Scouting reports, on the tenant transaction (0.4.12): every method takes
+ * the transaction and the verified context, and writes `ctx.tenantId` into
+ * its predicate; row-level security is the backstop. Only live reports are
+ * read or changed: an archived one (`deletedAt` set) is gone (DB-57).
+ */
 @Injectable()
-export class ScoutingReportRepository {
-  constructor(private prisma: PrismaService) {}
+export class ScoutingReportRepository implements ScoutingReports {
+  /** The report of the context's tenant with this id, live, as a predicate. */
+  private live(ctx: AuthorizedTenantContext, id: string) {
+    return { id_tenantId: { id, tenantId: ctx.tenantId }, deletedAt: null };
+  }
 
-  async create(data: CreateScoutingReportInput): Promise<ScoutingReport> {
-    return this.prisma.scoutingReport.create({
+  async create(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    data: CreateScoutingReportInput,
+  ): Promise<ScoutingReport> {
+    return tx.scoutingReport.create({
       data: {
         ...data,
+        tenantId: ctx.tenantId,
         reportDate: new Date(),
         status: 'DRAFT',
       },
-      include: {
-        player: true,
-        scout: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
+      include: { player: true, scout: SCOUT_WITH_EMAIL },
     });
   }
 
-  async findById(id: string, tenantId: string): Promise<ScoutingReport | null> {
-    return this.prisma.scoutingReport.findUnique({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-        deletedAt: null,
-      },
-      include: {
-        player: true,
-        scout: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            email: true,
-          },
-        },
-      },
+  async findById(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    id: string,
+  ): Promise<ScoutingReport | null> {
+    return tx.scoutingReport.findUnique({
+      where: this.live(ctx, id),
+      include: { player: true, scout: SCOUT_WITH_EMAIL },
     });
   }
 
   async findMany(
-    tenantId: string,
-    filters?: {
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    filters: {
       status?: ScoutReportStatus;
       scoutId?: string;
       playerId?: string;
-      recommendation?: any;
+      recommendation?: RecommendationLevel;
       dateFrom?: Date;
       dateTo?: Date;
-    },
-    pagination?: { skip?: number; take?: number },
+    } = {},
+    pagination: { skip?: number; take?: number } = {},
   ): Promise<{ reports: ScoutingReport[]; total: number }> {
-    const where: any = {
-      tenantId,
+    const where: Prisma.ScoutingReportWhereInput = {
+      tenantId: ctx.tenantId,
       deletedAt: null,
+      status: filters.status,
+      scoutId: filters.scoutId,
+      playerId: filters.playerId,
+      recommendation: filters.recommendation,
+      reportDate:
+        filters.dateFrom || filters.dateTo
+          ? { gte: filters.dateFrom, lte: filters.dateTo }
+          : undefined,
     };
-
-    if (filters?.status) where.status = filters.status;
-    if (filters?.scoutId) where.scoutId = filters.scoutId;
-    if (filters?.playerId) where.playerId = filters.playerId;
-    if (filters?.recommendation) where.recommendation = filters.recommendation;
-    if (filters?.dateFrom || filters?.dateTo) {
-      where.reportDate = {};
-      if (filters.dateFrom) where.reportDate.gte = filters.dateFrom;
-      if (filters.dateTo) where.reportDate.lte = filters.dateTo;
-    }
-
-    const [reports, total] = await Promise.all([
-      this.prisma.scoutingReport.findMany({
-        where,
-        include: {
-          player: {
-            select: {
-              id: true,
-              fullName: true,
-              position: true,
-            },
-          },
-          scout: {
-            select: {
-              id: true,
-              firstName: true,
-              lastName: true,
-            },
-          },
-        },
-        orderBy: { reportDate: 'desc' },
-        skip: pagination?.skip,
-        take: pagination?.take,
-      }),
-      this.prisma.scoutingReport.count({ where }),
-    ]);
-
-    return { reports, total };
+    const reports = await tx.scoutingReport.findMany({
+      where,
+      include: {
+        player: { select: { id: true, fullName: true, position: true } },
+        scout: SCOUT,
+      },
+      orderBy: { reportDate: 'desc' },
+      skip: pagination.skip,
+      take: pagination.take,
+    });
+    return { reports, total: await tx.scoutingReport.count({ where }) };
   }
 
   async update(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     data: UpdateScoutingReportInput,
   ): Promise<ScoutingReport> {
-    return this.prisma.scoutingReport.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
+    return tx.scoutingReport.update({
+      where: this.live(ctx, id),
       data,
-      include: {
-        player: true,
-        scout: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-      },
+      include: { player: true, scout: SCOUT },
     });
   }
 
-  async softDelete(id: string, tenantId: string): Promise<ScoutingReport> {
-    return this.prisma.scoutingReport.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
-      data: {
-        deletedAt: new Date(),
-      },
+  /** Archives a live report; one already archived is not found. */
+  async archive(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    id: string,
+  ): Promise<ScoutingReport> {
+    return tx.scoutingReport.update({
+      where: this.live(ctx, id),
+      data: { deletedAt: new Date() },
     });
   }
 
-  async submitReport(id: string, tenantId: string): Promise<ScoutingReport> {
-    return this.prisma.scoutingReport.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
-      data: {
-        status: 'SUBMITTED',
-      },
+  async submitReport(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    id: string,
+  ): Promise<ScoutingReport> {
+    return tx.scoutingReport.update({
+      where: this.live(ctx, id),
+      data: { status: 'SUBMITTED' },
     });
   }
 
   async approveReport(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
-    recommendation: any,
+    recommendation: RecommendationLevel,
   ): Promise<ScoutingReport> {
-    return this.prisma.scoutingReport.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
-      data: {
-        status: 'APPROVED',
-        recommendation,
-      },
+    return tx.scoutingReport.update({
+      where: this.live(ctx, id),
+      data: { status: 'APPROVED', recommendation },
     });
   }
 
-  async rejectReport(id: string, tenantId: string): Promise<ScoutingReport> {
-    return this.prisma.scoutingReport.update({
-      where: {
-        id_tenantId: {
-          id,
-          tenantId,
-        },
-      },
-      data: {
-        status: 'REJECTED',
-      },
+  async rejectReport(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    id: string,
+  ): Promise<ScoutingReport> {
+    return tx.scoutingReport.update({
+      where: this.live(ctx, id),
+      data: { status: 'REJECTED' },
     });
   }
 
-  async getStatsByScout(scoutId: string, tenantId: string): Promise<any> {
-    const [total, draft, submitted, approved] = await Promise.all([
-      this.prisma.scoutingReport.count({
-        where: { scoutId, tenantId, deletedAt: null },
-      }),
-      this.prisma.scoutingReport.count({
-        where: { scoutId, tenantId, status: 'DRAFT', deletedAt: null },
-      }),
-      this.prisma.scoutingReport.count({
-        where: { scoutId, tenantId, status: 'SUBMITTED', deletedAt: null },
-      }),
-      this.prisma.scoutingReport.count({
-        where: { scoutId, tenantId, status: 'APPROVED', deletedAt: null },
-      }),
-    ]);
-
-    return { total, draft, submitted, approved };
+  async getStatsByScout(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    scoutId: string,
+  ): Promise<{
+    total: number;
+    draft: number;
+    submitted: number;
+    approved: number;
+  }> {
+    const count = (status?: ScoutReportStatus) =>
+      tx.scoutingReport.count({
+        where: { scoutId, tenantId: ctx.tenantId, deletedAt: null, status },
+      });
+    // One after another: a transaction is one connection.
+    return {
+      total: await count(),
+      draft: await count('DRAFT'),
+      submitted: await count('SUBMITTED'),
+      approved: await count('APPROVED'),
+    };
   }
 }

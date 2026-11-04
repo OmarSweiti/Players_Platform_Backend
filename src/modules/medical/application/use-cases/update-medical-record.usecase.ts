@@ -1,41 +1,30 @@
 import { Injectable } from '@nestjs/common';
 import {
-  MedicalRecordRepository,
-  UpdateMedicalRecordInput,
-} from '../../infrastructure/repositories/medical-record.repository';
-import {
   ForbiddenError,
   NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import {
+  MedicalRecords,
+  type UpdateMedicalRecordInput,
+} from '../ports/medical-records.port';
 
 @Injectable()
 export class UpdateMedicalRecordUseCase {
-  constructor(private readonly medicalRecordRepo: MedicalRecordRepository) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly medicalRecordRepo: MedicalRecords,
+  ) {}
 
+  /** `memberRole` is the signed-in member's, from the session. */
   async execute(
+    ctx: AuthorizedTenantContext,
     id: string,
-    tenantId: string,
     input: UpdateMedicalRecordInput,
-    userId: string,
-    userRole: string,
+    memberRole: string,
   ) {
-    const record = await this.medicalRecordRepo.findById(id, tenantId);
-
-    if (!record) {
-      throw new NotFoundError('Medical record not found');
-    }
-
-    // Only medical staff can update confidential records
-    if (
-      record.isConfidential &&
-      !['MEDICAL', 'PHYSIOTHERAPIST', 'SUPER_ADMIN'].includes(userRole)
-    ) {
-      throw new ForbiddenError(
-        'Insufficient permissions to update confidential medical records',
-      );
-    }
-
     // Validate dates if updating
     if (
       input.recoveryDate &&
@@ -48,6 +37,23 @@ export class UpdateMedicalRecordUseCase {
       );
     }
 
-    return await this.medicalRecordRepo.update(id, tenantId, input);
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      const record = await this.medicalRecordRepo.findById(tx, ctx, id);
+      if (!record) {
+        throw new NotFoundError('Medical record not found');
+      }
+
+      // Only medical staff can update confidential records
+      if (
+        record.isConfidential &&
+        !['MEDICAL', 'PHYSIOTHERAPIST', 'SUPER_ADMIN'].includes(memberRole)
+      ) {
+        throw new ForbiddenError(
+          'Insufficient permissions to update confidential medical records',
+        );
+      }
+
+      return this.medicalRecordRepo.update(tx, ctx, id, input);
+    });
   }
 }

@@ -1,17 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import {
-  TreatmentSessionRepository,
-  CreateTreatmentSessionInput,
-} from '../../infrastructure/repositories/treatment-session.repository';
 import { ValidationFailedError } from '../../../../common/errors/domain-error';
+import {
+  actingMemberOf,
+  type AuthorizedTenantContext,
+} from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import {
+  type CreateTreatmentSessionInput,
+  TreatmentSessions,
+} from '../ports/treatment-sessions.port';
 
 @Injectable()
 export class CreateTreatmentSessionUseCase {
   constructor(
-    private readonly treatmentSessionRepo: TreatmentSessionRepository,
+    private readonly tenants: TenantTransactions,
+    private readonly treatmentSessionRepo: TreatmentSessions,
   ) {}
 
-  async execute(input: CreateTreatmentSessionInput) {
+  /** The session is the context's tenant's, conducted by the acting member. */
+  async execute(
+    ctx: AuthorizedTenantContext,
+    input: Omit<CreateTreatmentSessionInput, 'conductedBy'>,
+  ) {
     // Validate session date is not in the past for scheduled sessions
     if (input.status === 'SCHEDULED' && input.sessionDate < new Date()) {
       throw new ValidationFailedError('Cannot schedule a session in the past', [
@@ -27,6 +37,9 @@ export class CreateTreatmentSessionUseCase {
       );
     }
 
-    return await this.treatmentSessionRepo.create(input);
+    const conductedBy = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.treatmentSessionRepo.create(tx, ctx, { ...input, conductedBy }),
+    );
   }
 }
