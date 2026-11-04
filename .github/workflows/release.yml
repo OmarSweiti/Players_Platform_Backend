@@ -134,8 +134,6 @@ jobs:
       # that other refs could have written, and this is what gets deployed.
       # Keep signing out of the step that compiles third-party code if you can.
       - name: Build from the lockfile
-        env:
-          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci # generate never connects
         run: |
           set -euo pipefail
           npm ci --no-audit --no-fund
