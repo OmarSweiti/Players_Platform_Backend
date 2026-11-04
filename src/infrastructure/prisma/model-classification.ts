@@ -11,14 +11,27 @@ import { Prisma } from '@prisma/client';
  */
 export type GlobalAccess = 'own-tenant-row' | 'read-only';
 
+/**
+ * How a model's ids are made (0.4.11; SR-DB-002). UUIDv4 unless the class
+ * says `time-ordered`: an append-heavy table whose index locality matters
+ * (audit logs, security events, the outbox and inbox, sessions, messages,
+ * notifications) takes UUIDv7 from `@default(uuid(7))`, declared when its
+ * table is created or rebuilt. Prisma makes the id, so a raw INSERT supplies
+ * its own; existing ids never change. test/db/ids.integration-spec.ts holds
+ * every model's `@default` to its class.
+ */
+interface Ids {
+  readonly ids?: 'time-ordered';
+}
+
 export type ModelClass =
   /**
    * One tenant's rows, by `tenant_id`: forced row-level security with the
    * tenant policy, and a `tenant_id` that never changes.
    */
-  | { readonly kind: 'tenant-owned' }
+  | ({ readonly kind: 'tenant-owned' } & Ids)
   /** No tenant's alone: no `tenant_id`, and the runtime role's access is `runtime`. */
-  | { readonly kind: 'global'; readonly runtime: GlobalAccess };
+  | ({ readonly kind: 'global'; readonly runtime: GlobalAccess } & Ids);
 
 const TENANT_OWNED = { kind: 'tenant-owned' } as const;
 
@@ -63,7 +76,8 @@ export const MODEL_CLASSIFICATION: Readonly<
   TreatmentSession: TENANT_OWNED,
   Message: TENANT_OWNED,
   Notification: TENANT_OWNED,
-  AuditLog: TENANT_OWNED,
+  // Appended on every change, never updated: its index grows at one end.
+  AuditLog: { ...TENANT_OWNED, ids: 'time-ordered' },
 };
 
 /** A model as the database knows it: its table, and the column that names its tenant. */
