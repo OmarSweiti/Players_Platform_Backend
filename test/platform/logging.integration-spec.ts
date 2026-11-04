@@ -200,4 +200,39 @@ describe('structured logs, correlated from the request to the worker', () => {
     expect(everything).not.toContain(CANARY);
     expect(everything).not.toContain('search=');
   });
+
+  it('a_body_the_parser_refuses_is_still_logged', async () => {
+    // Refused while its body is read, before any route takes it: malformed,
+    // then too large. Each still gets its access line, and neither line
+    // carries a byte of the body.
+    const malformed = await booted.http
+      .post('/api/v1/probe/logging/jobs')
+      .set('Content-Type', 'application/json')
+      .send(`{"note": ${CANARY}`)
+      .expect(400);
+    const oversized = await booted.http
+      .post('/api/v1/probe/logging/jobs')
+      .send({ note: `${CANARY}${'x'.repeat(2 * 1024 * 1024)}` })
+      .expect(413);
+
+    const access = capture
+      .entries()
+      .filter(({ event }) => event === 'http.request');
+    for (const [response, status] of [
+      [malformed, 400],
+      [oversized, 413],
+    ] as const) {
+      const line = access.find(
+        (entry) => entry.requestId === response.headers['x-request-id'],
+      );
+      expect(Object.keys(line ?? {}).sort()).toEqual(ACCESS_FIELDS);
+      expect(line).toMatchObject({
+        level: 'warn',
+        method: 'POST',
+        route: '(unmatched route)',
+        status,
+      });
+    }
+    expect(capture.lines.join('\n')).not.toContain(CANARY);
+  });
 });
