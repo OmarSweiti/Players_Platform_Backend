@@ -25,4 +25,11 @@ describe('routeTemplateOf', () => {
     });
     expect(routeTemplateOf(request)).toBe('(unmatched route)');
   });
+
+  it('names a request refused at the body parsers as unmatched', () => {
+    const request = requestTo('/api/v1/players?token=secret', {
+      route: { path: '/api{/*splat}' },
+    });
+    expect(routeTemplateOf(request)).toBe('(unmatched route)');
+  });
 });

@@ -5,7 +5,11 @@ import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../../src/app.module';
-import { answerUnknownPaths, configureApp } from '../../src/app.setup';
+import {
+  answerUnknownPaths,
+  APP_OPTIONS,
+  configureApp,
+} from '../../src/app.setup';
 import { SessionGuard } from '../../src/common/guards/session.guard';
 import { LOG_SINK } from '../../src/infrastructure/logging/logger-options';
 import {
@@ -63,7 +67,8 @@ export async function bootApp(
     .overrideProvider(RATE_LIMIT_KEY_PREFIX)
     .useValue(`${RATE_LIMIT_KEYS}test:${namespace}:`);
   const moduleRef = await builder.compile();
-  const app = moduleRef.createNestApplication<NestExpressApplication>();
+  const app =
+    moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS);
   configureApp(app);
   if (opts.trustedProxies) app.set('trust proxy', opts.trustedProxies);
   // As main.ts does: every route first, then what none serves.
