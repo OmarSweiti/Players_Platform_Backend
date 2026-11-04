@@ -1,15 +1,27 @@
 import { Injectable } from '@nestjs/common';
-import {
-  MedicalRecordRepository,
-  CreateMedicalRecordInput,
-} from '../../infrastructure/repositories/medical-record.repository';
 import { ValidationFailedError } from '../../../../common/errors/domain-error';
+import {
+  actingMemberOf,
+  type AuthorizedTenantContext,
+} from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import {
+  type CreateMedicalRecordInput,
+  MedicalRecords,
+} from '../ports/medical-records.port';
 
 @Injectable()
 export class CreateMedicalRecordUseCase {
-  constructor(private readonly medicalRecordRepo: MedicalRecordRepository) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly medicalRecordRepo: MedicalRecords,
+  ) {}
 
-  async execute(input: CreateMedicalRecordInput) {
+  /** The record is the context's tenant's, written by the acting member. */
+  async execute(
+    ctx: AuthorizedTenantContext,
+    input: Omit<CreateMedicalRecordInput, 'createdById'>,
+  ) {
     // Validate injury date is not in the future
     if (input.injuryDate && input.injuryDate > new Date()) {
       throw new ValidationFailedError('Injury date cannot be in the future', [
@@ -40,6 +52,9 @@ export class CreateMedicalRecordUseCase {
       );
     }
 
-    return await this.medicalRecordRepo.create(input);
+    const createdById = actingMemberOf(ctx);
+    return this.tenants.withTenantTransaction(ctx, (tx) =>
+      this.medicalRecordRepo.create(tx, ctx, { ...input, createdById }),
+    );
   }
 }
