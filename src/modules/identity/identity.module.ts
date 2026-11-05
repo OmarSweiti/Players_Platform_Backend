@@ -10,6 +10,7 @@ import { ReadSessionUseCase } from './application/use-cases/read-session.usecase
 import { SignInUseCase } from './application/use-cases/sign-in.usecase';
 import { KeycloakIdentityProvider } from './infrastructure/keycloak/keycloak-identity-provider';
 import { SessionViewRepository } from './infrastructure/repositories/session-view.repository';
+import { IdentityValkey } from './infrastructure/valkey/identity-valkey';
 import { ValkeySignInAttempts } from './infrastructure/valkey/valkey-sign-in-attempts';
 import { AuthController } from './presentation/auth.controller';
 
@@ -23,6 +24,7 @@ import { AuthController } from './presentation/auth.controller';
   providers: [
     { provide: IdentityProviderPort, useClass: KeycloakIdentityProvider },
     { provide: SignInAttempts, useClass: ValkeySignInAttempts },
+    IdentityValkey,
     { provide: SessionViews, useClass: SessionViewRepository },
     { provide: CLOCK, useValue: systemClock },
     CsrfTokens,

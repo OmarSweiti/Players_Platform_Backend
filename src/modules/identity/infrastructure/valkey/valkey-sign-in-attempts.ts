@@ -1,18 +1,13 @@
 import { createHash } from 'node:crypto';
-import {
-  Injectable,
-  type OnModuleDestroy,
-  type OnModuleInit,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Redis } from 'ioredis';
+import { Injectable } from '@nestjs/common';
+import type { Redis } from 'ioredis';
 import { z } from 'zod';
 import { DependencyUnavailableError } from '../../../../common/errors/domain-error';
-import type { Env } from '../../../../config/env.schema';
 import {
   type SignInAttempt,
   SignInAttempts,
 } from '../../application/ports/sign-in-attempts.port';
+import { IdentityValkey } from './identity-valkey';
 
 /** Where attempts live in Valkey: under the digest of their state, never the state itself. */
 export const SIGN_IN_ATTEMPT_KEYS = 'sadara:sign-in:';
@@ -21,9 +16,6 @@ export const SIGN_IN_ATTEMPT_KEYS = 'sadara:sign-in:';
 export function attemptKeyOf(state: string): string {
   return `${SIGN_IN_ATTEMPT_KEYS}${createHash('sha256').update(state).digest('hex')}`;
 }
-
-/** How long a request waits for Valkey before sign-in is refused. */
-const TIMEOUT_MS = 500;
 
 const Kept = z.strictObject({
   tenantId: z.uuid(),
@@ -42,34 +34,12 @@ const Kept = z.strictObject({
  * limits are.
  */
 @Injectable()
-export class ValkeySignInAttempts
-  extends SignInAttempts
-  implements OnModuleInit, OnModuleDestroy
-{
+export class ValkeySignInAttempts extends SignInAttempts {
   private readonly valkey: Redis;
 
-  constructor(config: ConfigService<Env, true>) {
+  constructor(connection: IdentityValkey) {
     super();
-    this.valkey = new Redis({
-      host: config.get('REDIS_HOST', { infer: true }),
-      port: config.get('REDIS_PORT', { infer: true }),
-      lazyConnect: true,
-      enableOfflineQueue: false,
-      maxRetriesPerRequest: 0,
-      commandTimeout: TIMEOUT_MS,
-      connectTimeout: TIMEOUT_MS * 2,
-    });
-    // The client reconnects in the background; the rate limiter logs when
-    // Valkey stops and starts answering.
-    this.valkey.on('error', () => undefined);
-  }
-
-  async onModuleInit(): Promise<void> {
-    await this.valkey.connect().catch(() => undefined);
-  }
-
-  onModuleDestroy(): void {
-    this.valkey.disconnect();
+    this.valkey = connection.client;
   }
 
   async keep(
