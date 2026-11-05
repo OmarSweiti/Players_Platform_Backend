@@ -16,6 +16,8 @@ export abstract class DomainError extends Error {
   abstract readonly code: ErrorCode;
   /** When the client may try again, sent as `Retry-After`. */
   readonly retryAfterSeconds?: number;
+  /** Where to authenticate again: a `STEP_UP_REQUIRED` problem's `stepUpUrl`. */
+  readonly stepUpUrl?: string;
 
   constructor(
     message: string,
@@ -76,6 +78,21 @@ export class UnsupportedMediaTypeError extends DomainError {
 /** No session, or one that no longer signs anyone in. */
 export class AuthenticationRequiredError extends DomainError {
   readonly code = 'AUTHENTICATION_REQUIRED';
+}
+
+/**
+ * A sensitive action needs a recent authentication (0.5.8): the client sends
+ * the browser to `stepUpUrl`, with `returnTo`, and tries again after.
+ */
+export class StepUpRequiredError extends DomainError {
+  readonly code = 'STEP_UP_REQUIRED';
+
+  constructor(
+    override readonly stepUpUrl: string,
+    message = 'A recent authentication is required',
+  ) {
+    super(message);
+  }
 }
 
 /** A session past its idle or absolute expiry. */

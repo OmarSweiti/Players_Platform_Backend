@@ -75,6 +75,12 @@ const ProblemDetails = z.object({
       }),
     )
     .max(MAX_FIELD_ERRORS),
+  stepUpUrl: z
+    .string()
+    .optional()
+    .describe(
+      'STEP_UP_REQUIRED only: where to send the browser to authenticate again, with returnTo',
+    ),
 });
 
 /** What the contract needs to know of a route besides its swagger metadata. */

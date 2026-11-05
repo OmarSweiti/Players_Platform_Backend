@@ -32,6 +32,8 @@ export interface ProblemDetails {
   message: string;
   requestId: string;
   fieldErrors: { field: string; code: FieldErrorCode; message: string }[];
+  /** STEP_UP_REQUIRED only: where to authenticate again (0.5.8). */
+  stepUpUrl?: string;
 }
 
 /** A response names at most this many fields, however many were wrong. */
@@ -61,6 +63,8 @@ export interface Classified {
   unexpected: boolean;
   /** When to try again, if the error says (`Retry-After`). */
   retryAfterSeconds?: number;
+  /** Where to authenticate again, if the error says (`stepUpUrl`). */
+  stepUpUrl?: string;
 }
 
 /**
@@ -71,8 +75,14 @@ export interface Classified {
  */
 export function classify(exception: unknown): Classified {
   if (exception instanceof DomainError) {
-    const { code, fieldIssues, retryAfterSeconds } = exception;
-    return { code, fieldIssues, unexpected: false, retryAfterSeconds };
+    const { code, fieldIssues, retryAfterSeconds, stepUpUrl } = exception;
+    return {
+      code,
+      fieldIssues,
+      unexpected: false,
+      retryAfterSeconds,
+      stepUpUrl,
+    };
   }
   const status =
     exception instanceof HttpException
@@ -109,7 +119,7 @@ export function sendProblem(
   response: Response,
 ): void {
   const requestId = requestIdOf(request) ?? newRequestId();
-  const { code, fieldIssues, unexpected, retryAfterSeconds } =
+  const { code, fieldIssues, unexpected, retryAfterSeconds, stepUpUrl } =
     classify(exception);
   const { status, title } = PROBLEMS[code];
 
@@ -141,6 +151,7 @@ export function sendProblem(
         code: fieldCode,
         message: FIELD_PROBLEMS[fieldCode][locale],
       })),
+    ...(stepUpUrl === undefined ? {} : { stepUpUrl }),
   };
 
   response

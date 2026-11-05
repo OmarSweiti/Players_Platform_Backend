@@ -2397,6 +2397,10 @@
               ],
               "additionalProperties": false
             }
+          },
+          "stepUpUrl": {
+            "description": "STEP_UP_REQUIRED only: where to send the browser to authenticate again, with returnTo",
+            "type": "string"
           }
         },
         "required": [
