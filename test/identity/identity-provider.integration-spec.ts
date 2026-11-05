@@ -63,7 +63,12 @@ describe('the identity provider, against a test issuer', () => {
     {
       through = provider,
       expectedNonce,
-    }: { through?: KeycloakIdentityProvider; expectedNonce?: string } = {},
+      maxAge,
+    }: {
+      through?: KeycloakIdentityProvider;
+      expectedNonce?: string;
+      maxAge?: number;
+    } = {},
   ): Promise<VerifiedSignIn> {
     const state = oidc.randomState();
     const nonce = oidc.randomNonce();
@@ -73,6 +78,7 @@ describe('the identity provider, against a test issuer', () => {
       state,
       nonce,
       codeChallenge: await oidc.calculatePKCECodeChallenge(codeVerifier),
+      maxAge,
       locale: 'ar',
     });
     return through.exchange({
@@ -80,6 +86,7 @@ describe('the identity provider, against a test issuer', () => {
       codeVerifier,
       expectedState: state,
       expectedNonce: expectedNonce ?? nonce,
+      maxAge,
     });
   }
 
@@ -297,6 +304,38 @@ describe('the identity provider, against a test issuer', () => {
         ),
       ]).toEqual([hostile, refusedBy(check)]);
     }
+  });
+
+  it('a_fresh_authentication_is_asked_for_and_checked', async () => {
+    // max_age=0 asks the provider to authenticate the person again (0.5.8)…
+    const url = await provider.authorizationUrl({
+      redirectUri: CALLBACK,
+      state: 's',
+      nonce: 'n',
+      codeChallenge: 'c',
+      acrValues: '2',
+      maxAge: 0,
+      locale: 'en',
+    });
+    expect(url.searchParams.get('max_age')).toBe('0');
+    expect(url.searchParams.get('acr_values')).toBe('2');
+    // …and the answer must show it did: auth_time within the clock tolerance.
+    const now = Math.floor(Date.now() / 1000);
+    await expect(
+      signIn({ claims: { auth_time: now - 2 } }, { maxAge: 0 }),
+    ).resolves.toMatchObject({ subject: issuer.subject });
+    expect(
+      await outcomeOf(
+        signIn({ claims: { auth_time: now - 600 } }, { maxAge: 0 }),
+      ),
+    ).toEqual(refusedBy(/auth_time/));
+    // A missing auth_time is refused too; the library names it only as an
+    // invalid response, as it does a missing nonce.
+    expect(
+      await outcomeOf(
+        signIn({ claims: { auth_time: undefined } }, { maxAge: 0 }),
+      ),
+    ).toEqual(refusedBy(/./));
   });
 
   it('the_end_session_url_returns_to_this_host', async () => {

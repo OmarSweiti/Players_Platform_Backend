@@ -14,12 +14,15 @@ import {
 import { CLOCK, type Clock } from '../../../common/time/clock';
 import { digestOf, isSecret } from '../domain/secrets';
 import { idleExpiryAt } from '../domain/session-lifetime';
+import { admits } from './assurance.policy';
 
 /** A session that holds, and the member it signs in. */
 export interface AuthenticatedSession {
   readonly sessionId: string;
   /** SHA-256 of the cookie's value: what the CSRF token is derived from. */
   readonly tokenHash: Buffer;
+  readonly authTime: Date;
+  readonly acr: string | null;
   readonly member: SessionMember;
 }
 
@@ -38,7 +41,8 @@ export const RENEW_AFTER_MS = 60 * 1000;
  * or an inactive tenant is refused from the very next request.
  *
  * Refused as AUTHENTICATION_REQUIRED: no cookie, a host that names no active
- * tenant, an unknown or revoked session, a member no longer active. Past its
+ * tenant, an unknown or revoked session, a member no longer active, or one
+ * whose role now needs a second factor the session never proved. Past its
  * idle (30 minutes) or absolute (12 hours) expiry: SESSION_EXPIRED. A live
  * session's idle expiry moves with use, never past the absolute one.
  */
@@ -68,6 +72,11 @@ export class SessionService {
     if (!member.isActive || member.deletedAt !== null) {
       throw new AuthenticationRequiredError('the member is not active');
     }
+    // A role that became privileged needs the second factor the session never
+    // proved (0.5.8): signing in again asks for it.
+    if (!admits(member.role, session.acr)) {
+      throw new AuthenticationRequiredError('the role needs a second factor');
+    }
     const now = this.clock.now();
     if (session.idleExpiresAt <= now || session.absoluteExpiresAt <= now) {
       throw new SessionExpiredError('the session has expired');
@@ -83,6 +92,8 @@ export class SessionService {
     return {
       sessionId: session.id,
       tokenHash,
+      authTime: session.authTime,
+      acr: session.acr,
       member: { id: member.id, tenantId: tenant.id, role: member.role },
     };
   }

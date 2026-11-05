@@ -21,6 +21,7 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
+import { RequiresRecentAuth } from '../../../common/decorators/requires-recent-auth.decorator';
 import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
 import { CreateScoutingReportDto } from './dto/create-scouting-report.dto';
 import { UpdateScoutingReportDto } from './dto/update-scouting-report.dto';
@@ -157,6 +158,8 @@ export class ScoutingController {
   @Post('reports/:id/approve')
   @HttpCode(HttpStatus.OK)
   @Permissions(PERMISSIONS.SREPORT_APPROVE)
+  // An approval decision: a recent authentication (0.5.8).
+  @RequiresRecentAuth()
   @ApiOperation({ summary: 'Approve scouting report' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -180,6 +183,8 @@ export class ScoutingController {
   @Post('reports/:id/reject')
   @HttpCode(HttpStatus.OK)
   @Permissions(PERMISSIONS.SREPORT_REJECT)
+  // An approval decision: a recent authentication (0.5.8).
+  @RequiresRecentAuth()
   @ApiOperation({ summary: 'Reject scouting report' })
   @ApiResponse({
     status: HttpStatus.OK,

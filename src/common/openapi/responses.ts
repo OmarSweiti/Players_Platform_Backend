@@ -46,10 +46,13 @@ export function ReturnsPage(item: z.ZodType) {
 /**
  * What a route the browser navigates to answers on success: `303 See Other`,
  * to the `Location` it names, with no body. Only sign-in's routes answer so
- * (0.5.5): every other success is `{ data }`. `cookies` names the cookies the
- * answer sets or clears.
+ * (0.5.5, 0.5.8): every other success is `{ data }`. `cookies` names the
+ * cookies the answer sets or clears, if any.
  */
-export function Redirects(description: string, cookies: readonly string[]) {
+export function Redirects(
+  description: string,
+  cookies: readonly string[] = [],
+) {
   return ApiResponse({
     status: 303,
     description,
@@ -58,10 +61,14 @@ export function Redirects(description: string, cookies: readonly string[]) {
         description: 'Where the browser goes next',
         schema: { type: 'string', format: 'uri' },
       },
-      'Set-Cookie': {
-        description: `Sets or clears ${cookies.join(' and ')}`,
-        schema: { type: 'string' },
-      },
+      ...(cookies.length > 0
+        ? {
+            'Set-Cookie': {
+              description: `Sets or clears ${cookies.join(' and ')}`,
+              schema: { type: 'string' },
+            },
+          }
+        : {}),
     },
   });
 }

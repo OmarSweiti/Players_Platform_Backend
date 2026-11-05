@@ -24,10 +24,33 @@ export interface NewSession {
   readonly absoluteExpiresAt: Date;
 }
 
-export interface OpenedSession {
-  readonly sessionId: string;
-  readonly memberId: string;
-}
+/**
+ * Whether a member of `role` may hold a session at the assurance `acr`: the
+ * identity module's policy (0.5.8), handed in so that this stays a narrow
+ * reader and writer.
+ */
+export type Admits = (role: UserRole, acr: string | undefined) => boolean;
+
+/** What opening a session came to (0.5.5; 0.5.8). */
+export type OpenedSession =
+  | {
+      readonly kind: 'opened';
+      readonly sessionId: string;
+      readonly memberId: string;
+    }
+  /** No identity, no membership, or one inactive or archived. */
+  | { readonly kind: 'no-member' }
+  /** A member whose role needs more assurance than the provider asserted. */
+  | { readonly kind: 'needs-assurance' };
+
+/** What a step-up came to (0.5.8). */
+export type SteppedUp =
+  | { readonly kind: 'stepped-up'; readonly absoluteExpiresAt: Date }
+  /** The session ended, expired or lost its member meanwhile. */
+  | { readonly kind: 'gone' }
+  /** The provider proved someone other than the session's person. */
+  | { readonly kind: 'another-person' }
+  | { readonly kind: 'needs-assurance' };
 
 /** A session as authentication reads it (0.5.6), with its member's standing. */
 export interface StoredSession {
@@ -36,6 +59,8 @@ export interface StoredSession {
   readonly lastSeenAt: Date;
   readonly idleExpiresAt: Date;
   readonly absoluteExpiresAt: Date;
+  readonly authTime: Date;
+  readonly acr: string | null;
   readonly member: {
     readonly id: string;
     readonly role: UserRole;
@@ -73,15 +98,16 @@ export class AuthBootstrap {
 
   /**
    * Opens a session for the identity's membership in the tenant, in one
-   * transaction with the lookup: null when it has none that may sign in — no
-   * identity, no membership, or one inactive or archived. A membership is
+   * transaction with the lookup, if it has one that may sign in — active, not
+   * archived, and admitted at the asserted assurance (0.5.8). A membership is
    * found by its identity only, never by an email address (0.5.3).
    */
   openSession(
     tenant: HostTenant,
     identity: ProvenIdentity,
     session: NewSession,
-  ): Promise<OpenedSession | null> {
+    admits: Admits,
+  ): Promise<OpenedSession> {
     return this.inTenant(tenant, async (tx) => {
       const person = await tx.identity.findUnique({
         where: {
@@ -92,7 +118,7 @@ export class AuthBootstrap {
         },
         select: { id: true },
       });
-      if (!person) return null;
+      if (!person) return { kind: 'no-member' };
       const member = await tx.user.findFirst({
         where: {
           tenantId: tenant.id,
@@ -100,9 +126,11 @@ export class AuthBootstrap {
           isActive: true,
           deletedAt: null,
         },
-        select: { id: true },
+        select: { id: true, role: true },
       });
-      if (!member) return null;
+      if (!member) return { kind: 'no-member' };
+      if (!admits(member.role, identity.acr))
+        return { kind: 'needs-assurance' };
       const { id } = await tx.userSession.create({
         data: {
           tenantId: tenant.id,
@@ -122,7 +150,78 @@ export class AuthBootstrap {
         },
         select: { id: true },
       });
-      return { sessionId: id, memberId: member.id };
+      return { kind: 'opened', sessionId: id, memberId: member.id };
+    });
+  }
+
+  /**
+   * A step-up (0.5.8): the session the browser holds, authenticated again by
+   * the same person, is updated in place — its token replaced, its
+   * `auth_time`, `acr`, `amr` and provider session renewed — so that its id,
+   * its sign-in time and its absolute expiry stay. In one transaction: the
+   * session must still be live under `currentTokenHash`, its member active,
+   * the provider's person its own, and the member admitted at the new
+   * assurance; otherwise nothing changes.
+   */
+  stepUpSession(
+    tenant: HostTenant,
+    current: { sessionId: string; tokenHash: Uint8Array },
+    identity: ProvenIdentity,
+    renewal: {
+      tokenHash: Uint8Array;
+      at: Date;
+      idleExpiresAt: (absoluteExpiresAt: Date) => Date;
+    },
+    admits: Admits,
+  ): Promise<SteppedUp> {
+    return this.inTenant(tenant, async (tx) => {
+      const where = {
+        id: current.sessionId,
+        tenantId: tenant.id,
+        tokenHash: new Uint8Array(current.tokenHash),
+        revokedAt: null,
+      };
+      const row = await tx.userSession.findFirst({
+        where,
+        select: {
+          issuer: true,
+          subject: true,
+          idleExpiresAt: true,
+          absoluteExpiresAt: true,
+          user: { select: { role: true, isActive: true, deletedAt: true } },
+        },
+      });
+      if (
+        !row ||
+        row.idleExpiresAt <= renewal.at ||
+        row.absoluteExpiresAt <= renewal.at ||
+        !row.user.isActive ||
+        row.user.deletedAt !== null
+      ) {
+        return { kind: 'gone' };
+      }
+      if (row.issuer !== identity.issuer || row.subject !== identity.subject) {
+        return { kind: 'another-person' };
+      }
+      if (!admits(row.user.role, identity.acr)) {
+        return { kind: 'needs-assurance' };
+      }
+      const { count } = await tx.userSession.updateMany({
+        where,
+        data: {
+          tokenHash: new Uint8Array(renewal.tokenHash),
+          providerSid: identity.sid,
+          acr: identity.acr,
+          amr: [...identity.amr],
+          authTime: identity.authTime,
+          lastSeenAt: renewal.at,
+          idleExpiresAt: renewal.idleExpiresAt(row.absoluteExpiresAt),
+          revision: { increment: 1 },
+        },
+      });
+      return count === 1
+        ? { kind: 'stepped-up', absoluteExpiresAt: row.absoluteExpiresAt }
+        : { kind: 'gone' };
     });
   }
 
@@ -149,6 +248,8 @@ export class AuthBootstrap {
           lastSeenAt: true,
           idleExpiresAt: true,
           absoluteExpiresAt: true,
+          authTime: true,
+          acr: true,
           user: {
             select: { id: true, role: true, isActive: true, deletedAt: true },
           },

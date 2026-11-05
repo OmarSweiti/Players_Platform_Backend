@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { RateLimitModule } from '../../common/rate-limit/rate-limit.module';
 import { CsrfTokens } from '../../common/security/csrf-tokens';
 import { CLOCK, systemClock } from '../../common/time/clock';
+import { AssurancePolicy } from './application/assurance.policy';
 import { IdentityProviderPort } from './application/ports/identity-provider.port';
 import { LogoutTokenReplays } from './application/ports/logout-token-replays.port';
 import { OwnSessions } from './application/ports/own-sessions.port';
@@ -23,8 +24,9 @@ import { AuthController } from './presentation/auth.controller';
 
 // Identity: the identity provider behind its port (0.5.4), sign-in through
 // the API (0.5.5), the sessions it opens (0.5.6), which the global session and
-// CSRF guards (app.module.ts) check, and signing out (0.5.7). Invitations
-// (0.5.10) join it.
+// CSRF guards (app.module.ts) check, signing out (0.5.7), and assurance:
+// second factors for privileged roles and step-up for sensitive actions
+// (0.5.8). Invitations (0.5.10) join it.
 @Module({
   // The limiter counts the account being signed in to (0.3.8).
   imports: [RateLimitModule],
@@ -38,6 +40,7 @@ import { AuthController } from './presentation/auth.controller';
     IdentityValkey,
     { provide: CLOCK, useValue: systemClock },
     CsrfTokens,
+    AssurancePolicy,
     SessionService,
     SignInUseCase,
     ReadSessionUseCase,
@@ -45,6 +48,6 @@ import { AuthController } from './presentation/auth.controller';
     OwnSessionsUseCase,
     BackchannelLogoutUseCase,
   ],
-  exports: [IdentityProviderPort, SessionService, CsrfTokens],
+  exports: [IdentityProviderPort, SessionService, CsrfTokens, AssurancePolicy],
 })
 export class IdentityModule {}

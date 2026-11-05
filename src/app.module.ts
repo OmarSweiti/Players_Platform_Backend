@@ -25,6 +25,7 @@ import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/security/csrf.guard';
 import { RolesGuard } from './common/guards/roles.guard';
+import { RecentAuthGuard } from './common/guards/recent-auth.guard';
 
 @Module({
   imports: [
@@ -66,6 +67,9 @@ import { RolesGuard } from './common/guards/roles.guard';
     // permissions, so that a forged write learns nothing of them.
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
+    // Last: a sensitive action asks for a recent authentication (0.5.8) only
+    // of a member who may take it.
+    { provide: APP_GUARD, useClass: RecentAuthGuard },
   ],
 })
 export class AppModule {}

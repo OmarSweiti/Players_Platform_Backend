@@ -123,12 +123,13 @@ describe('the local credential system is retired', () => {
       const found = routes.find((r) => `${r.method} ${r.path}` === route);
       expect([route, found?.isPublic]).toEqual([route, false]);
     }
-    // What is under /auth/ is sign-in through the identity provider (0.5.5),
-    // the session it opens (0.5.6), and signing out (0.5.7): no route takes
-    // a credential.
+    // What is under /auth/ is sign-in through the identity provider (0.5.5)
+    // and its step-up (0.5.8), the session it opens (0.5.6), and signing out
+    // (0.5.7): no route takes a credential.
     expect(served.filter((route) => route.includes('/auth/'))).toEqual([
       'get /api/v1/auth/login',
       'get /api/v1/auth/callback',
+      'get /api/v1/auth/step-up',
       'get /api/v1/auth/session',
       'post /api/v1/auth/logout',
       'post /api/v1/auth/logout-all',

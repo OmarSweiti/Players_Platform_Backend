@@ -14,6 +14,7 @@ import {
 import { z } from 'zod';
 import { IF_MATCH_KEY } from '../concurrency/if-match.decorator';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
+import { RECENT_AUTH_KEY } from '../decorators/requires-recent-auth.decorator';
 import {
   type ErrorCode,
   FIELD_PROBLEMS,
@@ -75,6 +76,12 @@ const ProblemDetails = z.object({
       }),
     )
     .max(MAX_FIELD_ERRORS),
+  stepUpUrl: z
+    .string()
+    .optional()
+    .describe(
+      'STEP_UP_REQUIRED only: where to send the browser to authenticate again, with returnTo',
+    ),
 });
 
 /** What the contract needs to know of a route besides its swagger metadata. */
@@ -82,6 +89,7 @@ interface RouteFacts {
   isPublic: boolean;
   rateLimited: boolean;
   ifMatch: boolean;
+  recentAuth: boolean;
   raises: readonly ErrorCode[];
 }
 
@@ -209,6 +217,8 @@ function problemCodesOf(
     }
   }
   if (path.includes('{')) codes.add('NOT_FOUND');
+  // A sensitive action asks for a recent authentication (0.5.8).
+  if (facts.recentAuth) codes.add('STEP_UP_REQUIRED');
   if (facts.ifMatch) {
     codes.add('REVISION_MISMATCH').add('PRECONDITION_REQUIRED');
   }
@@ -344,6 +354,9 @@ function routesOf(app: INestApplication): Map<string, RouteFacts> {
             true,
           rateLimited: limit !== 'none',
           ifMatch: reflector.get<boolean>(IF_MATCH_KEY, handler) === true,
+          recentAuth:
+            reflector.getAllAndOverride<boolean>(RECENT_AUTH_KEY, targets) ===
+            true,
           raises:
             reflector.getAllAndMerge<ErrorCode[]>(RAISES_KEY, targets) ?? [],
         });

@@ -223,7 +223,7 @@ describe('sign-out, back-channel logout and session management', () => {
         lastSeenAt: row.lastSeenAt.toISOString(),
         idleExpiresAt: row.idleExpiresAt.toISOString(),
         absoluteExpiresAt: row.absoluteExpiresAt.toISOString(),
-        acr: null,
+        acr: row.acr,
         current: row.id === firstRow.id,
       })),
       page: { nextCursor: null, hasMore: false },

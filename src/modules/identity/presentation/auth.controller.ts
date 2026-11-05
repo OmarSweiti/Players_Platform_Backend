@@ -42,7 +42,10 @@ import {
   type CurrentSession,
   ReadSessionUseCase,
 } from '../application/use-cases/read-session.usecase';
-import { SignInUseCase } from '../application/use-cases/sign-in.usecase';
+import {
+  type SignInOutcome,
+  SignInUseCase,
+} from '../application/use-cases/sign-in.usecase';
 import {
   type SignedOut,
   SignOutUseCase,
@@ -139,21 +142,57 @@ export class AuthController {
     @Res() response: Response,
     @Query({ schema: CallbackQuery }) _answer: CallbackQuery,
   ): Promise<void> {
-    const preauth = cookieOf(request, PREAUTH_COOKIE);
-    // One callback per pre-auth cookie: it is cleared whatever the outcome,
-    // and so is any page that answers here.
-    response.clearCookie(PREAUTH_COOKIE, COOKIE_ATTRIBUTES);
+    // No page that answers here may be kept.
     response.setHeader('Cache-Control', 'no-store');
-    const signedIn = await this.signIn.complete({
-      arrival: request,
-      query: queryOf(request),
-      preauth,
-    });
-    response.cookie(SESSION_COOKIE, signedIn.sessionToken, {
+    let outcome: SignInOutcome;
+    try {
+      outcome = await this.signIn.complete({
+        arrival: request,
+        query: queryOf(request),
+        preauth: cookieOf(request, PREAUTH_COOKIE),
+        session: cookieOf(request, SESSION_COOKIE),
+      });
+    } catch (error) {
+      // One callback per pre-auth cookie: refused, it is cleared.
+      response.clearCookie(PREAUTH_COOKIE, COOKIE_ATTRIBUTES);
+      throw error;
+    }
+    if (outcome.kind === 'second-factor-needed') {
+      // The same browser goes back to the provider for the second factor.
+      response.cookie(PREAUTH_COOKIE, outcome.preauth, {
+        ...COOKIE_ATTRIBUTES,
+        maxAge: outcome.preauthMaxAgeMs,
+      });
+      navigate(response, outcome.authorizationUrl.href);
+      return;
+    }
+    response.clearCookie(PREAUTH_COOKIE, COOKIE_ATTRIBUTES);
+    response.cookie(SESSION_COOKIE, outcome.sessionToken, {
       ...COOKIE_ATTRIBUTES,
-      maxAge: signedIn.sessionMaxAgeMs,
+      maxAge: outcome.sessionMaxAgeMs,
     });
-    navigate(response, signedIn.returnTo);
+    navigate(response, outcome.returnTo);
+  }
+
+  @RateLimit('auth')
+  @Get('step-up')
+  @ApiOperation({
+    summary:
+      'Authenticate again for a sensitive action: to the identity provider, then back to returnTo',
+  })
+  @Redirects('To the identity provider, to authenticate again')
+  async stepUp(
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @Req() request: Request,
+    @Res() response: Response,
+    @Query({ schema: LoginQuery }) query: LoginQuery,
+  ): Promise<void> {
+    const authorizationUrl = await this.signIn.beginStepUp(ctx, {
+      arrival: request,
+      callbackPath: this.callbackPath,
+      returnTo: query.returnTo ?? '/',
+    });
+    navigate(response, authorizationUrl.href);
   }
 
   @Get('session')

@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   NotFoundError,
   RateLimitedError,
+  StepUpRequiredError,
   ValidationFailedError,
 } from '../errors/domain-error';
 import { FIELD_PROBLEMS, PROBLEMS } from '../errors/error-codes';
@@ -173,6 +174,18 @@ describe('ProblemDetailsFilter', () => {
 
     expect(answer(new NotFoundError('gone')).headers).not.toHaveProperty(
       'Retry-After',
+    );
+  });
+
+  it('names where to authenticate again only for a step-up', () => {
+    const stepUp = answer(new StepUpRequiredError('/api/v1/auth/step-up'));
+    expect(stepUp).toMatchObject({ status: 403 });
+    expect(stepUp.body).toMatchObject({
+      code: 'STEP_UP_REQUIRED',
+      stepUpUrl: '/api/v1/auth/step-up',
+    });
+    expect(answer(new NotFoundError('gone')).body).not.toHaveProperty(
+      'stepUpUrl',
     );
   });
 

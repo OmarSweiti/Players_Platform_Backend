@@ -97,6 +97,9 @@ export class OidcRelyingParty {
     if (request.acrValues !== undefined) {
       parameters.acr_values = request.acrValues;
     }
+    if (request.maxAge !== undefined) {
+      parameters.max_age = String(request.maxAge);
+    }
     return oidc.buildAuthorizationUrl(await this.discovered(), parameters);
   }
 
@@ -113,6 +116,8 @@ export class OidcRelyingParty {
         expectedState: answer.expectedState,
         expectedNonce: answer.expectedNonce,
         idTokenExpected: true,
+        // With max_age, `auth_time` is required and must be that recent.
+        ...(answer.maxAge !== undefined ? { maxAge: answer.maxAge } : {}),
       }),
     );
     const claims = tokens.claims();

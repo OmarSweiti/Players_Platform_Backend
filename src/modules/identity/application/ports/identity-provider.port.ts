@@ -78,6 +78,11 @@ export interface AuthorizationRequest {
   readonly loginHint?: string;
   /** The assurance a step-up asks for (0.5.8). */
   readonly acrValues?: string;
+  /**
+   * How many seconds ago the person may have last authenticated (OpenID
+   * Connect Core 1.0, 3.1.2.1): 0 has them authenticate again (0.5.8).
+   */
+  readonly maxAge?: number;
   readonly locale: Locale;
 }
 
@@ -87,6 +92,8 @@ export interface CallbackAnswer {
   readonly codeVerifier: string;
   readonly expectedState: string;
   readonly expectedNonce: string;
+  /** The `max_age` the request sent, which `auth_time` is checked against. */
+  readonly maxAge?: number;
 }
 
 /** Who signed in, as the ID token proved it. Nothing else is kept. */
