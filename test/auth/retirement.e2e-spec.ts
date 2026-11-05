@@ -61,6 +61,15 @@ const RETIRED = [
   'post /api/v1/auth/logout-all',
 ];
 
+// Three of those addresses are served again from 0.5.7, as the session's own
+// routes: they end or list sessions the identity provider's sign-in opened,
+// behind the session (and a write, its CSRF token), and take no credential.
+const SESSION_ROUTES_SINCE_0_5_7 = new Set([
+  'post /api/v1/auth/logout',
+  'post /api/v1/auth/logout-all',
+  'get /api/v1/auth/sessions',
+]);
+
 const CREDENTIAL_COLUMNS = [
   'passwordHash',
   'passwordChangedAt',
@@ -104,13 +113,28 @@ describe('the local credential system is retired', () => {
   it('no_local_credential_route_remains', () => {
     expect(routes.length).toBeGreaterThan(0);
     const served = routes.map(({ method, path }) => `${method} ${path}`);
-    for (const route of RETIRED) expect(served).not.toContain(route);
-    // What remains under /auth/ is sign-in through the identity provider
-    // (0.5.5) and the session it opens (0.5.6): no route takes a credential.
+    for (const route of RETIRED) {
+      if (!SESSION_ROUTES_SINCE_0_5_7.has(route)) {
+        expect(served).not.toContain(route);
+      }
+    }
+    // Those served again need a session: none is public.
+    for (const route of SESSION_ROUTES_SINCE_0_5_7) {
+      const found = routes.find((r) => `${r.method} ${r.path}` === route);
+      expect([route, found?.isPublic]).toEqual([route, false]);
+    }
+    // What is under /auth/ is sign-in through the identity provider (0.5.5),
+    // the session it opens (0.5.6), and signing out (0.5.7): no route takes
+    // a credential.
     expect(served.filter((route) => route.includes('/auth/'))).toEqual([
       'get /api/v1/auth/login',
       'get /api/v1/auth/callback',
       'get /api/v1/auth/session',
+      'post /api/v1/auth/logout',
+      'post /api/v1/auth/logout-all',
+      'get /api/v1/auth/sessions',
+      'delete /api/v1/auth/sessions/:id',
+      'post /api/v1/auth/backchannel-logout',
     ]);
   });
 
@@ -123,8 +147,9 @@ describe('the local credential system is retired', () => {
       const response = await booted.http[method](url);
       expect([method, path, response.status]).toEqual([method, path, 401]);
     }
-    // The public routes still answer: the probes, and sign-in's routes, which
-    // the host and the browser's sign-in decide, not a session (0.5.5).
+    // The public routes still answer: the probes, sign-in's routes, which the
+    // host and the browser's sign-in decide (0.5.5), and back-channel logout,
+    // which the provider's signed token decides (0.5.7) — never a session.
     const answers: Record<string, number> = {};
     for (const { method, path } of routes.filter(({ isPublic }) => isPublic)) {
       answers[`${method} ${path}`] = (await booted.http[method](path)).status;
@@ -134,6 +159,7 @@ describe('the local credential system is retired', () => {
       'get /health/ready': 200,
       'get /api/v1/auth/login': 404, // 127.0.0.1 is no tenant's host
       'get /api/v1/auth/callback': 401, // no sign-in in flight here
+      'post /api/v1/auth/backchannel-logout': 400, // no logout token
     });
   });
 

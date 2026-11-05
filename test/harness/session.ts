@@ -21,10 +21,13 @@ const TEST_ISSUER = 'https://idp.agency.test/realms/sadara';
  * it), the session cookie, that host's Origin, and the session's CSRF token.
  * The real session guard checks them, as it checks a browser's; only a test
  * of sign-in itself goes through the provider. A member with no identity is
- * linked to a new synthetic one first. Every call opens a new session.
+ * linked to one first: `provider`'s issuer and subject (found or added), or a
+ * new synthetic one; the session carries `provider.sid`, as the provider's
+ * session (0.5.7). Every call opens a new session.
  */
 export async function signedInAs(
   member: Pick<User, 'id' | 'tenantId'>,
+  provider?: { issuer: string; subject: string; sid?: string },
 ): Promise<Record<string, string>> {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest();
@@ -35,12 +38,27 @@ export async function signedInAs(
         identity: { select: { id: true, issuer: true, subject: true } },
       },
     });
+    const wanted = {
+      issuer: provider?.issuer ?? TEST_ISSUER,
+      subject: provider?.subject ?? randomUUID(),
+    };
     const identity =
       linked.identity ??
+      (await tx.identity.findUnique({
+        where: { issuer_subject: wanted },
+        select: { id: true, issuer: true, subject: true },
+      })) ??
       (await tx.identity.create({
-        data: { issuer: TEST_ISSUER, subject: randomUUID() },
+        data: wanted,
         select: { id: true, issuer: true, subject: true },
       }));
+    if (
+      provider &&
+      (identity.issuer !== provider.issuer ||
+        identity.subject !== provider.subject)
+    ) {
+      throw new Error('the member is linked to another identity');
+    }
     if (!linked.identity) {
       await tx.user.update({
         where: { id: member.id },
@@ -56,6 +74,7 @@ export async function signedInAs(
         tokenHash: new Uint8Array(tokenHash),
         issuer: identity.issuer,
         subject: identity.subject,
+        providerSid: provider?.sid,
         authTime: new Date(now),
         idleExpiresAt: new Date(now + SESSION_IDLE_MS),
         absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_MS),

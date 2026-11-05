@@ -33,6 +33,13 @@ export abstract class IdentityProviderPort {
   abstract verifyLogoutToken(jwt: string): Promise<LogoutClaims>;
 
   /**
+   * Where to send the browser to sign out at the provider too (0.5.7), and be
+   * returned to `postLogoutRedirectUri`, one the provider has registered.
+   * Sadara keeps no ID token, so the client identifies itself instead.
+   */
+  abstract endSessionUrl(request: EndSessionRequest): Promise<URL>;
+
+  /**
    * A new account for `email`, which the person completes through
    * `requiredActions`. Its subject is the identity's (0.5.3).
    */
@@ -50,6 +57,13 @@ export abstract class IdentityProviderPort {
 }
 
 export type Locale = 'ar' | 'en';
+
+/**
+ * How old a back-channel logout token may be (0.5.7). OpenID Connect
+ * Back-Channel Logout 1.0 asks for short-lived tokens; a bounded age bounds
+ * how long a token's `jti` must be remembered to refuse its replay.
+ */
+export const LOGOUT_TOKEN_MAX_AGE_SECONDS = 5 * 60;
 
 /** What a person completes at the provider before their account is ready. */
 export type RequiredAction = 'VERIFY_EMAIL' | 'SET_PASSWORD' | 'CONFIGURE_OTP';
@@ -88,9 +102,23 @@ export interface VerifiedSignIn {
   readonly emailVerified: boolean;
 }
 
+/**
+ * A verified back-channel logout token (0.5.4; 0.5.7): whose sessions end,
+ * and what identifies the token itself, so that it is honoured once.
+ */
 export interface LogoutClaims {
+  readonly issuer: string;
+  /** The token's own id: a replay repeats it (0.5.7). */
+  readonly jti: string;
+  readonly issuedAt: Date;
   readonly subject?: string;
   readonly sid?: string;
+}
+
+export interface EndSessionRequest {
+  /** This host's start page, which the provider has registered (0.5.1). */
+  readonly postLogoutRedirectUri: URL;
+  readonly locale: Locale;
 }
 
 /**
