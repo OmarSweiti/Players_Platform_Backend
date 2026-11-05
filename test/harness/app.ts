@@ -11,6 +11,7 @@ import {
   configureApp,
 } from '../../src/app.setup';
 import { SessionGuard } from '../../src/common/guards/session.guard';
+import { IdentityProviderPort } from '../../src/modules/identity/application/ports/identity-provider.port';
 import { LOG_SINK } from '../../src/infrastructure/logging/logger-options';
 import {
   RATE_LIMIT_KEY_PREFIX,
@@ -48,6 +49,12 @@ export async function bootApp(
     rateLimitNamespace?: string;
     /** TRUSTED_PROXIES, for this app only: the environment has none. */
     trustedProxies?: string[];
+    /**
+     * The identity provider, for this app only: the environment names one
+     * that does not exist. Sign-in's tests pass the adapter, configured for a
+     * test issuer (test/support/test-issuer.ts).
+     */
+    identityProvider?: IdentityProviderPort;
   } = {},
 ): Promise<BootedApp> {
   const builder = Test.createTestingModule({
@@ -60,6 +67,11 @@ export async function bootApp(
   // Signed-in requests, until real sessions exist (test/harness/session.ts).
   if (opts.testSessions) {
     builder.overrideProvider(SessionGuard).useClass(TestSessionGuard);
+  }
+  if (opts.identityProvider) {
+    builder
+      .overrideProvider(IdentityProviderPort)
+      .useValue(opts.identityProvider);
   }
   // Test files run at once against one Valkey: none may spend another's limits.
   const namespace = opts.rateLimitNamespace ?? randomUUID();
