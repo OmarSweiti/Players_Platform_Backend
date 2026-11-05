@@ -129,6 +129,12 @@ export const Env = z
     OIDC_CLIENT_SECRET: z.string().min(16),
     OIDC_ADMIN_CLIENT_ID: clientId,
     OIDC_ADMIN_CLIENT_SECRET: z.string().min(16),
+    // The key the session's CSRF token is derived under (0.5.6; ADR-0003): an
+    // HMAC of the session token's digest, so nothing is stored. Rotating it:
+    // the new key here, the old one in CSRF_SECRET_PREVIOUS until every
+    // session it served has expired (12 hours).
+    CSRF_SECRET: z.string().min(32),
+    CSRF_SECRET_PREVIOUS: optional(z.string().min(32)),
     MAIL_FROM: z.email(),
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),

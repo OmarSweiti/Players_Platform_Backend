@@ -16,7 +16,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
-import type { User } from '@prisma/client';
+import type { SessionMember } from '../../../common/interfaces/request-with-user.interface';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
@@ -370,7 +370,7 @@ export class ScoutingController {
   })
   async updateAssignmentStatus(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
-    @CurrentUser() member: User,
+    @CurrentUser() member: SessionMember,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: AssignmentStatusDto }) { status }: AssignmentStatusDto,
   ) {

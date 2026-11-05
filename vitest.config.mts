@@ -22,6 +22,10 @@ const testEnv = {
   OIDC_CLIENT_SECRET: 'test-placeholder-not-a-secret',
   OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
   OIDC_ADMIN_CLIENT_SECRET: 'test-placeholder-not-a-secret',
+  CSRF_SECRET: 'test-placeholder-not-a-secret-csrf-key',
+  // Tenants are found from the host, {slug}.localhost (0.5.2): signed-in
+  // requests come to their tenant's host (test/harness/session.ts).
+  APEX_DOMAIN: 'localhost',
 };
 
 const onDatabase = {

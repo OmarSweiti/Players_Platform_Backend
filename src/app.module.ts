@@ -23,6 +23,7 @@ import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { SessionGuard } from './common/guards/session.guard';
+import { CsrfGuard } from './common/security/csrf.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
 @Module({
@@ -55,12 +56,15 @@ import { RolesGuard } from './common/guards/roles.guard';
     // Global guards run in this order. The feature gate is first: a disabled
     // module's routes answer 404 before authentication can answer 401.
     { provide: APP_GUARD, useClass: FeatureGateGuard },
-    // useExisting, so a test can stand in for sessions (overrideProvider)
-    SessionGuard,
-    { provide: APP_GUARD, useExisting: SessionGuard },
+    // Every route not @Public() needs a session, checked in PostgreSQL on
+    // every request; the guard mints the request's tenant context (0.5.6).
+    { provide: APP_GUARD, useClass: SessionGuard },
     // After the session, so that a signed-in member counts as themselves;
     // before permissions, so that a refused request counts too.
     { provide: APP_GUARD, useClass: RateLimitGuard },
+    // After the session, whose token a write must carry (0.5.6); before
+    // permissions, so that a forged write learns nothing of them.
+    { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: RolesGuard },
   ],
 })

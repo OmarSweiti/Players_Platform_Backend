@@ -15,6 +15,7 @@ import {
   runPrisma,
 } from '../harness/fixtures';
 import { LogCapture } from '../harness/log-capture';
+import { setCookiesOf } from '../support/set-cookies';
 import { TestIssuer, type Hostile } from '../support/test-issuer';
 
 // Sign-in through the API (0.5.5; ADR-0003, SR-CORE-001), end to end against
@@ -33,32 +34,6 @@ const SECRET = /^[A-Za-z0-9_-]{43}$/;
 
 const sha256 = (value: string) => createHash('sha256').update(value).digest();
 const suffix = () => randomBytes(4).toString('hex');
-
-/** A cookie as the API set it: its value and its attributes, in lower case. */
-interface SetCookie {
-  value: string;
-  attributes: Record<string, string>;
-}
-
-function setCookiesOf(response: Response): Map<string, SetCookie> {
-  const headers = response.headers['set-cookie'] as unknown as
-    string[] | undefined;
-  const cookies = new Map<string, SetCookie>();
-  for (const header of headers ?? []) {
-    const [pair, ...rest] = header.split(';').map((part) => part.trim());
-    const at = pair.indexOf('=');
-    cookies.set(pair.slice(0, at), {
-      value: pair.slice(at + 1),
-      attributes: Object.fromEntries(
-        rest.map((attribute) => {
-          const [name, value = ''] = attribute.split('=');
-          return [name.toLowerCase(), value];
-        }),
-      ),
-    });
-  }
-  return cookies;
-}
 
 describe('sign-in through the API', () => {
   const logs = new LogCapture();

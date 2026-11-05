@@ -63,6 +63,26 @@ export class DependencyUnavailableError extends DomainError {
   readonly code = 'DEPENDENCY_UNAVAILABLE';
 }
 
+/** A write the API cannot tell its member made: no CSRF token, or from elsewhere. */
+export class CsrfFailedError extends DomainError {
+  readonly code = 'CSRF_FAILED';
+}
+
+/** A body in a format the API does not take: it takes JSON. */
+export class UnsupportedMediaTypeError extends DomainError {
+  readonly code = 'UNSUPPORTED_MEDIA_TYPE';
+}
+
+/** No session, or one that no longer signs anyone in. */
+export class AuthenticationRequiredError extends DomainError {
+  readonly code = 'AUTHENTICATION_REQUIRED';
+}
+
+/** A session past its idle or absolute expiry. */
+export class SessionExpiredError extends DomainError {
+  readonly code = 'SESSION_EXPIRED';
+}
+
 /** The resource's state does not allow this action. */
 export class InvalidTransitionError extends DomainError {
   readonly code = 'INVALID_TRANSITION';

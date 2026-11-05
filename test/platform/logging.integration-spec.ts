@@ -61,7 +61,6 @@ describe('structured logs, correlated from the request to the worker', () => {
   beforeAll(async () => {
     booted = await bootApp({
       logs: capture,
-      testSessions: true,
       controllers: [LoggingProbeController],
     });
     capture.start();
@@ -133,7 +132,7 @@ describe('structured logs, correlated from the request to the worker', () => {
       const response = await booted.http
         .get(`/api/v1/probe/logging/players/${playerId}`)
         .query({ search: CANARY })
-        .set(signedInAs(member))
+        .set(await signedInAs(member))
         .expect(200);
       reads.push({
         member,

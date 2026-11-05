@@ -17,3 +17,10 @@ export function lifetimesFrom(openedAt: Date): {
     absoluteExpiresAt: new Date(at + SESSION_ABSOLUTE_MS),
   };
 }
+
+/** A session's idle expiry once seen at `seenAt`: never past its absolute one. */
+export function idleExpiryAt(seenAt: Date, absoluteExpiresAt: Date): Date {
+  return new Date(
+    Math.min(seenAt.getTime() + SESSION_IDLE_MS, absoluteExpiresAt.getTime()),
+  );
+}

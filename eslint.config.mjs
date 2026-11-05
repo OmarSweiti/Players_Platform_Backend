@@ -8,7 +8,10 @@ import tseslint from 'typescript-eslint';
 // TenantTransactions (src/common/tenancy), never the root client; and a tenant
 // context is minted only by the session guard (0.5.6), the worker's job loader
 // (0.7.6) or an audited platform operation, each added to MINTERS as it arrives.
-const MINTERS = ['src/common/tenancy/tenant-context.ts'];
+const MINTERS = [
+  'src/common/tenancy/tenant-context.ts',
+  'src/common/guards/session.guard.ts', // 0.5.6
+];
 const MINT = {
   group: ['**/common/tenancy/tenant-context'],
   importNames: ['mintTenantContext'],

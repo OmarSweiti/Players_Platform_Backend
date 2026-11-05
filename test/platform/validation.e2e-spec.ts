@@ -16,7 +16,7 @@ import { PermissionService } from '../../src/modules/users/application/services/
 import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { controllersOf, routesOf, withParams } from '../harness/routes';
-import { signedInAs, TEST_TENANT_HEADER } from '../harness/session';
+import { signedInAs } from '../harness/session';
 
 // Both quarantined modules switched on before AppModule loads: their routes
 // are the ones that take bodies, queries and path ids today.
@@ -62,12 +62,14 @@ const REPOSITORIES: Type[] = [
 describe('strict validation, one mechanism', () => {
   let booted: BootedApp;
   let member: Record<string, string>;
+  let tenantId: string;
 
   beforeAll(async () => {
-    booted = await bootApp({ testSessions: true });
+    booted = await bootApp();
     const tenant = await createTenant();
     const admin = await createMember(tenant, 'SUPER_ADMIN');
-    member = signedInAs(admin);
+    member = await signedInAs(admin);
+    tenantId = admin.tenantId;
     // Every permission, so that only validation can refuse.
     vi.spyOn(PermissionService.prototype, 'hasPermission').mockResolvedValue(
       true,
@@ -212,7 +214,7 @@ describe('strict validation, one mechanism', () => {
     // tenant transaction, for the signed-in member's tenant (0.4.12).
     expect(findAll).toHaveBeenCalledWith(
       expect.anything(),
-      expect.objectContaining({ tenantId: member[TEST_TENANT_HEADER] }),
+      expect.objectContaining({ tenantId }),
       expect.objectContaining({ isConfidential: false }),
       { skip: 5, take: 5 },
     );

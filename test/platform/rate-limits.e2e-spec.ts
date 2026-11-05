@@ -199,14 +199,17 @@ describe('rate limits by category, shared through Valkey', () => {
   it('a_signed_in_member_counts_as_themselves', async () => {
     const signedIn = await boot({
       controllers: [MemberController],
-      testSessions: true,
     });
     const tenant = await createTenant();
     const [first, second] = await Promise.all([
       createMember(tenant, 'COACH'),
       createMember(tenant, 'COACH'),
     ]);
-    const as = (member: User) => () => signedInAs(member);
+    const sessions = new Map<User, Record<string, string>>([
+      [first, await signedInAs(first)],
+      [second, await signedInAs(second)],
+    ]);
+    const as = (member: User) => () => sessions.get(member) ?? {};
 
     // Two members on one network: one's exports leave the other's whole.
     const members = '/api/v1/probe/members';
