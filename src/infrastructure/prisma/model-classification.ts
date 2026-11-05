@@ -8,8 +8,11 @@ import { Prisma } from '@prisma/client';
  *   discovery read the narrow `tenant_directory` view instead.
  * - `read-only`: reference data the migrations write (permissions, the default
  *   role matrix, the currencies). The runtime role may read it and change nothing.
+ * - `append-only`: identities (0.5.3). The runtime role reads them and adds one
+ *   when a person first joins a tenant, and never rewrites or removes one: an
+ *   issuer and a subject name a person for good.
  */
-export type GlobalAccess = 'own-tenant-row' | 'read-only';
+export type GlobalAccess = 'own-tenant-row' | 'read-only' | 'append-only';
 
 /**
  * How a model's ids are made (0.4.11; SR-DB-002). UUIDv4 unless the class
@@ -50,8 +53,11 @@ export const MODEL_CLASSIFICATION: Readonly<
   Permission: { kind: 'global', runtime: 'read-only' },
   RolePermission: { kind: 'global', runtime: 'read-only' },
   CurrencyDefinition: { kind: 'global', runtime: 'read-only' },
+  Identity: { kind: 'global', runtime: 'append-only' },
 
   User: TENANT_OWNED,
+  // A row per sign-in, rarely updated: its index grows at one end.
+  UserSession: { ...TENANT_OWNED, ids: 'time-ordered' },
   Season: TENANT_OWNED,
   Document: TENANT_OWNED,
   Player: TENANT_OWNED,

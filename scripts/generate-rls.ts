@@ -24,6 +24,12 @@ export function rlsFor({
   class: modelClass,
   tenantColumn,
 }: ClassifiedTable): string {
+  if (modelClass.kind === 'global' && modelClass.runtime === 'append-only') {
+    return [
+      `-- ${table}: global; the runtime role reads and adds rows, and never rewrites or removes one.`,
+      `REVOKE UPDATE, DELETE ON ${table} FROM ${RUNTIME_ROLE};`,
+    ].join('\n');
+  }
   if (tenantColumn === null) {
     return [
       `-- ${table}: reference data the migrations write; the runtime role reads it.`,
