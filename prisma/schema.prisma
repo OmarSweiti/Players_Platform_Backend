@@ -55,6 +55,20 @@ enum Locale {
   @@map("locale")
 }
 
+/// Why a session ended before its expiry (0.5.3); each is the route that ends
+/// it: signing out and signing out everywhere, a member revoking one of their
+/// own sessions, and the identity provider's back-channel logout (0.5.7), and
+/// a step-up replacing the session it upgraded (0.5.8).
+enum SessionRevocation {
+  SIGN_OUT
+  SIGN_OUT_EVERYWHERE
+  REVOKED_BY_MEMBER
+  PROVIDER_LOGOUT
+  REPLACED
+
+  @@map("session_revocation")
+}
+
 enum UserRole {
   SUPER_ADMIN        // Platform-level admin (multi-tenant SaaS)
   OWNER              // Club/academy owner
@@ -406,6 +420,7 @@ model Tenant {
   playerWatchlists    PlayerWatchlist[]
   scoutingAssignments ScoutingAssignment[]
   treatmentSessions   TreatmentSession[]
+  userSessions        UserSession[]
 
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -428,6 +443,13 @@ model User {
   // No credential is stored here: passwords, second factors, reset and
   // verification tokens and lockouts belong to the identity provider
   // (ADR-0002); the local credential columns were dropped in 0.1.6.
+
+  /// The person this membership belongs to (0.5.3): a User is a membership of
+  /// one tenant, and an identity has at most one in each. Empty until linked
+  /// through proof of issuer and subject, never by email alone; an unlinked
+  /// member cannot sign in.
+  identityId            String?   @db.Uuid @map("identity_id")
+  identity              Identity? @relation(fields: [identityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   role                  UserRole
 
@@ -477,6 +499,7 @@ model User {
   scoutingAssignmentsBy ScoutingAssignment[] @relation("ScoutingAssignmentBy")
   treatmentSessions     TreatmentSession[]   @relation("TreatmentSessionConductor")
   uploadedDocuments     Document[]
+  sessions              UserSession[]
 
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -484,10 +507,79 @@ model User {
 
   @@unique([tenantId, normalizedEmail])
   @@unique([id, tenantId])
+  /// One membership per identity in a tenant. It leads with the identity, a
+  /// global row, so it also serves the key to identities.
+  @@unique([identityId, tenantId])
+  /// What a session's key names: the member, in its tenant, as that identity.
+  @@unique([id, tenantId, identityId])
 
   @@map("users")
   @@index([tenantId, isActive])
   @@index([tenantId, role])
+}
+
+/// A person as an identity provider knows them (0.5.3; ADR-0002): the issuer
+/// and the subject it gave them, and nothing else. Global: one person may be a
+/// member of several tenants, each a User linked here. The runtime role reads
+/// identities and adds them, and never rewrites or removes one (CHECKs and
+/// grants, hand-written SQL).
+model Identity {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// The provider's issuer URL, exactly as its tokens state it.
+  issuer      String   @db.VarChar(500)
+  /// The provider's id for the person: at most 255 ASCII characters (OpenID
+  /// Connect Core 1.0, section 2).
+  subject     String   @db.VarChar(255)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  memberships User[]
+
+  @@unique([issuer, subject])
+  @@map("identities")
+}
+
+/// A signed-in browser's server-side session (0.5.3; ADR-0003). The cookie
+/// holds a random token and only its SHA-256 digest is stored; no CSRF token is
+/// stored (0.5.6 derives it from the digest), and no provider token is kept —
+/// only what the ID token asserted: issuer, subject, the provider's session id
+/// (`sid`), `acr`, `amr` and `auth_time`. Idle expiry moves with use, never
+/// past the absolute expiry. CHECKs (hand-written SQL) hold the digest's size,
+/// the expiry order and the revocation pair.
+model UserSession {
+  id                String             @id @default(uuid(7)) @db.Uuid
+  tenantId          String             @db.Uuid @map("tenant_id")
+  userId            String             @db.Uuid @map("user_id")
+  identityId        String             @db.Uuid @map("identity_id")
+
+  tokenHash         Bytes              @map("token_hash")
+
+  issuer            String             @db.VarChar(500)
+  subject           String             @db.VarChar(255)
+  providerSid       String?            @db.VarChar(255) @map("provider_sid")
+  acr               String?            @db.VarChar(255)
+  amr               String[]           @default([]) @db.VarChar(64)
+  authTime          DateTime           @map("auth_time") @db.Timestamptz(3)
+
+  createdAt         DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt        DateTime           @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  idleExpiresAt     DateTime           @map("idle_expires_at") @db.Timestamptz(3)
+  absoluteExpiresAt DateTime           @map("absolute_expires_at") @db.Timestamptz(3)
+  revokedAt         DateTime?          @map("revoked_at") @db.Timestamptz(3)
+  revokeReason      SessionRevocation? @map("revoke_reason")
+
+  revision          Int                @default(1)
+
+  tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  /// The member, in this tenant, as this identity: a session cannot name
+  /// another tenant's member, nor an identity the member is not linked to.
+  user              User               @relation(fields: [userId, tenantId, identityId], references: [id, tenantId, identityId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, tokenHash])
+  @@unique([id, tenantId])
+  @@index([tenantId, userId])
+  /// Back-channel logout finds a person's sessions by the provider's sid (0.5.7).
+  @@index([tenantId, identityId, providerSid])
+  @@map("user_sessions")
 }
 
 //////////////////////////

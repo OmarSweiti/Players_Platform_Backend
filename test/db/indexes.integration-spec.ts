@@ -12,8 +12,9 @@ import { classifiedTables } from '../../src/infrastructure/prisma/model-classifi
  * Uniqueness rules on a tenant-owned table that lead with a parent's id rather
  * than tenant_id. Each is tenant-safe: the parent's id is unique across
  * tenants, and the row's composite key (0.4.4) ties that parent to the row's
- * own tenant. Leading with tenant_id would change nothing they enforce, and
- * would rename the compound keys the code addresses them by.
+ * own tenant, or the parent is global and the rule names the tenant too.
+ * Leading with tenant_id would change nothing they enforce, and would rename
+ * the compound keys the code addresses them by.
  */
 const LEADS_WITH_A_PARENT: Record<string, string> = {
   attendance_enrollment_id_training_session_id_key:
@@ -27,6 +28,8 @@ const LEADS_WITH_A_PARENT: Record<string, string> = {
     'one enrollment per programme and player',
   player_watchlists_user_id_player_id_key:
     "one watchlist entry per member and player (the watchlist repository's userId_playerId)",
+  users_identity_id_tenant_id_key:
+    'one membership per identity and tenant; the identity is global, and this serves the key to it',
 };
 
 interface Index {

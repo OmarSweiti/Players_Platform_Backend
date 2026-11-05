@@ -27,12 +27,22 @@ const CHECK_VIOLATION = '23514';
 const UNIQUE_VIOLATION = '23505';
 const RESTRICT_VIOLATION = '23001';
 
-/** The CHECKs earlier steps added, which this one leaves as they are. */
-const EARLIER_CHECKS = [
+/**
+ * The CHECKs other steps add in their own migrations, each proved by that
+ * step's own test; this one leaves them as they are.
+ */
+const OTHER_STEPS_CHECKS = [
   'currency_definitions_code_check',
   'currency_definitions_minor_unit_exponent_check',
   'enrollments_paid_currency_check',
   'users_normalized_email_check',
+  // 0.5.3: test/db/identity.integration-spec.ts
+  'identities_issuer_check',
+  'identities_subject_check',
+  'user_sessions_revision_check',
+  'user_sessions_revocation_check',
+  'user_sessions_times_check',
+  'user_sessions_token_hash_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
@@ -816,7 +826,7 @@ describe('integrity constraints in SQL', () => {
     const schema = inject('databaseSchema');
     const migrator = await connect(inject('migrationDatabaseUrl'));
     try {
-      // Every CHECK, by name: this step's list and the earlier steps' own.
+      // Every CHECK, by name: this step's list and the other steps' own.
       const { rows: checks } = await migrator.query<{
         name: string;
         table: string;
@@ -830,7 +840,7 @@ describe('integrity constraints in SQL', () => {
         [schema],
       );
       expect(checks.map((c) => c.name)).toEqual(
-        [...INTEGRITY_CHECKS.map((c) => c.name), ...EARLIER_CHECKS].sort(),
+        [...INTEGRITY_CHECKS.map((c) => c.name), ...OTHER_STEPS_CHECKS].sort(),
       );
 
       // Each as the list words it: the catalog's definition is the one
