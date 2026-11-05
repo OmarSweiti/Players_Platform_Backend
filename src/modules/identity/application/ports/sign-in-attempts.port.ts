@@ -12,8 +12,17 @@ export interface SignInAttempt {
   readonly returnTo: string;
   readonly nonce: string;
   readonly codeVerifier: string;
-  /** SHA-256 of the pre-auth cookie's value, base64url: the browser that began it. */
+  /**
+   * The browser that began it, base64url: the SHA-256 of its pre-auth
+   * cookie's value, or, for a step-up, of its session cookie's (0.5.8).
+   */
   readonly browserBinding: string;
+  /** The assurance asked for: a second factor (0.5.8). */
+  readonly acrValues?: string;
+  /** The `max_age` asked for, which the answer's `auth_time` must meet. */
+  readonly maxAge?: number;
+  /** A step-up's: the session it renews, which the browser holds. */
+  readonly stepUpSessionId?: string;
 }
 
 /**

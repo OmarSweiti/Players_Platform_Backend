@@ -48,13 +48,14 @@ export class SessionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<SessionRequest>();
     const cookies = request.cookies as Record<string, unknown> | undefined;
-    const { sessionId, tokenHash, member } = await this.sessions.authenticate({
-      arrival: request,
-      token: cookies?.[SESSION_COOKIE],
-    });
+    const { sessionId, tokenHash, authTime, acr, member } =
+      await this.sessions.authenticate({
+        arrival: request,
+        token: cookies?.[SESSION_COOKIE],
+      });
     request.user = member;
     request.tenantId = member.tenantId;
-    request.session = { id: sessionId, tokenHash };
+    request.session = { id: sessionId, tokenHash, authTime, acr };
     request.tenantContext = mintTenantContext({
       tenantId: member.tenantId,
       actor: { kind: 'USER', userId: member.id, sessionId },

@@ -8,10 +8,15 @@ export interface SessionMember {
   readonly role: UserRole;
 }
 
-/** The session a request was authenticated by: its id, and its token's digest. */
+/**
+ * The session a request was authenticated by: its id, its token's digest, and
+ * when and how strongly its member last authenticated (0.5.8).
+ */
 export interface RequestSession {
   readonly id: string;
   readonly tokenHash: Uint8Array;
+  readonly authTime: Date;
+  readonly acr: string | null;
 }
 
 export interface RequestWithUser extends Request {

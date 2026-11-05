@@ -2004,6 +2004,246 @@
         ]
       }
     },
+    "/api/v1/auth/step-up": {
+      "get": {
+        "operationId": "AuthController.stepUp",
+        "parameters": [
+          {
+            "name": "returnTo",
+            "required": false,
+            "in": "query",
+            "description": "Where to return once signed in: a path on this origin",
+            "schema": {
+              "description": "Where to return once signed in: a path on this origin",
+              "type": "string",
+              "maxLength": 2048
+            }
+          }
+        ],
+        "responses": {
+          "303": {
+            "description": "To the identity provider, to authenticate again",
+            "headers": {
+              "Location": {
+                "description": "Where the browser goes next",
+                "schema": {
+                  "type": "string",
+                  "format": "uri"
+                }
+              },
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 400
+                        },
+                        "code": {
+                          "enum": [
+                            "VALIDATION_FAILED"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required; Session expired",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 401
+                        },
+                        "code": {
+                          "enum": [
+                            "AUTHENTICATION_REQUIRED",
+                            "SESSION_EXPIRED"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 403
+                        },
+                        "code": {
+                          "enum": [
+                            "FORBIDDEN"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              },
+              "Retry-After": {
+                "$ref": "#/components/headers/RetryAfter"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 429
+                        },
+                        "code": {
+                          "enum": [
+                            "RATE_LIMITED"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal error",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 500
+                        },
+                        "code": {
+                          "enum": [
+                            "INTERNAL_ERROR"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency unavailable",
+            "headers": {
+              "X-Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/ProblemDetails"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "status": {
+                          "const": 503
+                        },
+                        "code": {
+                          "enum": [
+                            "DEPENDENCY_UNAVAILABLE"
+                          ]
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "summary": "Authenticate again for a sensitive action: to the identity provider, then back to returnTo",
+        "tags": [
+          "Authentication"
+        ],
+        "security": [
+          {
+            "session": []
+          }
+        ]
+      }
+    },
     "/health/live": {
       "get": {
         "operationId": "HealthController.live",

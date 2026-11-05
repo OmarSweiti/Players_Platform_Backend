@@ -1,8 +1,16 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { Request } from 'express';
-import { DomainError } from '../../../../common/errors/domain-error';
+import {
+  AuthenticationRequiredError,
+  DomainError,
+} from '../../../../common/errors/domain-error';
 import { RateLimiter } from '../../../../common/rate-limit/rate-limiter';
-import { AuthBootstrap } from '../../../../common/tenancy/auth-bootstrap';
+import {
+  AuthBootstrap,
+  type ProvenIdentity,
+} from '../../../../common/tenancy/auth-bootstrap';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
+import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import {
   hostOf,
   NoAccountHereError,
@@ -18,13 +26,21 @@ import {
   sameDigest,
 } from '../../domain/secrets';
 import {
+  idleExpiryAt,
   lifetimesFrom,
   SESSION_ABSOLUTE_MS,
 } from '../../domain/session-lifetime';
 import {
+  admits,
+  needsSecondFactor,
+  SECOND_FACTOR_LEVEL,
+} from '../assurance.policy';
+import {
   IdentityProviderPort,
+  type Locale,
   ProviderAnswerRefusedError,
 } from '../ports/identity-provider.port';
+import { SessionViews } from '../ports/session-views.port';
 import { SignInAttempts } from '../ports/sign-in-attempts.port';
 
 /** How long a sign-in may stay in flight, and its pre-auth cookie live: ten minutes. */
@@ -35,8 +51,9 @@ type Arrival = Pick<Request, 'hostname'>;
 
 /**
  * A sign-in this API cannot finish: the browser is not the one that began
- * it, or its state is unknown, used, or for another tenant. `check` names
- * what failed, never a value. The browser starts again.
+ * it; its state is unknown, used, or for another tenant; a step-up proved
+ * another person; or the second factor a role needs was asked for and not
+ * given. `check` names what failed, never a value. The browser starts again.
  */
 export class SignInRefusedError extends DomainError {
   readonly code = 'AUTHENTICATION_REQUIRED';
@@ -54,13 +71,27 @@ export interface SignInStarted {
   readonly preauthMaxAgeMs: number;
 }
 
-export interface SignedIn {
-  /** The session cookie's value: only its digest is stored. */
-  readonly sessionToken: string;
-  readonly sessionMaxAgeMs: number;
-  /** Where the browser goes: where sign-in began, on this origin. */
-  readonly returnTo: string;
-}
+/** What the callback came to (0.5.5; 0.5.8). */
+export type SignInOutcome =
+  | {
+      /** A session: opened, or stepped up and its token replaced. */
+      readonly kind: 'signed-in';
+      /** The session cookie's value: only its digest is stored. */
+      readonly sessionToken: string;
+      readonly sessionMaxAgeMs: number;
+      /** Where the browser goes: where sign-in began, on this origin. */
+      readonly returnTo: string;
+    }
+  | ({
+      /**
+       * A member whose role needs a second factor signed in without one: no
+       * session; the browser goes back to the provider, asking for it.
+       */
+      readonly kind: 'second-factor-needed';
+    } & SignInStarted);
+
+/** How old an authentication a step-up accepts: none — it is made anew. */
+const STEP_UP_MAX_AGE_SECONDS = 0;
 
 /**
  * Sign-in through the API (0.5.5; ADR-0003, SR-CORE-001): the authorization
@@ -73,6 +104,15 @@ export interface SignedIn {
  * that identity's membership of the host's tenant. Anyone else — no identity,
  * no membership, one inactive or archived — gets "no account here", exactly
  * as an unknown host does, and no session.
+ *
+ * Assurance (0.5.8; SR-AUTH-002). A member whose role is privileged gets no
+ * session without a second factor: the callback sends the browser back to
+ * the provider asking for level 2, and refuses if it is still not given.
+ * `beginStepUp` has a signed-in member authenticate again (`max_age=0`, and
+ * level 2 for a privileged role): that attempt is bound to the session the
+ * browser holds, and its callback updates that same session — its token
+ * replaced, its authentication time and assurance renewed — if, and only if,
+ * the same person authenticated, in the same browser.
  */
 @Injectable()
 export class SignInUseCase {
@@ -82,6 +122,8 @@ export class SignInUseCase {
     private readonly provider: IdentityProviderPort,
     private readonly attempts: SignInAttempts,
     private readonly limiter: RateLimiter,
+    private readonly transactions: TenantTransactions,
+    private readonly views: SessionViews,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -97,39 +139,53 @@ export class SignInUseCase {
     const tenant = await this.tenants.resolve(input.arrival);
     const host = hostOf(input.arrival);
     if (host === null) throw new NoAccountHereError();
-    const locale = await this.bootstrap.localeOf(tenant);
-
-    const state = newSecret();
-    const nonce = newSecret();
-    const codeVerifier = newSecret();
-    const redirectUri = new URL(input.callbackPath, `https://${host}`);
-    // First, so that a provider that does not answer leaves nothing behind.
-    const authorizationUrl = await this.provider.authorizationUrl({
-      redirectUri,
-      state,
-      nonce,
-      codeChallenge: challengeOf(codeVerifier),
-      locale,
-    });
     // Sign-ins begun in two tabs share the browser's cookie, so either finishes.
     const preauth = isSecret(input.preauth) ? input.preauth : newSecret();
-    await this.attempts.keep(
-      state,
-      {
-        tenantId: tenant.id,
-        redirectUri: redirectUri.href,
-        returnTo: input.returnTo,
-        nonce,
-        codeVerifier,
-        browserBinding: digestOf(preauth).toString('base64url'),
-      },
-      SIGN_IN_SECONDS,
-    );
+    const authorizationUrl = await this.startAttempt({
+      tenantId: tenant.id,
+      redirectUri: new URL(input.callbackPath, `https://${host}`),
+      returnTo: input.returnTo,
+      binding: preauth,
+      locale: await this.bootstrap.localeOf(tenant),
+    });
     return {
       authorizationUrl,
       preauth,
       preauthMaxAgeMs: SIGN_IN_SECONDS * 1000,
     };
+  }
+
+  /**
+   * A signed-in member authenticates again (0.5.8): where to send the
+   * browser. The attempt is bound to the session the context was minted for.
+   */
+  async beginStepUp(
+    ctx: AuthorizedTenantContext,
+    input: { arrival: Arrival; callbackPath: string; returnTo: string },
+  ): Promise<URL> {
+    if (ctx.actor.kind !== 'USER') {
+      throw new AuthenticationRequiredError('only a session steps up');
+    }
+    const { sessionId } = ctx.actor;
+    const view = await this.transactions.withTenantTransaction(ctx, (tx) =>
+      this.views.ofContext(tx, ctx),
+    );
+    const host = hostOf(input.arrival);
+    if (!view || host === null) {
+      throw new AuthenticationRequiredError('the session is gone');
+    }
+    return this.startAttempt({
+      tenantId: ctx.tenantId,
+      redirectUri: new URL(input.callbackPath, `https://${host}`),
+      returnTo: input.returnTo,
+      binding: view.tokenHash,
+      locale: ctx.locale,
+      stepUpSessionId: sessionId,
+      maxAge: STEP_UP_MAX_AGE_SECONDS,
+      ...(needsSecondFactor(view.member.role)
+        ? { acrValues: SECOND_FACTOR_LEVEL }
+        : {}),
+    });
   }
 
   async complete(input: {
@@ -138,21 +194,30 @@ export class SignInUseCase {
     query: string;
     /** The pre-auth cookie the browser holds, if any. */
     preauth: unknown;
-  }): Promise<SignedIn> {
+    /** The session cookie the browser holds, if any: a step-up's binding. */
+    session: unknown;
+  }): Promise<SignInOutcome> {
     // The browser that began it, and an attempt it began: checked before
-    // anything is sent to the provider.
-    if (!isSecret(input.preauth)) throw new SignInRefusedError('preauth');
+    // anything is sent to the provider. A browser that holds neither cookie
+    // began nothing, and takes nothing.
+    if (!isSecret(input.preauth) && !isSecret(input.session)) {
+      throw new SignInRefusedError('preauth');
+    }
     const state = new URLSearchParams(input.query).get('state');
     if (!state) throw new SignInRefusedError('state');
     const attempt = await this.attempts.take(state);
     if (!attempt) throw new SignInRefusedError('state');
+    const stepUp = attempt.stepUpSessionId !== undefined;
+    // A sign-in is bound to the pre-auth cookie; a step-up to the session.
+    const bound = stepUp ? input.session : input.preauth;
     if (
+      !isSecret(bound) ||
       !sameDigest(
         Buffer.from(attempt.browserBinding, 'base64url'),
-        digestOf(input.preauth),
+        digestOf(bound),
       )
     ) {
-      throw new SignInRefusedError('preauth');
+      throw new SignInRefusedError(stepUp ? 'session' : 'preauth');
     }
     const tenant = await this.tenants.resolve(input.arrival);
     if (tenant.id !== attempt.tenantId) throw new SignInRefusedError('tenant');
@@ -164,6 +229,7 @@ export class SignInUseCase {
       codeVerifier: attempt.codeVerifier,
       expectedState: state,
       expectedNonce: attempt.nonce,
+      maxAge: attempt.maxAge,
     });
     // Recent authentication (0.5.8) is measured from it.
     if (proven.authTime === undefined) {
@@ -174,33 +240,138 @@ export class SignInUseCase {
       'auth',
       `account:${digestOf(`${proven.issuer}\n${proven.subject}`).toString('base64url')}`,
     );
-
-    const sessionToken = newSecret();
-    const openedAt = this.clock.now();
-    const session = await this.bootstrap.openSession(
-      tenant,
-      {
-        issuer: proven.issuer,
-        subject: proven.subject,
-        sid: proven.sid,
-        acr: proven.acr,
-        amr: proven.amr,
-        authTime: proven.authTime,
-      },
-      {
-        tokenHash: digestOf(sessionToken),
-        openedAt,
-        ...lifetimesFrom(openedAt),
-      },
-    );
-    if (!session) throw new NoAccountHereError();
-    return {
-      sessionToken,
-      sessionMaxAgeMs: SESSION_ABSOLUTE_MS,
-      returnTo: returnUrl(
-        new URL(attempt.redirectUri).origin,
-        attempt.returnTo,
-      ),
+    const identity: ProvenIdentity = {
+      issuer: proven.issuer,
+      subject: proven.subject,
+      sid: proven.sid,
+      acr: proven.acr,
+      amr: proven.amr,
+      authTime: proven.authTime,
     };
+    const returnTo = returnUrl(
+      new URL(attempt.redirectUri).origin,
+      attempt.returnTo,
+    );
+    const sessionToken = newSecret();
+    const at = this.clock.now();
+
+    if (attempt.stepUpSessionId !== undefined) {
+      const steppedUp = await this.bootstrap.stepUpSession(
+        tenant,
+        { sessionId: attempt.stepUpSessionId, tokenHash: digestOf(bound) },
+        identity,
+        {
+          tokenHash: digestOf(sessionToken),
+          at,
+          idleExpiresAt: (absolute) => idleExpiryAt(at, absolute),
+        },
+        admits,
+      );
+      switch (steppedUp.kind) {
+        case 'stepped-up':
+          return {
+            kind: 'signed-in',
+            sessionToken,
+            sessionMaxAgeMs:
+              steppedUp.absoluteExpiresAt.getTime() - at.getTime(),
+            returnTo,
+          };
+        case 'gone':
+          throw new AuthenticationRequiredError('the session is gone');
+        case 'another-person':
+          throw new SignInRefusedError('identity');
+        case 'needs-assurance':
+          throw new SignInRefusedError('assurance');
+      }
+    }
+
+    const opened = await this.bootstrap.openSession(
+      tenant,
+      identity,
+      { tokenHash: digestOf(sessionToken), openedAt: at, ...lifetimesFrom(at) },
+      admits,
+    );
+    switch (opened.kind) {
+      case 'opened':
+        return {
+          kind: 'signed-in',
+          sessionToken,
+          sessionMaxAgeMs: SESSION_ABSOLUTE_MS,
+          returnTo,
+        };
+      case 'no-member':
+        throw new NoAccountHereError();
+      case 'needs-assurance':
+        // Asked for and still not given: refused, never asked again.
+        if (attempt.acrValues === SECOND_FACTOR_LEVEL) {
+          throw new SignInRefusedError('assurance');
+        }
+        return {
+          kind: 'second-factor-needed',
+          authorizationUrl: await this.startAttempt({
+            tenantId: tenant.id,
+            redirectUri: new URL(attempt.redirectUri),
+            returnTo: attempt.returnTo,
+            binding: bound,
+            locale: await this.bootstrap.localeOf(tenant),
+            acrValues: SECOND_FACTOR_LEVEL,
+          }),
+          preauth: bound,
+          preauthMaxAgeMs: SIGN_IN_SECONDS * 1000,
+        };
+    }
+  }
+
+  /**
+   * Keeps a new attempt bound to `binding` — a pre-auth cookie's value, or a
+   * session token's digest — and answers where to send the browser.
+   */
+  private async startAttempt(attempt: {
+    tenantId: string;
+    redirectUri: URL;
+    returnTo: string;
+    binding: string | Uint8Array;
+    locale: Locale;
+    acrValues?: string;
+    maxAge?: number;
+    stepUpSessionId?: string;
+  }): Promise<URL> {
+    const state = newSecret();
+    const nonce = newSecret();
+    const codeVerifier = newSecret();
+    // First, so that a provider that does not answer leaves nothing behind.
+    const authorizationUrl = await this.provider.authorizationUrl({
+      redirectUri: attempt.redirectUri,
+      state,
+      nonce,
+      codeChallenge: challengeOf(codeVerifier),
+      acrValues: attempt.acrValues,
+      maxAge: attempt.maxAge,
+      locale: attempt.locale,
+    });
+    const bindingDigest =
+      typeof attempt.binding === 'string'
+        ? digestOf(attempt.binding)
+        : Buffer.from(attempt.binding);
+    await this.attempts.keep(
+      state,
+      {
+        tenantId: attempt.tenantId,
+        redirectUri: attempt.redirectUri.href,
+        returnTo: attempt.returnTo,
+        nonce,
+        codeVerifier,
+        browserBinding: bindingDigest.toString('base64url'),
+        ...(attempt.acrValues !== undefined
+          ? { acrValues: attempt.acrValues }
+          : {}),
+        ...(attempt.maxAge !== undefined ? { maxAge: attempt.maxAge } : {}),
+        ...(attempt.stepUpSessionId !== undefined
+          ? { stepUpSessionId: attempt.stepUpSessionId }
+          : {}),
+      },
+      SIGN_IN_SECONDS,
+    );
+    return authorizationUrl;
   }
 }

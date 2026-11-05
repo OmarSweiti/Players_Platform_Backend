@@ -5,6 +5,7 @@ import {
   csrfTokenOf,
 } from '../../src/common/security/csrf-tokens';
 import { SESSION_COOKIE } from '../../src/common/security/session-cookies';
+import { needsSecondFactor } from '../../src/modules/identity/application/assurance.policy';
 import {
   SESSION_ABSOLUTE_MS,
   SESSION_IDLE_MS,
@@ -23,11 +24,14 @@ const TEST_ISSUER = 'https://idp.agency.test/realms/sadara';
  * of sign-in itself goes through the provider. A member with no identity is
  * linked to one first: `provider`'s issuer and subject (found or added), or a
  * new synthetic one; the session carries `provider.sid`, as the provider's
- * session (0.5.7). Every call opens a new session.
+ * session (0.5.7). Its assurance is what sign-in would have required: a
+ * second factor (`acr` "2") for a privileged role, a password ("1") for any
+ * other (0.5.8), unless `provider.acr` says otherwise. Every call opens a
+ * new session.
  */
 export async function signedInAs(
   member: Pick<User, 'id' | 'tenantId'>,
-  provider?: { issuer: string; subject: string; sid?: string },
+  provider?: { issuer: string; subject: string; sid?: string; acr?: string },
 ): Promise<Record<string, string>> {
   const token = randomBytes(32).toString('base64url');
   const tokenHash = createHash('sha256').update(token).digest();
@@ -35,6 +39,7 @@ export async function signedInAs(
     const linked = await tx.user.findUniqueOrThrow({
       where: { id: member.id },
       select: {
+        role: true,
         identity: { select: { id: true, issuer: true, subject: true } },
       },
     });
@@ -75,6 +80,8 @@ export async function signedInAs(
         issuer: identity.issuer,
         subject: identity.subject,
         providerSid: provider?.sid,
+        acr: provider?.acr ?? (needsSecondFactor(linked.role) ? '2' : '1'),
+        amr: needsSecondFactor(linked.role) ? ['pwd', 'otp'] : ['pwd'],
         authTime: new Date(now),
         idleExpiresAt: new Date(now + SESSION_IDLE_MS),
         absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_MS),

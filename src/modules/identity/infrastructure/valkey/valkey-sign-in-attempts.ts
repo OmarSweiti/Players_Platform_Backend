@@ -24,6 +24,9 @@ const Kept = z.strictObject({
   nonce: z.string(),
   codeVerifier: z.string(),
   browserBinding: z.string(),
+  acrValues: z.string().optional(),
+  maxAge: z.int().min(0).optional(),
+  stepUpSessionId: z.uuid().optional(),
 });
 
 /**
