@@ -33,6 +33,13 @@ export abstract class IdentityProviderPort {
   abstract verifyLogoutToken(jwt: string): Promise<LogoutClaims>;
 
   /**
+   * Where to send the browser to sign out at the provider too (0.5.7), and be
+   * returned to `postLogoutRedirectUri`, one the provider has registered.
+   * Sadara keeps no ID token, so the client identifies itself instead.
+   */
+  abstract endSessionUrl(request: EndSessionRequest): Promise<URL>;
+
+  /**
    * A new account for `email`, which the person completes through
    * `requiredActions`. Its subject is the identity's (0.5.3).
    */
@@ -88,9 +95,23 @@ export interface VerifiedSignIn {
   readonly emailVerified: boolean;
 }
 
+/**
+ * A verified back-channel logout token (0.5.4; 0.5.7): whose sessions end,
+ * and what identifies the token itself, so that it is honoured once.
+ */
 export interface LogoutClaims {
+  readonly issuer: string;
+  /** The token's own id: a replay repeats it (0.5.7). */
+  readonly jti: string;
+  readonly issuedAt: Date;
   readonly subject?: string;
   readonly sid?: string;
+}
+
+export interface EndSessionRequest {
+  /** This host's start page, which the provider has registered (0.5.1). */
+  readonly postLogoutRedirectUri: URL;
+  readonly locale: Locale;
 }
 
 /**

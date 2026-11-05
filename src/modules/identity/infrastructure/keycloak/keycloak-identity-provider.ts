@@ -8,6 +8,7 @@ import {
   IdentityProviderPort,
   type AuthorizationRequest,
   type CallbackAnswer,
+  type EndSessionRequest,
   type Locale,
   type LogoutClaims,
   type RequiredAction,
@@ -70,6 +71,10 @@ export class KeycloakIdentityProvider extends IdentityProviderPort {
 
   verifyLogoutToken(jwt: string): Promise<LogoutClaims> {
     return this.signIn.verifyLogoutToken(jwt);
+  }
+
+  endSessionUrl(request: EndSessionRequest): Promise<URL> {
+    return this.signIn.endSessionUrl(request);
   }
 
   async createAccount(

@@ -262,14 +262,23 @@ describe('the identity provider, against a test issuer', () => {
   });
 
   it('logout_tokens_are_verified', async () => {
-    // A well-formed back-channel logout token names the subject and session.
-    expect(
-      await provider.verifyLogoutToken(await issuer.logoutToken()),
-    ).toEqual({
+    // A well-formed back-channel logout token names the subject and session,
+    // and the token itself, so that it is honoured once (0.5.7).
+    const before = Math.floor(Date.now() / 1000) * 1000;
+    const claims = await provider.verifyLogoutToken(await issuer.logoutToken());
+    expect(claims).toEqual({
+      issuer: issuer.issuer,
+      jti: expect.any(String) as string,
+      issuedAt: expect.any(Date) as Date,
       subject: issuer.subject,
       sid: issuer.sid,
     });
+    expect(claims.issuedAt.getTime()).toBeGreaterThanOrEqual(before);
+    const now = Math.floor(Date.now() / 1000);
     const refusals: Array<[Hostile, RegExp]> = [
+      // older than five minutes, or issued in the future
+      [{ claims: { iat: now - 301 - 30, exp: now + 60 } }, /iat/],
+      [{ claims: { iat: now + 120, exp: now + 240 } }, /iat/],
       [{ claims: { aud: 'another-client' } }, /aud/],
       [{ claims: { iss: 'https://elsewhere.test/realms/sadara' } }, /iss/],
       [{ claims: { events: undefined } }, /events/],
@@ -288,6 +297,22 @@ describe('the identity provider, against a test issuer', () => {
         ),
       ]).toEqual([hostile, refusedBy(check)]);
     }
+  });
+
+  it('the_end_session_url_returns_to_this_host', async () => {
+    const url = await provider.endSessionUrl({
+      postLogoutRedirectUri: new URL('https://sadara.localhost/'),
+      locale: 'ar',
+    });
+    expect(url.origin + url.pathname).toBe(
+      `${issuer.issuer}/protocol/openid-connect/logout`,
+    );
+    // No ID token is kept, so the client names itself (no id_token_hint).
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      client_id: issuer.clientId,
+      post_logout_redirect_uri: 'https://sadara.localhost/',
+      ui_locales: 'ar',
+    });
   });
 
   it('an_issuer_that_does_not_answer_is_unavailable', async () => {

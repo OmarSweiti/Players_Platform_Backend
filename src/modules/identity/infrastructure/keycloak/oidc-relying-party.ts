@@ -11,6 +11,7 @@ import {
   ProviderAnswerRefusedError,
   type AuthorizationRequest,
   type CallbackAnswer,
+  type EndSessionRequest,
   type LogoutClaims,
   type VerifiedSignIn,
 } from '../../application/ports/identity-provider.port';
@@ -31,6 +32,13 @@ const ID_TOKEN_ALGORITHM = 'RS256';
  * issued in the future; this adapter refuses that too.
  */
 const CLOCK_TOLERANCE_SECONDS = 30;
+
+/**
+ * How old a logout token may be (0.5.7): OpenID Connect Back-Channel Logout
+ * 1.0 asks for short-lived tokens, and a bounded age bounds how long a
+ * token's `jti` must be remembered to refuse its replay.
+ */
+export const LOGOUT_TOKEN_MAX_AGE_SECONDS = 5 * 60;
 
 /** A logout token is signed with the issuer's keys, never a shared secret. */
 const LOGOUT_ALGORITHMS = [
@@ -154,6 +162,9 @@ export class OidcRelyingParty {
         audience: this.client.clientId,
         algorithms: LOGOUT_ALGORITHMS,
         requiredClaims: ['iat', 'jti', 'events'],
+        // Neither older than the bound nor issued in the future.
+        maxTokenAge: LOGOUT_TOKEN_MAX_AGE_SECONDS,
+        clockTolerance: CLOCK_TOLERANCE_SECONDS,
       }));
     } catch (error) {
       throw this.failureOf('logout', error);
@@ -170,7 +181,27 @@ export class OidcRelyingParty {
     if (subject === undefined && sid === undefined) {
       throw new ProviderAnswerRefusedError('logout_token:sub_or_sid');
     }
-    return { subject, sid };
+    if (!isString(payload.jti) || payload.jti === '') {
+      throw new ProviderAnswerRefusedError('logout_token:jti');
+    }
+    return {
+      issuer: metadata.issuer,
+      jti: payload.jti,
+      issuedAt: new Date(Number(payload.iat) * 1000), // a number: jose checked it
+      subject,
+      sid,
+    };
+  }
+
+  /**
+   * The provider's end-session endpoint, for this client (openid-client adds
+   * `client_id`), returning to `postLogoutRedirectUri`.
+   */
+  async endSessionUrl(request: EndSessionRequest): Promise<URL> {
+    return oidc.buildEndSessionUrl(await this.discovered(), {
+      post_logout_redirect_uri: request.postLogoutRedirectUri.href,
+      ui_locales: request.locale,
+    });
   }
 
   /** An access token for this client itself (the client credentials grant). */
