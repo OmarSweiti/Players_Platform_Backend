@@ -10,7 +10,6 @@ import {
   APP_OPTIONS,
   configureApp,
 } from '../../src/app.setup';
-import { SessionGuard } from '../../src/common/guards/session.guard';
 import { IdentityProviderPort } from '../../src/modules/identity/application/ports/identity-provider.port';
 import { LOG_SINK } from '../../src/infrastructure/logging/logger-options';
 import {
@@ -18,7 +17,6 @@ import {
   RATE_LIMIT_KEYS,
 } from '../../src/common/rate-limit/rate-limiter';
 import type { LogCapture } from './log-capture';
-import { TestSessionGuard } from './session';
 
 export interface BootedApp {
   app: INestApplication;
@@ -38,7 +36,6 @@ export async function bootApp(
      * bootApp.
      */
     logs?: LogCapture;
-    testSessions?: boolean;
     /** Test-only routes, served through the same pipeline as the app's. */
     controllers?: Type[];
     /**
@@ -64,10 +61,6 @@ export async function bootApp(
   // The log goes to stdout, errors only, as in every test; a test that reads
   // it captures it (test/harness/log-capture.ts).
   if (opts.logs) builder.overrideProvider(LOG_SINK).useValue(opts.logs.sink);
-  // Signed-in requests, until real sessions exist (test/harness/session.ts).
-  if (opts.testSessions) {
-    builder.overrideProvider(SessionGuard).useClass(TestSessionGuard);
-  }
   if (opts.identityProvider) {
     builder
       .overrideProvider(IdentityProviderPort)

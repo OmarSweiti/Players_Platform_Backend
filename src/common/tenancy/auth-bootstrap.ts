@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { UserRole } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
 import type { TenantTx } from './tenant-transaction';
 import { NoAccountHereError, type HostTenant } from './tenant-resolver';
@@ -27,11 +28,27 @@ export interface OpenedSession {
   readonly memberId: string;
 }
 
+/** A session as authentication reads it (0.5.6), with its member's standing. */
+export interface StoredSession {
+  readonly id: string;
+  readonly revokedAt: Date | null;
+  readonly lastSeenAt: Date;
+  readonly idleExpiresAt: Date;
+  readonly absoluteExpiresAt: Date;
+  readonly member: {
+    readonly id: string;
+    readonly role: UserRole;
+    readonly isActive: boolean;
+    readonly deletedAt: Date | null;
+  };
+}
+
 /**
  * The database before anyone is signed in (0.5.5; docs/reference/
- * architecture.md, "Authentication and trusted tenancy"). Sign-in knows only
- * the tenant of the host (TenantResolver), and no tenant context exists until
- * a session does: these are the few reads and writes it needs there, each in
+ * architecture.md, "Authentication and trusted tenancy"). Sign-in, and the
+ * session guard before it has a member (0.5.6), know only the tenant of the
+ * host (TenantResolver): no tenant context exists until a session holds.
+ * These are the few reads and writes they need there, each in
  * a transaction of the host's tenant under row-level security, selecting
  * authentication fields only. It mints no context and offers no generic
  * access; tenant data is reached only through a context the session guard
@@ -106,6 +123,67 @@ export class AuthBootstrap {
       });
       return { sessionId: id, memberId: member.id };
     });
+  }
+
+  /**
+   * The session whose token hashes to `tokenHash` in the tenant (0.5.6), with
+   * its member as they stand now: read from PostgreSQL on every request, so
+   * that a revocation or a deactivation holds from the next one.
+   */
+  async sessionOf(
+    tenant: HostTenant,
+    tokenHash: Uint8Array,
+  ): Promise<StoredSession | null> {
+    const row = await this.inTenant(tenant, (tx) =>
+      tx.userSession.findUnique({
+        where: {
+          tenantId_tokenHash: {
+            tenantId: tenant.id,
+            tokenHash: new Uint8Array(tokenHash),
+          },
+        },
+        select: {
+          id: true,
+          revokedAt: true,
+          lastSeenAt: true,
+          idleExpiresAt: true,
+          absoluteExpiresAt: true,
+          user: {
+            select: { id: true, role: true, isActive: true, deletedAt: true },
+          },
+        },
+      }),
+    );
+    if (!row) return null;
+    const { user, ...session } = row;
+    return { ...session, member: user };
+  }
+
+  /**
+   * Moves a live session's idle expiry (0.5.6): never past its absolute one,
+   * and never for a session revoked meanwhile.
+   */
+  async renewSession(
+    tenant: HostTenant,
+    sessionId: string,
+    seenAt: Date,
+    idleExpiresAt: Date,
+  ): Promise<void> {
+    await this.inTenant(tenant, (tx) =>
+      tx.userSession.updateMany({
+        where: {
+          id: sessionId,
+          tenantId: tenant.id,
+          revokedAt: null,
+          absoluteExpiresAt: { gte: idleExpiresAt },
+        },
+        data: {
+          lastSeenAt: seenAt,
+          idleExpiresAt,
+          revision: { increment: 1 },
+        },
+      }),
+    );
   }
 
   /** `work` in one transaction as the host's tenant, as TenantTransactions does. */

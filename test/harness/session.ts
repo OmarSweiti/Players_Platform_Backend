@@ -1,97 +1,76 @@
-import { randomUUID } from 'node:crypto';
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { User } from '@prisma/client';
-import type { Request } from 'express';
-import { IS_PUBLIC_KEY } from '../../src/common/decorators/public.decorator';
 import {
-  type AuthorizedTenantContext,
-  mintTenantContext,
-} from '../../src/common/tenancy/tenant-context';
-import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
-import { testContext } from './fixtures';
+  CSRF_HEADER,
+  csrfTokenOf,
+} from '../../src/common/security/csrf-tokens';
+import { SESSION_COOKIE } from '../../src/common/security/session-cookies';
+import {
+  SESSION_ABSOLUTE_MS,
+  SESSION_IDLE_MS,
+} from '../../src/modules/identity/domain/session-lifetime';
+import { asTenant } from './fixtures';
 
-/** The headers a test request names its member in, until real sessions exist. */
-export const TEST_MEMBER_HEADER = 'x-test-member';
-export const TEST_TENANT_HEADER = 'x-test-tenant';
-
-/** The headers that make a test request the member's. */
-export function signedInAs(
-  member: Pick<User, 'id' | 'tenantId'>,
-): Record<string, string> {
-  return {
-    [TEST_MEMBER_HEADER]: member.id,
-    [TEST_TENANT_HEADER]: member.tenantId,
-  };
-}
+/** The issuer of the identities the harness links members to: synthetic. */
+const TEST_ISSUER = 'https://idp.agency.test/realms/sadara';
 
 /**
- * A stand-in for the sessions of 0.5.6, for tests that need a signed-in
- * member: a request naming a member and their tenant (signedInAs) is that
- * member's, and any other request is refused, as the placeholder SessionGuard
- * refuses them all. The member is looked up as their tenant, the way 0.5.2
- * scopes the sign-in lookup to the tenant of the host: row-level security
- * (0.4.5) shows nothing without one. Like the guard of 0.5.6, it mints the
- * request's tenant context for that member, which handlers receive through
- * @CurrentTenantContext() (0.4.12). Installed by bootApp({ testSessions:
- * true }); never in the application.
+ * A real session for `member` (0.5.6), opened as sign-in opens one (0.5.5),
+ * and the headers of a request from the member's own page: their tenant's
+ * host ({slug}.localhost, as APEX_DOMAIN in the test environment resolves
+ * it), the session cookie, that host's Origin, and the session's CSRF token.
+ * The real session guard checks them, as it checks a browser's; only a test
+ * of sign-in itself goes through the provider. A member with no identity is
+ * linked to a new synthetic one first. Every call opens a new session.
  */
-@Injectable()
-export class TestSessionGuard implements CanActivate {
-  constructor(
-    private readonly reflector: Reflector,
-    private readonly tenants: TenantTransactions,
-  ) {}
-
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
-    if (isPublic) return true;
-
-    const request = context.switchToHttp().getRequest<
-      Request & {
-        user?: User;
-        tenantId?: string;
-        tenantContext?: AuthorizedTenantContext;
-      }
-    >();
-    const member = await this.memberOf(
-      request.header(TEST_MEMBER_HEADER),
-      request.header(TEST_TENANT_HEADER),
-    );
-    if (!member) throw new UnauthorizedException();
-
-    request.user = member;
-    request.tenantId = member.tenantId;
-    request.tenantContext = mintTenantContext({
-      tenantId: member.tenantId,
-      actor: { kind: 'USER', userId: member.id, sessionId: randomUUID() },
-      requestId: randomUUID(),
-      locale: 'en',
+export async function signedInAs(
+  member: Pick<User, 'id' | 'tenantId'>,
+): Promise<Record<string, string>> {
+  const token = randomBytes(32).toString('base64url');
+  const tokenHash = createHash('sha256').update(token).digest();
+  const host = await asTenant(member.tenantId, async (tx) => {
+    const linked = await tx.user.findUniqueOrThrow({
+      where: { id: member.id },
+      select: {
+        identity: { select: { id: true, issuer: true, subject: true } },
+      },
     });
-    return true;
-  }
-
-  private async memberOf(
-    memberId: string | undefined,
-    tenantId: string | undefined,
-  ): Promise<User | null> {
-    if (!memberId || !tenantId) return null;
-    let lookup;
-    try {
-      lookup = testContext(tenantId, 'test-session');
-    } catch {
-      return null; // not a tenant id: no such member
+    const identity =
+      linked.identity ??
+      (await tx.identity.create({
+        data: { issuer: TEST_ISSUER, subject: randomUUID() },
+        select: { id: true, issuer: true, subject: true },
+      }));
+    if (!linked.identity) {
+      await tx.user.update({
+        where: { id: member.id },
+        data: { identityId: identity.id },
+      });
     }
-    return this.tenants.withTenantTransaction(lookup, (tx) =>
-      tx.user.findFirst({ where: { id: memberId, tenantId } }),
-    );
-  }
+    const now = Date.now();
+    await tx.userSession.create({
+      data: {
+        tenantId: member.tenantId,
+        userId: member.id,
+        identityId: identity.id,
+        tokenHash: new Uint8Array(tokenHash),
+        issuer: identity.issuer,
+        subject: identity.subject,
+        authTime: new Date(now),
+        idleExpiresAt: new Date(now + SESSION_IDLE_MS),
+        absoluteExpiresAt: new Date(now + SESSION_ABSOLUTE_MS),
+      },
+    });
+    const { slug } = await tx.tenant.findUniqueOrThrow({
+      where: { id: member.tenantId },
+      select: { slug: true },
+    });
+    return `${slug}.localhost`;
+  });
+  return {
+    Host: host,
+    Cookie: `${SESSION_COOKIE}=${token}`,
+    Origin: `https://${host}`,
+    [CSRF_HEADER]: csrfTokenOf(tokenHash, process.env.CSRF_SECRET ?? ''),
+  };
 }

@@ -43,10 +43,10 @@ describe('unfinished modules stay behind their flags', () => {
   beforeAll(async () => {
     // FEATURE_MEDICAL and FEATURE_SCOUTING unset; signed-in requests through
     // the stand-in for sessions (test/harness/session.ts)
-    booted = await bootApp({ testSessions: true });
+    booted = await bootApp();
     const tenant = await createTenant();
     const member = await createMember(tenant, 'SUPER_ADMIN');
-    signedIn = signedInAs(member);
+    signedIn = await signedInAs(member);
   });
 
   afterAll(async () => {

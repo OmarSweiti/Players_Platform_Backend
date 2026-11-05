@@ -49,7 +49,7 @@ describe('the existing modules on the tenant transaction', () => {
   let playerB: Player;
 
   beforeAll(async () => {
-    booted = await bootApp({ testSessions: true });
+    booted = await bootApp();
     [a, b] = [await createTenant(), await createTenant()];
     [memberA, memberB] = [
       await createMember(a, 'MEDICAL'),
@@ -100,7 +100,7 @@ describe('the existing modules on the tenant transaction', () => {
         },
       }),
     );
-    const asA = signedInAs(memberA);
+    const asA = await signedInAs(memberA);
     const get = (path: string) => booted.http.get(`${API}${path}`).set(asA);
 
     // Lists: A's live records only, never B's, never an archived one.
@@ -159,7 +159,7 @@ describe('the existing modules on the tenant transaction', () => {
         (
           await booted.http
             .get(`${API}/medical/records`)
-            .set(signedInAs(memberB))
+            .set(await signedInAs(memberB))
         ).body,
       ),
     ).toEqual([ofB.id]);
@@ -167,7 +167,7 @@ describe('the existing modules on the tenant transaction', () => {
 
   it('scouting_writes_are_stamped_with_the_context_tenant', async () => {
     const scoutA = await createMember(a, 'SCOUT');
-    const asScoutA = signedInAs(scoutA);
+    const asScoutA = await signedInAs(scoutA);
     const post = (path: string, body: object) =>
       booted.http.post(`${API}${path}`).set(asScoutA).send(body);
 
@@ -249,7 +249,7 @@ describe('the existing modules on the tenant transaction', () => {
     ).toBe(404);
 
     // B sees none of it.
-    const asB = signedInAs(memberB);
+    const asB = await signedInAs(memberB);
     expect(
       ids((await booted.http.get(`${API}/scouting/reports`).set(asB)).body),
     ).toEqual([]);

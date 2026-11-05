@@ -26,12 +26,12 @@ import {
   RATE_LIMIT_KEY,
   type RateLimitMetadata,
 } from '../rate-limit/rate-limit.decorator';
+import { CSRF_HEADER } from '../security/csrf-tokens';
 import { SESSION_COOKIE } from '../security/session-cookies';
 import { RAISES_KEY } from './responses';
 import { zodSchemaConverter } from './zod-schema-converter';
 
-/** The header that carries the session's CSRF token on every write (ADR-0003). */
-export const CSRF_HEADER = 'X-CSRF-Token';
+export { CSRF_HEADER };
 
 const METHODS = [
   'get',
@@ -203,7 +203,10 @@ function problemCodesOf(
   if (!facts.isPublic) {
     codes.add('AUTHENTICATION_REQUIRED').add('SESSION_EXPIRED');
     codes.add('FORBIDDEN');
-    if (!SAFE.has(method)) codes.add('CSRF_FAILED');
+    // A write carries the session's token, from this origin, as JSON (0.5.6).
+    if (!SAFE.has(method)) {
+      codes.add('CSRF_FAILED').add('UNSUPPORTED_MEDIA_TYPE');
+    }
   }
   if (path.includes('{')) codes.add('NOT_FOUND');
   if (facts.ifMatch) {

@@ -106,10 +106,11 @@ describe('the local credential system is retired', () => {
     const served = routes.map(({ method, path }) => `${method} ${path}`);
     for (const route of RETIRED) expect(served).not.toContain(route);
     // What remains under /auth/ is sign-in through the identity provider
-    // (0.5.5): no route takes a credential.
+    // (0.5.5) and the session it opens (0.5.6): no route takes a credential.
     expect(served.filter((route) => route.includes('/auth/'))).toEqual([
       'get /api/v1/auth/login',
       'get /api/v1/auth/callback',
+      'get /api/v1/auth/session',
     ]);
   });
 
