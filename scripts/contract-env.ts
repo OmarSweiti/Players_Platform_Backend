@@ -12,6 +12,11 @@ const CONTRACT_ENV = {
   TRUSTED_PROXIES: '',
   CORS_ORIGIN: 'https://app.sadara.test',
   MAIL_FROM: 'no-reply@sadara.test',
+  OIDC_ISSUER: 'https://idp.sadara.test/realms/sadara',
+  OIDC_CLIENT_ID: 'sadara-api',
+  OIDC_CLIENT_SECRET: 'contract-placeholder',
+  OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
+  OIDC_ADMIN_CLIENT_SECRET: 'contract-placeholder',
   FEATURE_MEDICAL: 'false',
   FEATURE_SCOUTING: 'false',
 };

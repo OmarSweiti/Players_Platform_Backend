@@ -64,6 +64,22 @@ const database = z
       'must connect as the runtime role, never as the owner, the migrator or a superuser',
   });
 
+// The identity provider's issuer (0.5.4): HTTPS, or plain HTTP on this machine
+// only (the local stack's Keycloak), without a query or fragment.
+const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
+const issuer = z.url({ protocol: /^https?$/ }).refine(
+  (url) => {
+    const { protocol, hostname, search, hash } = new URL(url);
+    return (
+      (protocol === 'https:' || LOOPBACK.has(hostname)) &&
+      search === '' &&
+      hash === ''
+    );
+  },
+  { message: 'must be an HTTPS URL, or HTTP on localhost, with no query' },
+);
+const clientId = z.string().regex(/^[a-z0-9-]+$/, 'a client id');
+
 /** Where the API's routes live; the committed contract names this one. */
 export const DEFAULT_API_PREFIX = 'api';
 
@@ -104,6 +120,15 @@ export const Env = z
       z.string().regex(DNS_LABEL, 'a lower-case DNS label'),
     ),
     DEFAULT_TENANT_HOSTS: hostList,
+    // The identity provider (0.5.4; ADR-0002), found from its issuer by OIDC
+    // discovery. The API signs people in as OIDC_CLIENT_ID, and manages their
+    // accounts as OIDC_ADMIN_CLIENT_ID, a service account that may manage
+    // users and nothing else. Both secrets are required, with no default.
+    OIDC_ISSUER: issuer,
+    OIDC_CLIENT_ID: clientId,
+    OIDC_CLIENT_SECRET: z.string().min(16),
+    OIDC_ADMIN_CLIENT_ID: clientId,
+    OIDC_ADMIN_CLIENT_SECRET: z.string().min(16),
     MAIL_FROM: z.email(),
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),

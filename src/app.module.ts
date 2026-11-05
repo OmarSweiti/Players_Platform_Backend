@@ -17,6 +17,7 @@ import { ChatModule } from './modules/chat/chat.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ScoutingModule } from './modules/scouting/scouting.module';
 import { MedicalModule } from './modules/medical/medical.module';
+import { IdentityModule } from './modules/identity/identity.module';
 import { HealthModule } from './health/health.module';
 import { RateLimitModule } from './common/rate-limit/rate-limit.module';
 import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
@@ -37,6 +38,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     EventsModule,
     MailModule,
     StorageModule,
+    IdentityModule,
     UsersModule,
     PlayersModule,
     ContractsModule,
