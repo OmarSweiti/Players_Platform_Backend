@@ -66,14 +66,20 @@ export default defineConfig({
         },
       },
       {
-        // Against the local stack's Keycloak (0.5.4), not in CI, which has none:
-        // `npx vitest run --project keycloak` after `just up` in the umbrella.
+        // Against the local stack's Keycloak (0.5.4, 0.5.9), not in CI, which
+        // has none, with a schema of its own as the API tests have; its
+        // settings are this machine's .env, not the test placeholders:
+        // `bash -c 'source ./scripts/test-database.sh && npx vitest run
+        // --project keycloak'` after `just up` in the umbrella.
         plugins: [compile()],
         test: {
           name: 'keycloak',
           include: ['test/**/*.keycloak-spec.ts'],
           environment: 'node',
+          globalSetup: onDatabase.globalSetup,
+          setupFiles: onDatabase.setupFiles,
           testTimeout: 60_000,
+          hookTimeout: 120_000,
         },
       },
       {

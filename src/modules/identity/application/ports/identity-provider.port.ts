@@ -49,6 +49,12 @@ export abstract class IdentityProviderPort {
     requiredActions: readonly RequiredAction[],
   ): Promise<{ subject: string }>;
 
+  /**
+   * The account the provider has for `email`, if any (0.5.9): how a
+   * provisioning run that stopped part-way finds what it already made.
+   */
+  abstract findAccount(email: string): Promise<{ subject: string } | null>;
+
   /** Sends the account's pending required actions to its address. */
   abstract sendSetupEmail(subject: string): Promise<void>;
 

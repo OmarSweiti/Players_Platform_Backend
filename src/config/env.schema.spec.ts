@@ -1,6 +1,6 @@
 import { ConfigModule } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
-import { configOptions, parseEnv } from './env.schema';
+import { configOptions, parseEnv, parseProvisioningEnv } from './env.schema';
 
 // A complete, valid environment — synthetic values only.
 const valid = {
@@ -197,6 +197,36 @@ describe('the environment schema', () => {
     expect(
       failureOf({ ...valid, CSRF_SECRET_PREVIOUS: 'too-short' }),
     ).toContain('CSRF_SECRET_PREVIOUS must be at least 32 characters');
+  });
+
+  it('the_provisioning_command_needs_its_own_account_besides_the_apis', () => {
+    const provisioning = {
+      ...valid,
+      OIDC_PROVISIONER_CLIENT_ID: 'sadara-provisioner',
+      OIDC_PROVISIONER_CLIENT_SECRET: 'not-a-real-provisioner-secret',
+    };
+    expect(parseProvisioningEnv(provisioning)).toMatchObject({
+      OIDC_PROVISIONER_CLIENT_ID: 'sadara-provisioner',
+      OIDC_ISSUER: valid.OIDC_ISSUER,
+    });
+    // The API does not need it: its own environment holds without.
+    expect(() => parseEnv(valid)).not.toThrow();
+    const message = (() => {
+      try {
+        parseProvisioningEnv({
+          ...valid,
+          OIDC_PROVISIONER_CLIENT_SECRET: 'short',
+        });
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return '';
+    })();
+    expect(message).toContain('OIDC_PROVISIONER_CLIENT_ID is missing');
+    expect(message).toContain(
+      'OIDC_PROVISIONER_CLIENT_SECRET must be at least 16 characters',
+    );
+    expect(message).not.toContain('short');
   });
 
   it('refuses a database connection as the owner, the migrator or the superuser', () => {
