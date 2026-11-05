@@ -58,6 +58,13 @@ export abstract class IdentityProviderPort {
 
 export type Locale = 'ar' | 'en';
 
+/**
+ * How old a back-channel logout token may be (0.5.7). OpenID Connect
+ * Back-Channel Logout 1.0 asks for short-lived tokens; a bounded age bounds
+ * how long a token's `jti` must be remembered to refuse its replay.
+ */
+export const LOGOUT_TOKEN_MAX_AGE_SECONDS = 5 * 60;
+
 /** What a person completes at the provider before their account is ready. */
 export type RequiredAction = 'VERIFY_EMAIL' | 'SET_PASSWORD' | 'CONFIGURE_OTP';
 

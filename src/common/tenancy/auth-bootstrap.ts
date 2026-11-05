@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import type { UserRole } from '@prisma/client';
+import type { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
+import type { TenantId } from './tenant-context';
 import type { TenantTx } from './tenant-transaction';
 import { NoAccountHereError, type HostTenant } from './tenant-resolver';
 
@@ -186,9 +187,60 @@ export class AuthBootstrap {
     );
   }
 
-  /** `work` in one transaction as the host's tenant, as TenantTransactions does. */
+  /**
+   * Ends the sessions a provider's back-channel logout names (0.5.7), in
+   * every tenant, active or not: those of `sid` (and of `subject`, when the
+   * token names both), or every session of `subject` when it names no `sid`.
+   * A named subject is first resolved to its identity, so each tenant's
+   * lookup is the `(tenant_id, identity_id, provider_sid)` index; a subject
+   * Sadara has never seen has no sessions. Each tenant is its own transaction
+   * under row-level security; there is no scan across tenants, and a logout
+   * naming neither ends nothing.
+   */
+  async revokeProviderSessions(
+    logout: { issuer: string; subject?: string; sid?: string },
+    at: Date,
+  ): Promise<number> {
+    let named: Prisma.UserSessionWhereInput;
+    if (logout.subject !== undefined) {
+      const person = await this.prisma.identity.findUnique({
+        where: {
+          issuer_subject: { issuer: logout.issuer, subject: logout.subject },
+        },
+        select: { id: true },
+      });
+      if (!person) return 0;
+      named = {
+        identityId: person.id,
+        ...(logout.sid !== undefined ? { providerSid: logout.sid } : {}),
+      };
+    } else if (logout.sid !== undefined) {
+      named = { issuer: logout.issuer, providerSid: logout.sid };
+    } else {
+      return 0;
+    }
+    const tenants = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id::text AS id FROM tenant_directory`;
+    let revoked = 0;
+    for (const { id } of tenants) {
+      const { count } = await this.inTenant({ id: id as TenantId }, (tx) =>
+        tx.userSession.updateMany({
+          where: { tenantId: id, revokedAt: null, ...named },
+          data: {
+            revokedAt: at,
+            revokeReason: 'PROVIDER_LOGOUT',
+            revision: { increment: 1 },
+          },
+        }),
+      );
+      revoked += count;
+    }
+    return revoked;
+  }
+
+  /** `work` in one transaction as the tenant, as TenantTransactions does. */
   private inTenant<T>(
-    tenant: HostTenant,
+    tenant: Pick<HostTenant, 'id'>,
     work: (tx: TenantTx) => Promise<T>,
   ): Promise<T> {
     return this.prisma.$transaction(async (tx) => {

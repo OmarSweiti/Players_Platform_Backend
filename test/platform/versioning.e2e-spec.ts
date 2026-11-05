@@ -17,6 +17,8 @@ const PUBLIC_ANSWERS: Record<string, [string, number]> = {
   'get /api/v1/auth/login': ['?returnTo=//elsewhere.test', 400],
   // a callback with no sign-in in flight
   'get /api/v1/auth/callback': ['', 401],
+  // a back-channel logout with no logout token
+  'post /api/v1/auth/backchannel-logout': ['', 400],
 };
 
 describe('versioned routes', () => {

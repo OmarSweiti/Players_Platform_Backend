@@ -12,6 +12,7 @@ import {
   type AuthorizationRequest,
   type CallbackAnswer,
   type EndSessionRequest,
+  LOGOUT_TOKEN_MAX_AGE_SECONDS,
   type LogoutClaims,
   type VerifiedSignIn,
 } from '../../application/ports/identity-provider.port';
@@ -32,13 +33,6 @@ const ID_TOKEN_ALGORITHM = 'RS256';
  * issued in the future; this adapter refuses that too.
  */
 const CLOCK_TOLERANCE_SECONDS = 30;
-
-/**
- * How old a logout token may be (0.5.7): OpenID Connect Back-Channel Logout
- * 1.0 asks for short-lived tokens, and a bounded age bounds how long a
- * token's `jti` must be remembered to refuse its replay.
- */
-export const LOGOUT_TOKEN_MAX_AGE_SECONDS = 5 * 60;
 
 /** A logout token is signed with the issuer's keys, never a shared secret. */
 const LOGOUT_ALGORITHMS = [

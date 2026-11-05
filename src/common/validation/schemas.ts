@@ -43,6 +43,15 @@ export const flag = z
   .enum(['true', 'false'])
   .transform((value) => value === 'true');
 
+/**
+ * A page of a cursor-paginated list (0.3.5): how many rows, and the cursor
+ * the previous page answered with, if any (src/common/pagination).
+ */
+export const cursorPaging = {
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().min(1).max(512).optional(),
+};
+
 /** A page of a list, until cursor pagination replaces it (0.3.5). */
 export const paging = {
   page: z.coerce.number().int().min(1).max(10_000).default(1),

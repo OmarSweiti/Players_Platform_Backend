@@ -1,11 +1,29 @@
-import { Controller, Get, Query, Req, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { API_VERSION } from '../../../app.setup';
 import { Public } from '../../../common/decorators/public.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
-import { Raises, Redirects, Returns } from '../../../common/openapi/responses';
+import type { Page } from '../../../common/pagination/paginate';
+import {
+  Raises,
+  Redirects,
+  Returns,
+  ReturnsPage,
+} from '../../../common/openapi/responses';
 import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator';
 import {
   COOKIE_ATTRIBUTES,
@@ -13,12 +31,28 @@ import {
   SESSION_COOKIE,
 } from '../../../common/security/session-cookies';
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
+import { IdParams } from '../../../common/validation/schemas';
 import type { Env } from '../../../config/env.schema';
+import { BackchannelLogoutUseCase } from '../application/use-cases/backchannel-logout.usecase';
+import {
+  type ListedSession,
+  OwnSessionsUseCase,
+} from '../application/use-cases/own-sessions.usecase';
 import {
   type CurrentSession,
   ReadSessionUseCase,
 } from '../application/use-cases/read-session.usecase';
 import { SignInUseCase } from '../application/use-cases/sign-in.usecase';
+import {
+  type SignedOut,
+  SignOutUseCase,
+} from '../application/use-cases/sign-out.usecase';
+import {
+  BackchannelLogoutBody,
+  SessionsQuery,
+  SessionSummaryResponse,
+  SignedOutResponse,
+} from './dto/session-management.dto';
 import { CurrentSessionResponse } from './dto/session.dto';
 import { CallbackQuery, LoginQuery } from './dto/sign-in.dto';
 
@@ -39,10 +73,12 @@ function navigate(response: Response, to: string): void {
 }
 
 /**
- * Sign-in through the API (0.5.5), and the session it opens (0.5.6). The
- * browser navigates to sign-in's two routes: they answer with redirects and
- * cookies, not `{ data }`, are public, and are in the `auth` rate-limit
- * category (0.3.8). The session's own route needs the session.
+ * Sign-in through the API (0.5.5), the session it opens (0.5.6), and
+ * signing out and managing one's sessions (0.5.7). The browser navigates to
+ * sign-in's two routes: they answer with redirects and cookies, not
+ * `{ data }`, are public, and are in the `auth` rate-limit category (0.3.8).
+ * The session routes need the session, and their writes its CSRF token.
+ * Back-channel logout is public: the provider's signed token is its proof.
  */
 @ApiTags('Authentication')
 @Controller('auth')
@@ -52,6 +88,9 @@ export class AuthController {
   constructor(
     private readonly signIn: SignInUseCase,
     private readonly readSession: ReadSessionUseCase,
+    private readonly signOut: SignOutUseCase,
+    private readonly ownSessions: OwnSessionsUseCase,
+    private readonly backchannel: BackchannelLogoutUseCase,
     config: ConfigService<Env, true>,
   ) {
     const prefix = config.get('API_PREFIX', { infer: true });
@@ -131,4 +170,93 @@ export class AuthController {
     response.setHeader('Cache-Control', 'no-store');
     return this.readSession.execute(ctx);
   }
+
+  @Post('logout')
+  @HttpCode(200)
+  @ApiOperation({
+    summary:
+      "Sign out: this session ends, and the provider's sign-out page is named",
+  })
+  @Returns(SignedOutResponse)
+  async logout(
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<SignedOut> {
+    const signedOut = await this.signOut.execute(ctx, {
+      arrival: request,
+      everywhere: false,
+    });
+    signedOutOf(response);
+    return signedOut;
+  }
+
+  @Post('logout-all')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Sign out everywhere: every one of the member's sessions ends",
+  })
+  @Returns(SignedOutResponse)
+  async logoutAll(
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<SignedOut> {
+    const signedOut = await this.signOut.execute(ctx, {
+      arrival: request,
+      everywhere: true,
+    });
+    signedOutOf(response);
+    return signedOut;
+  }
+
+  @Get('sessions')
+  @ApiOperation({ summary: "The member's own live sessions, newest first" })
+  @ReturnsPage(SessionSummaryResponse)
+  sessions(
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @Query({ schema: SessionsQuery }) query: SessionsQuery,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<Page<ListedSession>> {
+    response.setHeader('Cache-Control', 'no-store');
+    return this.ownSessions.list(ctx, query);
+  }
+
+  @Delete('sessions/:id')
+  @ApiOperation({ summary: "End one of the member's own sessions" })
+  @Returns(z.null())
+  async endSession(
+    @CurrentTenantContext() ctx: AuthorizedTenantContext,
+    @Param({ schema: IdParams }) { id }: IdParams,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<null> {
+    const { wasCurrent } = await this.ownSessions.revoke(ctx, id);
+    // Ending this browser's own session signs this browser out.
+    if (wasCurrent) signedOutOf(response);
+    return null;
+  }
+
+  @Public()
+  @Post('backchannel-logout')
+  @HttpCode(200)
+  @ApiConsumes('application/x-www-form-urlencoded')
+  @ApiOperation({
+    summary:
+      "The identity provider's back-channel logout: the sessions its token names end",
+  })
+  @Returns(z.null())
+  async backchannelLogout(
+    @Body({ schema: BackchannelLogoutBody }) body: BackchannelLogoutBody,
+    @Res({ passthrough: true }) response: Response,
+  ): Promise<null> {
+    response.setHeader('Cache-Control', 'no-store');
+    await this.backchannel.execute(body.logout_token);
+    return null;
+  }
+}
+
+/** The session cookie cleared, with the attributes it was set with. */
+function signedOutOf(response: Response): void {
+  response.clearCookie(SESSION_COOKIE, COOKIE_ATTRIBUTES);
+  response.setHeader('Cache-Control', 'no-store');
 }
