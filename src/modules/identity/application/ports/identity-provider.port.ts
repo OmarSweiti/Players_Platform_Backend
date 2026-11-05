@@ -1,0 +1,121 @@
+import {
+  ConflictError,
+  DomainError,
+  NotFoundError,
+} from '../../../../common/errors/domain-error';
+
+/**
+ * The identity provider, behind one port (0.5.4; ADR-0002, SR-AUTH-001). The
+ * provider proves who someone is, and Sadara decides what they may do: sign-in
+ * (0.5.5) sends the browser to `authorizationUrl` and hands back what the
+ * provider returned to `exchange`; back-channel logout (0.5.7) checks its
+ * token with `verifyLogoutToken`; invitations (0.5.10) and offboarding manage
+ * accounts. The Keycloak adapter implements it
+ * (infrastructure/keycloak/keycloak-identity-provider.ts).
+ */
+export abstract class IdentityProviderPort {
+  /**
+   * Where to send the browser to sign in: the authorization code flow with
+   * PKCE (S256), for the callback of the host it came from.
+   */
+  abstract authorizationUrl(request: AuthorizationRequest): Promise<URL>;
+
+  /**
+   * The provider's answer at the callback, checked and exchanged for who
+   * signed in. Refused (`ProviderAnswerRefusedError`) unless the response
+   * carries the expected state and issuer and the ID token holds: signed by
+   * one of the issuer's current keys, from the allowlisted issuer, for this
+   * client, unexpired, and with the nonce this sign-in sent.
+   */
+  abstract exchange(callback: CallbackAnswer): Promise<VerifiedSignIn>;
+
+  /** A back-channel logout token's subject and session, once it holds. */
+  abstract verifyLogoutToken(jwt: string): Promise<LogoutClaims>;
+
+  /**
+   * A new account for `email`, which the person completes through
+   * `requiredActions`. Its subject is the identity's (0.5.3).
+   */
+  abstract createAccount(
+    email: string,
+    locale: Locale,
+    requiredActions: readonly RequiredAction[],
+  ): Promise<{ subject: string }>;
+
+  /** Sends the account's pending required actions to its address. */
+  abstract sendSetupEmail(subject: string): Promise<void>;
+
+  /** Disables the account and ends its sessions at the provider. */
+  abstract disableAccount(subject: string): Promise<void>;
+}
+
+export type Locale = 'ar' | 'en';
+
+/** What a person completes at the provider before their account is ready. */
+export type RequiredAction = 'VERIFY_EMAIL' | 'SET_PASSWORD' | 'CONFIGURE_OTP';
+
+export interface AuthorizationRequest {
+  /** This host's callback, one the provider has registered (0.5.1). */
+  readonly redirectUri: URL;
+  readonly state: string;
+  readonly nonce: string;
+  /** BASE64URL(SHA-256(code_verifier)) (RFC 7636). */
+  readonly codeChallenge: string;
+  readonly loginHint?: string;
+  /** The assurance a step-up asks for (0.5.8). */
+  readonly acrValues?: string;
+  readonly locale: Locale;
+}
+
+export interface CallbackAnswer {
+  /** The URL the browser came back to, its query as the provider wrote it. */
+  readonly callbackUrl: URL;
+  readonly codeVerifier: string;
+  readonly expectedState: string;
+  readonly expectedNonce: string;
+}
+
+/** Who signed in, as the ID token proved it. Nothing else is kept. */
+export interface VerifiedSignIn {
+  readonly issuer: string;
+  readonly subject: string;
+  /** The provider's session, which back-channel logout names (0.5.7). */
+  readonly sid?: string;
+  readonly acr?: string;
+  readonly amr: readonly string[];
+  readonly authTime?: Date;
+  readonly email?: string;
+  readonly emailVerified: boolean;
+}
+
+export interface LogoutClaims {
+  readonly subject?: string;
+  readonly sid?: string;
+}
+
+/**
+ * The provider's answer does not prove who signed in, or a logout token does
+ * not hold. `check` names the check that failed, never a token or a claim's
+ * value; sign-in (0.5.5) answers with a refusal and records it (0.7.3).
+ */
+export class ProviderAnswerRefusedError extends DomainError {
+  readonly code = 'AUTHENTICATION_REQUIRED';
+
+  constructor(readonly check: string) {
+    super(`the identity provider's answer was refused: ${check}`);
+  }
+}
+
+/** The provider already has an account for this address. */
+export class AccountExistsError extends ConflictError {
+  constructor() {
+    super('the identity provider already has an account for this address');
+  }
+}
+
+/** The provider has no account with this subject. */
+export class AccountNotFoundError extends NotFoundError {
+  constructor() {
+    super('the identity provider has no account with this subject');
+  }
+}
