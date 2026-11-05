@@ -51,21 +51,32 @@ describe('the committed OpenAPI contract (0.3.9)', () => {
 
     for (const { where, path, operation } of operations) {
       const responses = Object.entries(operation.responses);
-      const successes = responses.filter(([status]) => status.startsWith('2'));
+      // A success is `{ data }`; or, for a route the browser navigates to
+      // (sign-in, 0.5.5), a 303 to its Location with no body.
+      const isSuccess = (status: string) =>
+        status.startsWith('2') || status === '303';
+      const successes = responses.filter(([status]) => isSuccess(status));
       expect(successes.length, `${where} declares a success`).toBeGreaterThan(
         0,
       );
       for (const [status, response] of successes) {
         expect(isResponse(response), `${where} ${status}`).toBe(true);
-        const schema = (response as ResponseObject).content?.[
-          'application/json'
-        ]?.schema as SchemaObject | undefined;
+        const { content, headers } = response as ResponseObject;
+        if (status === '303') {
+          expect(content, `${where} 303 has no body`).toBeUndefined();
+          expect(headers, `${where} 303 names where`).toHaveProperty(
+            'Location',
+          );
+          continue;
+        }
+        const schema = content?.['application/json']?.schema as
+          SchemaObject | undefined;
         expect(schema?.required, `${where} ${status} is { data }`).toContain(
           'data',
         );
       }
 
-      const problems = responses.filter(([status]) => !status.startsWith('2'));
+      const problems = responses.filter(([status]) => !isSuccess(status));
       const statuses = problems.map(([status]) => status);
       expect(statuses, `${where} can always fail`).toContain('500');
       if ((operation.security ?? []).length > 0) {

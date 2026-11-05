@@ -11,6 +11,14 @@ vi.hoisted(() => {
   process.env.FEATURE_SCOUTING = 'true';
 });
 
+/** Sign-in's routes, which need no session: a request each refuses, and how. */
+const PUBLIC_ANSWERS: Record<string, [string, number]> = {
+  // a return path that leaves the origin
+  'get /api/v1/auth/login': ['?returnTo=//elsewhere.test', 400],
+  // a callback with no sign-in in flight
+  'get /api/v1/auth/callback': ['', 401],
+};
+
 describe('versioned routes', () => {
   let booted: BootedApp;
 
@@ -35,9 +43,11 @@ describe('versioned routes', () => {
     for (const { method, path } of versioned) {
       expect(path).toMatch(/^\/api\/v1\//);
       const url = withParams(path, randomUUID);
-      // Served under v1 — refused for want of a session, not unknown…
-      const served = await booted.http[method](url);
-      expect([method, path, served.status]).toEqual([method, path, 401]);
+      // Served under v1 — refused for want of a session, not unknown; or,
+      // sign-in's public routes (0.5.5), refused for what they check first…
+      const [query, status] = PUBLIC_ANSWERS[`${method} ${path}`] ?? ['', 401];
+      const served = await booted.http[method](`${url}${query}`);
+      expect([method, path, served.status]).toEqual([method, path, status]);
       // …and nowhere else.
       const unversioned = await booted.http[method](
         url.replace('/api/v1/', '/api/'),

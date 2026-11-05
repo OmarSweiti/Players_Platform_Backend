@@ -105,7 +105,12 @@ describe('the local credential system is retired', () => {
     expect(routes.length).toBeGreaterThan(0);
     const served = routes.map(({ method, path }) => `${method} ${path}`);
     for (const route of RETIRED) expect(served).not.toContain(route);
-    expect(served.filter((route) => route.includes('/auth/'))).toEqual([]);
+    // What remains under /auth/ is sign-in through the identity provider
+    // (0.5.5): no route takes a credential.
+    expect(served.filter((route) => route.includes('/auth/'))).toEqual([
+      'get /api/v1/auth/login',
+      'get /api/v1/auth/callback',
+    ]);
   });
 
   it('protected_routes_refuse_without_a_session', async () => {
@@ -117,11 +122,18 @@ describe('the local credential system is retired', () => {
       const response = await booted.http[method](url);
       expect([method, path, response.status]).toEqual([method, path, 401]);
     }
-    // The public routes still answer.
+    // The public routes still answer: the probes, and sign-in's routes, which
+    // the host and the browser's sign-in decide, not a session (0.5.5).
+    const answers: Record<string, number> = {};
     for (const { method, path } of routes.filter(({ isPublic }) => isPublic)) {
-      const response = await booted.http[method](path);
-      expect([method, path, response.status]).toEqual([method, path, 200]);
+      answers[`${method} ${path}`] = (await booted.http[method](path)).status;
     }
+    expect(answers).toEqual({
+      'get /health/live': 200,
+      'get /health/ready': 200,
+      'get /api/v1/auth/login': 404, // 127.0.0.1 is no tenant's host
+      'get /api/v1/auth/callback': 401, // no sign-in in flight here
+    });
   });
 
   it('credential_columns_are_gone', async () => {
