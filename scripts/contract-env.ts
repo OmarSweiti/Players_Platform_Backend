@@ -17,6 +17,7 @@ const CONTRACT_ENV = {
   OIDC_CLIENT_SECRET: 'contract-placeholder',
   OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
   OIDC_ADMIN_CLIENT_SECRET: 'contract-placeholder',
+  CSRF_SECRET: 'contract-placeholder-contract-placeholder',
   FEATURE_MEDICAL: 'false',
   FEATURE_SCOUTING: 'false',
 };

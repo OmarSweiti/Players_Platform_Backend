@@ -14,6 +14,7 @@ const valid = {
   OIDC_CLIENT_SECRET: 'not-a-real-client-secret',
   OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
   OIDC_ADMIN_CLIENT_SECRET: 'not-a-real-admin-secret',
+  CSRF_SECRET: 'not-a-real-csrf-key-not-a-real-csrf-key',
 } as const;
 
 const failureOf = (raw: Record<string, unknown>): string => {
@@ -181,6 +182,21 @@ describe('the environment schema', () => {
     expect(failureOf({ ...valid, OIDC_CLIENT_ID: 'Sadara API' })).toContain(
       'OIDC_CLIENT_ID must be a client id',
     );
+  });
+
+  it('takes a CSRF key, and the previous one while it rotates', () => {
+    const { CSRF_SECRET: _omitted, ...rest } = valid;
+    expect(failureOf(rest)).toContain('CSRF_SECRET is missing');
+    expect(failureOf({ ...valid, CSRF_SECRET: 'too-short' })).toContain(
+      'CSRF_SECRET must be at least 32 characters',
+    );
+    expect(parseEnv(valid).CSRF_SECRET_PREVIOUS).toBeUndefined();
+    expect(
+      parseEnv({ ...valid, CSRF_SECRET_PREVIOUS: '' }).CSRF_SECRET_PREVIOUS,
+    ).toBeUndefined();
+    expect(
+      failureOf({ ...valid, CSRF_SECRET_PREVIOUS: 'too-short' }),
+    ).toContain('CSRF_SECRET_PREVIOUS must be at least 32 characters');
   });
 
   it('refuses a database connection as the owner, the migrator or the superuser', () => {

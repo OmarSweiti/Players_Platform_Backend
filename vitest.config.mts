@@ -22,6 +22,7 @@ const testEnv = {
   OIDC_CLIENT_SECRET: 'test-placeholder-not-a-secret',
   OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
   OIDC_ADMIN_CLIENT_SECRET: 'test-placeholder-not-a-secret',
+  CSRF_SECRET: 'test-placeholder-not-a-secret-csrf-key',
 };
 
 const onDatabase = {
