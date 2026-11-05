@@ -1,0 +1,107 @@
+import { createHash } from 'node:crypto';
+import {
+  Injectable,
+  type OnModuleDestroy,
+  type OnModuleInit,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Redis } from 'ioredis';
+import { z } from 'zod';
+import { DependencyUnavailableError } from '../../../../common/errors/domain-error';
+import type { Env } from '../../../../config/env.schema';
+import {
+  type SignInAttempt,
+  SignInAttempts,
+} from '../../application/ports/sign-in-attempts.port';
+
+/** Where attempts live in Valkey: under the digest of their state, never the state itself. */
+export const SIGN_IN_ATTEMPT_KEYS = 'sadara:sign-in:';
+
+/** The key an attempt is kept under. */
+export function attemptKeyOf(state: string): string {
+  return `${SIGN_IN_ATTEMPT_KEYS}${createHash('sha256').update(state).digest('hex')}`;
+}
+
+/** How long a request waits for Valkey before sign-in is refused. */
+const TIMEOUT_MS = 500;
+
+const Kept = z.strictObject({
+  tenantId: z.uuid(),
+  redirectUri: z.url(),
+  returnTo: z.string(),
+  nonce: z.string(),
+  codeVerifier: z.string(),
+  browserBinding: z.string(),
+});
+
+/**
+ * Sign-ins in flight, in Valkey (0.5.5), so that the callback may reach any
+ * API instance. Each is one key with its expiry, read and removed in one
+ * command (GETDEL), so that two callbacks with one state cannot both take it.
+ * Without Valkey, sign-in is refused (DEPENDENCY_UNAVAILABLE), as the rate
+ * limits are.
+ */
+@Injectable()
+export class ValkeySignInAttempts
+  extends SignInAttempts
+  implements OnModuleInit, OnModuleDestroy
+{
+  private readonly valkey: Redis;
+
+  constructor(config: ConfigService<Env, true>) {
+    super();
+    this.valkey = new Redis({
+      host: config.get('REDIS_HOST', { infer: true }),
+      port: config.get('REDIS_PORT', { infer: true }),
+      lazyConnect: true,
+      enableOfflineQueue: false,
+      maxRetriesPerRequest: 0,
+      commandTimeout: TIMEOUT_MS,
+      connectTimeout: TIMEOUT_MS * 2,
+    });
+    // The client reconnects in the background; the rate limiter logs when
+    // Valkey stops and starts answering.
+    this.valkey.on('error', () => undefined);
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.valkey.connect().catch(() => undefined);
+  }
+
+  onModuleDestroy(): void {
+    this.valkey.disconnect();
+  }
+
+  async keep(
+    state: string,
+    attempt: SignInAttempt,
+    seconds: number,
+  ): Promise<void> {
+    try {
+      await this.valkey.set(
+        attemptKeyOf(state),
+        JSON.stringify(attempt),
+        'EX',
+        seconds,
+      );
+    } catch {
+      throw new DependencyUnavailableError('Valkey did not keep the sign-in');
+    }
+  }
+
+  async take(state: string): Promise<SignInAttempt | null> {
+    let kept: string | null;
+    try {
+      kept = await this.valkey.getdel(attemptKeyOf(state));
+    } catch {
+      throw new DependencyUnavailableError('Valkey did not answer the sign-in');
+    }
+    if (kept === null) return null;
+    try {
+      const parsed = Kept.safeParse(JSON.parse(kept));
+      return parsed.success ? parsed.data : null;
+    } catch {
+      return null; // not JSON: nothing this API kept
+    }
+  }
+}

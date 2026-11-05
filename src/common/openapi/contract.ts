@@ -26,11 +26,10 @@ import {
   RATE_LIMIT_KEY,
   type RateLimitMetadata,
 } from '../rate-limit/rate-limit.decorator';
+import { SESSION_COOKIE } from '../security/session-cookies';
 import { RAISES_KEY } from './responses';
 import { zodSchemaConverter } from './zod-schema-converter';
 
-/** The session cookie (ADR-0023), issued at sign-in from `0.5.6`. */
-export const SESSION_COOKIE = '__Host-Http-sadara_session';
 /** The header that carries the session's CSRF token on every write (ADR-0003). */
 export const CSRF_HEADER = 'X-CSRF-Token';
 
@@ -45,6 +44,8 @@ const METHODS = [
   'trace',
 ] as const;
 type Method = (typeof METHODS)[number];
+/** The statuses an operation may declare as its success: 2xx, or a 303. */
+const SUCCESS = /^(2\d\d|303)$/;
 /** Methods that change nothing, so carry no CSRF token. */
 const SAFE: ReadonlySet<Method> = new Set(['get', 'head', 'options']);
 
@@ -98,7 +99,8 @@ interface RouteFacts {
  *   status's codes;
  * - `X-Request-Id` on every response, `Retry-After` on 429.
  *
- * Generation fails on an operation without a declared success (`@Returns`),
+ * Generation fails on an operation without a declared success (`@Returns`, or
+ * `@Redirects` for a route the browser navigates to),
  * on a parameter or body without a schema, and on a problem response
  * declared any other way than through `@Raises`.
  */
@@ -233,15 +235,19 @@ function completeOperation(
     throw new Error(`${where}: its body has no schema`);
   }
 
+  // A success is a body (`@Returns`), or a redirect to a Location
+  // (`@Redirects`), never both and never neither.
   const declared = Object.entries(operation.responses);
-  const successes = declared.filter(([status]) => /^2\d\d$/.test(status));
+  const successes = declared.filter(([status]) => SUCCESS.test(status));
   if (
     successes.length === 0 ||
-    !successes.every(([, response]) => hasContent(response))
+    !successes.every(([status, response]) =>
+      status === '303' ? hasLocation(response) : hasContent(response),
+    )
   ) {
     throw new Error(`${where} declares no success: add @Returns(schema)`);
   }
-  const problem = declared.find(([status]) => !/^2\d\d$/.test(status));
+  const problem = declared.find(([status]) => !SUCCESS.test(status));
   if (problem) {
     throw new Error(`${where} declares ${problem[0]} itself: use @Raises`);
   }
@@ -356,6 +362,12 @@ function hasContent(response: ResponseObject | ReferenceObject | undefined) {
   return Object.values(response.content ?? {}).some((media) =>
     hasSchema(media.schema),
   );
+}
+
+/** A redirect that names where it goes, and carries no body. */
+function hasLocation(response: ResponseObject | ReferenceObject | undefined) {
+  if (!response || '$ref' in response) return false;
+  return response.headers?.Location !== undefined && !response.content;
 }
 
 /** A map with its keys in code-point order, so the file diffs stably. */
