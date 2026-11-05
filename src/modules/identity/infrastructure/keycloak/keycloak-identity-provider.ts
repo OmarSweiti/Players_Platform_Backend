@@ -95,6 +95,31 @@ export class KeycloakIdentityProvider extends IdentityProviderPort {
     return { subject };
   }
 
+  async findAccount(email: string): Promise<{ subject: string } | null> {
+    const address = email.trim().toLowerCase();
+    const response = await this.adminApi.call(
+      'GET',
+      `/users?email=${encodeURIComponent(address)}&exact=true&briefRepresentation=true`,
+    );
+    if (response.status !== 200) {
+      await response.body?.cancel();
+      throw this.adminApi.unexpected('find account', response.status);
+    }
+    const users = (await response.json()) as Array<{
+      id?: unknown;
+      email?: unknown;
+    }>;
+    // Exact, whatever the search matched: the address, in Keycloak's lower case.
+    const user = users.find(
+      (candidate) =>
+        typeof candidate.email === 'string' &&
+        candidate.email.toLowerCase() === address,
+    );
+    return typeof user?.id === 'string' && SUBJECT.test(user.id)
+      ? { subject: user.id }
+      : null;
+  }
+
   async sendSetupEmail(subject: string): Promise<void> {
     const user = await this.account(subject);
     const actions = Array.isArray(user.requiredActions)

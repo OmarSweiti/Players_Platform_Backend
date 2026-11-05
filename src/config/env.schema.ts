@@ -187,7 +187,15 @@ function problemOf(
  * missing or invalid — never a value, so the error can be logged.
  */
 export function parseEnv(raw: Record<string, unknown>): Env {
-  const result = Env.safeParse(raw);
+  return parseWith(Env, raw);
+}
+
+/** `raw` through `schema`, or an error naming every variable, never a value. */
+function parseWith<T extends z.ZodType>(
+  schema: T,
+  raw: Record<string, unknown>,
+): z.output<T> {
+  const result = schema.safeParse(raw);
   if (result.success) return result.data;
   const problems = [
     ...new Set(result.error.issues.map((issue) => problemOf(issue, raw))),
@@ -195,6 +203,37 @@ export function parseEnv(raw: Record<string, unknown>): Env {
   throw new Error(
     `The environment is invalid: ${problems.join('; ')}. Every variable is described in .env.example.`,
   );
+}
+
+/**
+ * What the tenant provisioning command needs besides the API's own settings
+ * (0.5.9): the provisioning service account, which may change the sign-in
+ * client and nothing else. Only that command reads these; the API never
+ * holds them.
+ */
+const Provisioner = z.object({
+  OIDC_PROVISIONER_CLIENT_ID: clientId,
+  OIDC_PROVISIONER_CLIENT_SECRET: z.string().min(16),
+});
+export type ProvisioningEnv = Env & z.infer<typeof Provisioner>;
+
+/** The provisioning command's environment: the API's, and the provisioner's. */
+export function parseProvisioningEnv(
+  raw: Record<string, unknown>,
+): ProvisioningEnv {
+  const problems: string[] = [];
+  const attempt = <T>(parse: () => T): T | undefined => {
+    try {
+      return parse();
+    } catch (error) {
+      problems.push((error as Error).message);
+      return undefined;
+    }
+  };
+  const env = attempt(() => parseEnv(raw));
+  const provisioner = attempt(() => parseWith(Provisioner, raw));
+  if (!env || !provisioner) throw new Error(problems.join(' '));
+  return { ...env, ...provisioner };
 }
 
 /** How the application loads its configuration: validated, once, at boot. */
