@@ -28,7 +28,7 @@ import { Public } from '../decorators/public.decorator';
 import { behindFeature } from '../feature-flags/feature-gate.guard';
 import { IdParams, day } from '../validation/schemas';
 import { buildContract, CSRF_HEADER } from './contract';
-import { Raises, Returns, ReturnsPage } from './responses';
+import { Raises, Redirects, Returns, ReturnsPage } from './responses';
 
 const Thing = z
   .object({ id: z.uuid(), name: z.string(), bornOn: day })
@@ -211,6 +211,44 @@ describe('the API contract', () => {
     }
     await expect(contractOf(SilentController)).rejects.toThrow(
       'POST /api/v1/silent declares no success: add @Returns(schema)',
+    );
+  });
+
+  it('a_navigation_answers_a_redirect_without_a_body', async () => {
+    @Controller('away')
+    class AwayController {
+      @Public()
+      @Get()
+      @Redirects('To elsewhere', ['a cookie'])
+      go() {
+        return null;
+      }
+    }
+    const go = operation(
+      await contractOf(AwayController),
+      'get',
+      '/api/v1/away',
+    );
+    const redirect = go.responses['303'] as ResponseObject;
+    expect(redirect.content).toBeUndefined();
+    expect(Object.keys(redirect.headers ?? {})).toEqual([
+      'Location',
+      'Set-Cookie',
+      'X-Request-Id',
+    ]);
+    expect(go.responses['200']).toBeUndefined();
+
+    // A redirect is a success only with its Location.
+    @Controller('nowhere')
+    class NowhereController {
+      @Get()
+      @ApiResponse({ status: 303, description: 'See other' })
+      go() {
+        return null;
+      }
+    }
+    await expect(contractOf(NowhereController)).rejects.toThrow(
+      'GET /api/v1/nowhere declares no success',
     );
   });
 
