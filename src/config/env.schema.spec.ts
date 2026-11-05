@@ -9,6 +9,11 @@ const valid = {
     'postgresql://sadara_app:not-a-real-password@db.agency.test:5432/sadara',
   CORS_ORIGIN: 'https://app.agency.test',
   MAIL_FROM: 'no-reply@agency.test',
+  OIDC_ISSUER: 'https://idp.agency.test/realms/sadara',
+  OIDC_CLIENT_ID: 'sadara-api',
+  OIDC_CLIENT_SECRET: 'not-a-real-client-secret',
+  OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
+  OIDC_ADMIN_CLIENT_SECRET: 'not-a-real-admin-secret',
 } as const;
 
 const failureOf = (raw: Record<string, unknown>): string => {
@@ -146,6 +151,38 @@ describe('the environment schema', () => {
     ).toContain('DEFAULT_TENANT_SLUG is missing');
   });
 
+  it('takes the identity provider over HTTPS, or HTTP on this machine, with both secrets', () => {
+    for (const local of [
+      'http://localhost:8080/realms/sadara',
+      'http://127.0.0.1:8080/realms/sadara',
+      'http://[::1]:8080/realms/sadara',
+    ]) {
+      expect(parseEnv({ ...valid, OIDC_ISSUER: local }).OIDC_ISSUER).toBe(
+        local,
+      );
+    }
+    for (const refused of [
+      'http://idp.agency.test/realms/sadara', // plain HTTP off this machine
+      'https://idp.agency.test/realms/sadara?realm=other',
+      'https://idp.agency.test/realms/sadara#fragment',
+      'ftp://idp.agency.test/realms/sadara',
+    ]) {
+      expect(failureOf({ ...valid, OIDC_ISSUER: refused })).toContain(
+        'OIDC_ISSUER must be',
+      );
+    }
+    for (const secret of ['OIDC_CLIENT_SECRET', 'OIDC_ADMIN_CLIENT_SECRET']) {
+      const { [secret as keyof typeof valid]: _omitted, ...rest } = valid;
+      expect(failureOf(rest)).toContain(`${secret} is missing`);
+      expect(failureOf({ ...valid, [secret]: 'short' })).toContain(
+        `${secret} must be at least 16 characters`,
+      );
+    }
+    expect(failureOf({ ...valid, OIDC_CLIENT_ID: 'Sadara API' })).toContain(
+      'OIDC_CLIENT_ID must be a client id',
+    );
+  });
+
   it('refuses a database connection as the owner, the migrator or the superuser', () => {
     for (const role of [
       'sadara_owner',
@@ -175,6 +212,8 @@ describe('the environment schema', () => {
       MAIL_FROM: canary,
       PORT: canary,
       TRUSTED_PROXIES: canary,
+      OIDC_ISSUER: `https://idp.agency.test/?${canary}`,
+      OIDC_CLIENT_ID: `Client ${canary}`,
     });
 
     for (const name of [
@@ -184,6 +223,8 @@ describe('the environment schema', () => {
       'MAIL_FROM',
       'PORT',
       'TRUSTED_PROXIES',
+      'OIDC_ISSUER',
+      'OIDC_CLIENT_ID',
     ]) {
       expect(message).toContain(name);
     }

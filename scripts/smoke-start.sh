@@ -46,6 +46,9 @@ docker run -d --name "$run-api" --network "$run" \
   -e REDIS_HOST="$run-valkey" \
   -e CORS_ORIGIN=https://app.agency.test \
   -e MAIL_FROM=no-reply@agency.test \
+  -e OIDC_ISSUER=https://idp.agency.test/realms/sadara \
+  -e OIDC_CLIENT_ID=sadara-api -e OIDC_CLIENT_SECRET=not-a-secret-not-a-secret \
+  -e OIDC_ADMIN_CLIENT_ID=sadara-admin -e OIDC_ADMIN_CLIENT_SECRET=not-a-secret-not-a-secret \
   "$image" >/dev/null
 export SMOKE_CONTAINER="$run-api"
 
