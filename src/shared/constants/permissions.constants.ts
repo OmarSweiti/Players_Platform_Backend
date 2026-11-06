@@ -74,6 +74,8 @@ export const PERMISSIONS = {
   USER_UPDATE: 'user.update',
   USER_DELETE: 'user.delete',
   USER_ASSIGN_ROLE: 'user.assign_role',
+  // 0.5.10: inviting a person to the tenant, with a role
+  USER_INVITE: 'user.invite',
 
   // Tenant Management
   TENANT_MANAGE: 'tenant.manage',

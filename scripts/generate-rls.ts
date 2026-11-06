@@ -40,6 +40,7 @@ export function rlsFor({
     modelClass.kind === 'tenant-owned'
       ? `one tenant's rows, by ${tenantColumn}`
       : `each tenant sees and writes its own row`;
+  const kept = modelClass.kind === 'tenant-owned' && modelClass.rows === 'kept';
   return [
     `-- ${table}: ${whose}.`,
     `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`,
@@ -51,6 +52,12 @@ export function rlsFor({
     `CREATE TRIGGER ${table}_tenant_immutable BEFORE UPDATE ON ${table}`,
     `  FOR EACH ROW WHEN (OLD.${tenantColumn} IS DISTINCT FROM NEW.${tenantColumn})`,
     `  EXECUTE FUNCTION refuse_tenant_change('${tenantColumn}');`,
+    ...(kept
+      ? [
+          `-- Closed by a state of its own, never removed.`,
+          `REVOKE DELETE ON ${table} FROM ${RUNTIME_ROLE};`,
+        ]
+      : []),
   ].join('\n');
 }
 

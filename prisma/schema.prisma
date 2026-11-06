@@ -299,6 +299,7 @@ enum PermissionAction {
   ASSIGN
   VIEW_CONFIDENTIAL
   MANAGE
+  INVITE
 
   @@map("permission_action")
 }
@@ -421,6 +422,7 @@ model Tenant {
   scoutingAssignments ScoutingAssignment[]
   treatmentSessions   TreatmentSession[]
   userSessions        UserSession[]
+  invitations         Invitation[]
 
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -500,6 +502,8 @@ model User {
   treatmentSessions     TreatmentSession[]   @relation("TreatmentSessionConductor")
   uploadedDocuments     Document[]
   sessions              UserSession[]
+  invitationsSent       Invitation[] @relation("InvitationInviter")
+  acceptedInvitations   Invitation[] @relation("InvitationAccepted")
 
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -580,6 +584,54 @@ model UserSession {
   /// Back-channel logout finds a person's sessions by the provider's sid (0.5.7).
   @@index([tenantId, identityId, providerSid])
   @@map("user_sessions")
+}
+
+/// An invitation to join a tenant (0.5.10; ADR-0002): an address, the role it
+/// grants and the language its email is written in (DB-68), open for seven
+/// days. Its single-use token is made when its email is sent (0.7.8), and only
+/// the token's SHA-256 digest is stored, so no table holds a usable link; a new
+/// token replaces the last. Accepting needs the token and the provider's
+/// verified address, never the address alone, and closes it for good, as
+/// revoking does. CHECKs, the partial unique index that keeps one open
+/// invitation per address, and the runtime role's grants are hand-written SQL.
+model Invitation {
+  id                 String    @id @default(uuid()) @db.Uuid
+  tenantId           String    @db.Uuid @map("tenant_id")
+
+  /// The address as the inviter wrote it, and its normal form (users' rule).
+  email              String    @db.VarChar(255)
+  normalizedEmail    String    @db.VarChar(255) @map("normalized_email")
+  role               UserRole
+  locale             Locale
+
+  /// SHA-256 of the token its email carries, once one is sent: 32 bytes.
+  tokenHash          Bytes?    @map("token_hash")
+  tokenIssuedAt      DateTime? @map("token_issued_at") @db.Timestamptz(3)
+
+  invitedById        String    @db.Uuid @map("invited_by_id")
+  expiresAt          DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt         DateTime? @map("accepted_at") @db.Timestamptz(3)
+  /// The membership accepting it made, and the identity that accepted it.
+  acceptedMemberId   String?   @db.Uuid @map("accepted_member_id")
+  acceptedIdentityId String?   @db.Uuid @map("accepted_identity_id")
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamptz(3)
+
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  invitedBy          User      @relation("InvitationInviter", fields: [invitedById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  /// The member it made, in this tenant, as the identity that accepted it.
+  acceptedMember     User?     @relation("InvitationAccepted", fields: [acceptedMemberId, tenantId, acceptedIdentityId], references: [id, tenantId, identityId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, tokenHash])
+  @@unique([id, tenantId])
+  /// The list, newest first. The invitations to an address, one open at a
+  /// time, are a partial unique index (hand-written SQL).
+  @@index([tenantId, createdAt, id])
+  @@index([tenantId, invitedById])
+  @@index([tenantId, acceptedMemberId])
+  @@map("invitations")
 }
 
 //////////////////////////
