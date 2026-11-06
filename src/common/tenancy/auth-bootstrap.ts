@@ -52,6 +52,43 @@ export type SteppedUp =
   | { readonly kind: 'another-person' }
   | { readonly kind: 'needs-assurance' };
 
+/** A pending invitation, as a sign-in that carries it begins (0.5.10). */
+export interface PendingInvitation {
+  /** The address invited: the provider is told whom to expect. */
+  readonly email: string;
+  /** The language its email was written in, which the sign-in pages speak. */
+  readonly locale: 'ar' | 'en';
+}
+
+/** Who the provider proved signed in, with the address it asserted (0.5.10). */
+export interface InvitedPerson {
+  readonly issuer: string;
+  readonly subject: string;
+  /** The asserted address in users' normal form (normalizeEmail); null if none. */
+  readonly normalizedEmail: string | null;
+  /** Whether the provider asserts the person proved they hold that address. */
+  readonly emailVerified: boolean;
+}
+
+/**
+ * Whether a member holding `granter` may give `role` (the users module's
+ * role-grants policy), handed in so that this stays a narrow reader and writer.
+ */
+export type MayGrant = (granter: UserRole, role: UserRole) => boolean;
+
+/** What accepting an invitation came to (0.5.10). */
+export type AcceptedInvitation =
+  | { readonly kind: 'accepted'; readonly memberId: string }
+  | {
+      readonly kind: 'refused';
+      /**
+       * What failed, never a value: no pending invitation by that token; an
+       * address unverified or not the invitation's; an inviter no longer
+       * able to grant its role; or a membership already there.
+       */
+      readonly check: 'invitation' | 'address' | 'inviter' | 'member';
+    };
+
 /** A session as authentication reads it (0.5.6), with its member's standing. */
 export interface StoredSession {
   readonly id: string;
@@ -76,9 +113,10 @@ export interface StoredSession {
  * host (TenantResolver): no tenant context exists until a session holds.
  * These are the few reads and writes they need there, each in
  * a transaction of the host's tenant under row-level security, selecting
- * authentication fields only. It mints no context and offers no generic
- * access; tenant data is reached only through a context the session guard
- * mints (0.5.6).
+ * authentication fields only — and accepting an invitation, the one way a
+ * membership is made at sign-in (0.5.10). It mints no context and offers no
+ * generic access; tenant data is reached only through a context the session
+ * guard mints (0.5.6).
  */
 @Injectable()
 export class AuthBootstrap {
@@ -222,6 +260,153 @@ export class AuthBootstrap {
       return count === 1
         ? { kind: 'stepped-up', absoluteExpiresAt: row.absoluteExpiresAt }
         : { kind: 'gone' };
+    });
+  }
+
+  /**
+   * The invitation whose token hashes to `tokenHash` in the tenant, if it is
+   * pending at `at` (0.5.10): neither accepted nor revoked, and not expired.
+   */
+  pendingInvitation(
+    tenant: HostTenant,
+    tokenHash: Uint8Array,
+    at: Date,
+  ): Promise<PendingInvitation | null> {
+    return this.inTenant(tenant, (tx) =>
+      tx.invitation.findFirst({
+        where: {
+          tenantId: tenant.id,
+          tokenHash: new Uint8Array(tokenHash),
+          acceptedAt: null,
+          revokedAt: null,
+          expiresAt: { gt: at },
+        },
+        select: { email: true, locale: true },
+      }),
+    );
+  }
+
+  /**
+   * Accepts the invitation whose token hashes to `tokenHash` for the person
+   * the provider proved signed in (0.5.10; ADR-0002): proof of the mailbox —
+   * the token its email carried — and of the identity — the provider's
+   * verified address, the invitation's own — never the address alone. Its
+   * inviter must still be an active member who may grant its role. In one
+   * transaction, holding the invitation's row so that a second acceptance
+   * waits and then finds it taken: the identity is found or added, the
+   * membership made with the invited role, the invitation closed as
+   * accepted by them, and the acceptance audited. A refusal changes nothing.
+   */
+  acceptInvitation(
+    tenant: HostTenant,
+    tokenHash: Uint8Array,
+    person: InvitedPerson,
+    at: Date,
+    mayGrant: MayGrant,
+  ): Promise<AcceptedInvitation> {
+    const refused = (check: 'invitation' | 'address' | 'inviter' | 'member') =>
+      ({ kind: 'refused', check }) as const;
+    return this.inTenant(tenant, async (tx) => {
+      const digest = new Uint8Array(tokenHash);
+      await tx.$queryRaw`
+        SELECT id FROM invitations
+         WHERE tenant_id = ${tenant.id}::uuid AND token_hash = ${digest}
+           FOR UPDATE`;
+      const invitation = await tx.invitation.findUnique({
+        where: {
+          tenantId_tokenHash: { tenantId: tenant.id, tokenHash: digest },
+        },
+        select: {
+          id: true,
+          email: true,
+          normalizedEmail: true,
+          role: true,
+          expiresAt: true,
+          acceptedAt: true,
+          revokedAt: true,
+          invitedBy: {
+            select: { role: true, isActive: true, deletedAt: true },
+          },
+        },
+      });
+      if (
+        !invitation ||
+        invitation.acceptedAt !== null ||
+        invitation.revokedAt !== null ||
+        invitation.expiresAt <= at
+      ) {
+        return refused('invitation');
+      }
+      if (
+        !person.emailVerified ||
+        person.normalizedEmail !== invitation.normalizedEmail
+      ) {
+        return refused('address');
+      }
+      const inviter = invitation.invitedBy;
+      if (
+        !inviter.isActive ||
+        inviter.deletedAt !== null ||
+        !mayGrant(inviter.role, invitation.role)
+      ) {
+        return refused('inviter');
+      }
+      const key = { issuer: person.issuer, subject: person.subject };
+      const known = await tx.identity.findUnique({
+        where: { issuer_subject: key },
+        select: { id: true },
+      });
+      const taken = await tx.user.findFirst({
+        where: {
+          tenantId: tenant.id,
+          OR: [
+            { normalizedEmail: invitation.normalizedEmail },
+            ...(known ? [{ identityId: known.id }] : []),
+          ],
+        },
+        select: { id: true },
+      });
+      if (taken) return refused('member');
+      // Identities are only ever added (0.5.3): one added meanwhile is kept.
+      await tx.identity.createMany({ data: [key], skipDuplicates: true });
+      const identity = await tx.identity.findUniqueOrThrow({
+        where: { issuer_subject: key },
+        select: { id: true },
+      });
+      const member = await tx.user.create({
+        data: {
+          tenantId: tenant.id,
+          email: invitation.email,
+          normalizedEmail: invitation.normalizedEmail,
+          role: invitation.role,
+          identityId: identity.id,
+        },
+        select: { id: true },
+      });
+      await tx.invitation.update({
+        where: { id_tenantId: { id: invitation.id, tenantId: tenant.id } },
+        data: {
+          acceptedAt: at,
+          acceptedMemberId: member.id,
+          acceptedIdentityId: identity.id,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          tenantId: tenant.id,
+          userId: member.id,
+          action: 'invitation.accepted',
+          entityType: 'Invitation',
+          entityId: invitation.id,
+          oldValues: { status: 'pending' },
+          newValues: {
+            status: 'accepted',
+            memberId: member.id,
+            role: invitation.role,
+          },
+        },
+      });
+      return { kind: 'accepted', memberId: member.id };
     });
   }
 

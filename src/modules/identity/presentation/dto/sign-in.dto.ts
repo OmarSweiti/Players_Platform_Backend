@@ -1,18 +1,35 @@
 import { z } from 'zod';
 import { isReturnPath, MAX_RETURN_PATH } from '../../domain/return-path';
+import { isSecret } from '../../domain/secrets';
+
+const returnTo = z
+  .string()
+  .max(MAX_RETURN_PATH)
+  .refine(isReturnPath, {
+    message: 'a path on this origin',
+    params: { code: 'INVALID_FORMAT' },
+  })
+  .optional()
+  .describe('Where to return once signed in: a path on this origin');
 
 export const LoginQuery = z.strictObject({
-  returnTo: z
+  returnTo,
+  invitation: z
     .string()
-    .max(MAX_RETURN_PATH)
-    .refine(isReturnPath, {
-      message: 'a path on this origin',
+    .refine(isSecret, {
+      message: "an invitation's token",
       params: { code: 'INVALID_FORMAT' },
     })
     .optional()
-    .describe('Where to return once signed in: a path on this origin'),
+    .describe(
+      "The token of an invitation's link (0.5.10): this sign-in accepts it",
+    ),
 });
 export type LoginQuery = z.infer<typeof LoginQuery>;
+
+/** A step-up returns where it began; it carries nothing else (0.5.8). */
+export const StepUpQuery = z.strictObject({ returnTo });
+export type StepUpQuery = z.infer<typeof StepUpQuery>;
 
 const answer = z.string().max(2048).optional();
 

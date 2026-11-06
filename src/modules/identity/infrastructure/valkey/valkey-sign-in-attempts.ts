@@ -27,6 +27,11 @@ const Kept = z.strictObject({
   acrValues: z.string().optional(),
   maxAge: z.int().min(0).optional(),
   stepUpSessionId: z.uuid().optional(),
+  // An invitation's token digest, SHA-256 in base64url: 43 characters.
+  invitation: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{43}$/)
+    .optional(),
 });
 
 /**

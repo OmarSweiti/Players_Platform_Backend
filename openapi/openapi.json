@@ -529,6 +529,16 @@
               "type": "string",
               "maxLength": 2048
             }
+          },
+          {
+            "name": "invitation",
+            "required": false,
+            "in": "query",
+            "description": "The token of an invitation's link (0.5.10): this sign-in accepts it",
+            "schema": {
+              "description": "The token of an invitation's link (0.5.10): this sign-in accepts it",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -717,7 +727,7 @@
             }
           }
         },
-        "summary": "Sign in: to the identity provider, for the tenant of the host",
+        "summary": "Sign in: to the identity provider, for the tenant of the host; with an invitation's token, to accept it",
         "tags": [
           "Authentication"
         ],
