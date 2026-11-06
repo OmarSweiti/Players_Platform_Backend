@@ -23,6 +23,11 @@ export interface SignInAttempt {
   readonly maxAge?: number;
   /** A step-up's: the session it renews, which the browser holds. */
   readonly stepUpSessionId?: string;
+  /**
+   * An invitation's (0.5.10): the SHA-256 of its token, base64url, which the
+   * callback accepts. The token itself is never kept.
+   */
+  readonly invitation?: string;
 }
 
 /**

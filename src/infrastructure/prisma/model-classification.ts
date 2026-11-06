@@ -27,12 +27,22 @@ interface Ids {
   readonly ids?: 'time-ordered';
 }
 
+/**
+ * What becomes of a tenant's rows. Removable unless the class says `kept`:
+ * a record closed by a state of its own and never removed — an invitation
+ * (0.5.10) is accepted or revoked, and the list shows each — so the runtime
+ * role may not delete one.
+ */
+interface Rows {
+  readonly rows?: 'kept';
+}
+
 export type ModelClass =
   /**
    * One tenant's rows, by `tenant_id`: forced row-level security with the
    * tenant policy, and a `tenant_id` that never changes.
    */
-  | ({ readonly kind: 'tenant-owned' } & Ids)
+  | ({ readonly kind: 'tenant-owned' } & Ids & Rows)
   /** No tenant's alone: no `tenant_id`, and the runtime role's access is `runtime`. */
   | ({ readonly kind: 'global'; readonly runtime: GlobalAccess } & Ids);
 
@@ -58,6 +68,8 @@ export const MODEL_CLASSIFICATION: Readonly<
   User: TENANT_OWNED,
   // A row per sign-in, rarely updated: its index grows at one end.
   UserSession: { ...TENANT_OWNED, ids: 'time-ordered' },
+  // Accepted or revoked, never removed: the list shows what became of each.
+  Invitation: { ...TENANT_OWNED, rows: 'kept' },
   Season: TENANT_OWNED,
   Document: TENANT_OWNED,
   Player: TENANT_OWNED,

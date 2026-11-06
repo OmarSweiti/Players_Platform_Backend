@@ -283,7 +283,8 @@ describe('the existing modules on the tenant transaction', () => {
     const repositories = sources.filter(([path]) =>
       path.includes('/repositories/'),
     );
-    expect(repositories.length).toBe(5);
+    // The users module's invitations (0.5.10) are the sixth.
+    expect(repositories.length).toBe(6);
     for (const [path, text] of repositories) {
       const methods = text
         .split(/^ {2}async /m)

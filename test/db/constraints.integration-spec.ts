@@ -43,6 +43,14 @@ const OTHER_STEPS_CHECKS = [
   'user_sessions_revocation_check',
   'user_sessions_times_check',
   'user_sessions_token_hash_check',
+  // 0.5.10: test/db/invitations.integration-spec.ts
+  'invitations_acceptance_check',
+  'invitations_closed_once_check',
+  'invitations_expiry_check',
+  'invitations_normalized_email_check',
+  'invitations_role_check',
+  'invitations_token_check',
+  'invitations_token_hash_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
@@ -76,6 +84,9 @@ const PARTIAL_UNIQUES = {
     'CREATE UNIQUE INDEX seasons_tenant_id_current_key ON seasons USING btree (tenant_id) WHERE (is_current AND (deleted_at IS NULL))',
   seasons_tenant_id_name_key:
     'CREATE UNIQUE INDEX seasons_tenant_id_name_key ON seasons USING btree (tenant_id, name) WHERE (deleted_at IS NULL)',
+  // 0.5.10: one open invitation per address (test/db/invitations.integration-spec.ts)
+  invitations_open_address_key:
+    'CREATE UNIQUE INDEX invitations_open_address_key ON invitations USING btree (tenant_id, normalized_email) WHERE ((accepted_at IS NULL) AND (revoked_at IS NULL))',
 };
 
 /** Column → SQL expression: the values one statement writes. */

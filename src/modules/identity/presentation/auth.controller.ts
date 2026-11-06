@@ -57,7 +57,7 @@ import {
   SignedOutResponse,
 } from './dto/session-management.dto';
 import { CurrentSessionResponse } from './dto/session.dto';
-import { CallbackQuery, LoginQuery } from './dto/sign-in.dto';
+import { CallbackQuery, LoginQuery, StepUpQuery } from './dto/sign-in.dto';
 
 /** The value of one of the browser's cookies, as it sent it. */
 function cookieOf(request: Request, name: string): unknown {
@@ -104,7 +104,8 @@ export class AuthController {
   @RateLimit('auth')
   @Get('login')
   @ApiOperation({
-    summary: 'Sign in: to the identity provider, for the tenant of the host',
+    summary:
+      "Sign in: to the identity provider, for the tenant of the host; with an invitation's token, to accept it",
   })
   @Redirects('To the identity provider', [PREAUTH_COOKIE])
   @Raises('NOT_FOUND')
@@ -118,6 +119,7 @@ export class AuthController {
       callbackPath: this.callbackPath,
       returnTo: query.returnTo ?? '/',
       preauth: cookieOf(request, PREAUTH_COOKIE),
+      invitation: query.invitation,
     });
     response.cookie(PREAUTH_COOKIE, started.preauth, {
       ...COOKIE_ATTRIBUTES,
@@ -185,7 +187,7 @@ export class AuthController {
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
     @Req() request: Request,
     @Res() response: Response,
-    @Query({ schema: LoginQuery }) query: LoginQuery,
+    @Query({ schema: StepUpQuery }) query: StepUpQuery,
   ): Promise<void> {
     const authorizationUrl = await this.signIn.beginStepUp(ctx, {
       arrival: request,

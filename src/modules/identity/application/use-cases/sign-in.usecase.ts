@@ -3,6 +3,7 @@ import type { Request } from 'express';
 import {
   AuthenticationRequiredError,
   DomainError,
+  NotFoundError,
 } from '../../../../common/errors/domain-error';
 import { RateLimiter } from '../../../../common/rate-limit/rate-limiter';
 import {
@@ -17,6 +18,8 @@ import {
   TenantResolver,
 } from '../../../../common/tenancy/tenant-resolver';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
+import { mayGrant } from '../../../users/application/role-grants.policy';
+import { normalizeEmail } from '../../../users/domain/email';
 import { returnUrl } from '../../domain/return-path';
 import {
   challengeOf,
@@ -135,10 +138,26 @@ export class SignInUseCase {
     returnTo: string;
     /** The pre-auth cookie the browser holds, if any. */
     preauth: unknown;
+    /** An invitation's token (isSecret), from its link (0.5.10). */
+    invitation?: string;
   }): Promise<SignInStarted> {
     const tenant = await this.tenants.resolve(input.arrival);
     const host = hostOf(input.arrival);
     if (host === null) throw new NoAccountHereError();
+    // An invitation's sign-in begins only while it is pending; the provider
+    // is told whom to expect, and speaks the invitation's language.
+    const invitation =
+      input.invitation === undefined ? undefined : digestOf(input.invitation);
+    const invited =
+      invitation &&
+      (await this.bootstrap.pendingInvitation(
+        tenant,
+        invitation,
+        this.clock.now(),
+      ));
+    if (invitation && !invited) {
+      throw new NotFoundError('the invitation is not pending');
+    }
     // Sign-ins begun in two tabs share the browser's cookie, so either finishes.
     const preauth = isSecret(input.preauth) ? input.preauth : newSecret();
     const authorizationUrl = await this.startAttempt({
@@ -146,7 +165,13 @@ export class SignInUseCase {
       redirectUri: new URL(input.callbackPath, `https://${host}`),
       returnTo: input.returnTo,
       binding: preauth,
-      locale: await this.bootstrap.localeOf(tenant),
+      locale: invited ? invited.locale : await this.bootstrap.localeOf(tenant),
+      ...(invited && invitation
+        ? {
+            loginHint: invited.email,
+            invitation: invitation.toString('base64url'),
+          }
+        : {}),
     });
     return {
       authorizationUrl,
@@ -255,6 +280,29 @@ export class SignInUseCase {
     const sessionToken = newSecret();
     const at = this.clock.now();
 
+    // An invitation's sign-in (0.5.10): its membership is made first, only
+    // with its token and the provider's verified address; then the member
+    // signs in as any member does, a second factor asked for if the role
+    // needs one.
+    if (attempt.invitation !== undefined) {
+      const accepted = await this.bootstrap.acceptInvitation(
+        tenant,
+        Buffer.from(attempt.invitation, 'base64url'),
+        {
+          issuer: proven.issuer,
+          subject: proven.subject,
+          normalizedEmail:
+            proven.email === undefined ? null : normalizeEmail(proven.email),
+          emailVerified: proven.emailVerified,
+        },
+        at,
+        mayGrant,
+      );
+      if (accepted.kind === 'refused') {
+        throw new SignInRefusedError(`invitation: ${accepted.check}`);
+      }
+    }
+
     if (attempt.stepUpSessionId !== undefined) {
       const steppedUp = await this.bootstrap.stepUpSession(
         tenant,
@@ -335,6 +383,10 @@ export class SignInUseCase {
     acrValues?: string;
     maxAge?: number;
     stepUpSessionId?: string;
+    /** Whom the provider should expect: an invitation's address. */
+    loginHint?: string;
+    /** An invitation's token digest, base64url (0.5.10). */
+    invitation?: string;
   }): Promise<URL> {
     const state = newSecret();
     const nonce = newSecret();
@@ -348,6 +400,7 @@ export class SignInUseCase {
       acrValues: attempt.acrValues,
       maxAge: attempt.maxAge,
       locale: attempt.locale,
+      loginHint: attempt.loginHint,
     });
     const bindingDigest =
       typeof attempt.binding === 'string'
@@ -368,6 +421,9 @@ export class SignInUseCase {
         ...(attempt.maxAge !== undefined ? { maxAge: attempt.maxAge } : {}),
         ...(attempt.stepUpSessionId !== undefined
           ? { stepUpSessionId: attempt.stepUpSessionId }
+          : {}),
+        ...(attempt.invitation !== undefined
+          ? { invitation: attempt.invitation }
           : {}),
       },
       SIGN_IN_SECONDS,
