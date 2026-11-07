@@ -132,8 +132,8 @@ WHERE a.deleted_at IS NOT NULL;
 
 -- violations: real_account
 -- A member whose address is neither on a domain reserved for tests and
--- examples (RFC 2606, RFC 6761) nor one the old seed creates
--- (src/database/seed.ts, until 0.5.11 moves it to .test): a real person may
+-- examples (RFC 2606, RFC 6761) nor one the seed made before 0.5.11 moved it
+-- to .test (a database seeded then may still hold them): a real person may
 -- own it. Its credential data must not be dropped without the owner deciding.
 SELECT 'users' AS table_name, u.id AS row_id, u.tenant_id AS tenant_id,
        'users row is not a known synthetic account: a real person may own it' AS reason
