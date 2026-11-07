@@ -109,6 +109,10 @@ contract:
 # CI's required `test` check, except the migration replay (that is `just migrations`)
 check: prisma lint build typecheck boundaries test contract
 
+# The synthetic development data (0.5.11), idempotently: two tenants, a member per role in each, players
+seed:
+    npm run --silent seed
+
 # Read-only integrity report, as the migrator (MIGRATION_DATABASE_URL, or .env): exits 1 on any violation — run before every constraint or data migration
 preflight:
     #!/usr/bin/env bash
