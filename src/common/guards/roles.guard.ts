@@ -9,7 +9,9 @@ import { ROLES_KEY } from '../decorators/roles.decorator';
 import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 import { UserRole } from '@prisma/client';
 import { RequestWithUser } from '../interfaces/request-with-user.interface';
+import type { AuthorizedTenantContext } from '../tenancy/tenant-context';
 import { PermissionService } from '../../modules/users/application/services/permission.service';
+import type { PermissionKey } from '../../modules/users/domain/permission-catalog';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -24,10 +26,9 @@ export class RolesGuard implements CanActivate {
       [context.getHandler(), context.getClass()],
     );
 
-    const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
-      PERMISSIONS_KEY,
-      [context.getHandler(), context.getClass()],
-    );
+    const requiredPermissions = this.reflector.getAllAndOverride<
+      PermissionKey[]
+    >(PERMISSIONS_KEY, [context.getHandler(), context.getClass()]);
 
     // If no roles or permissions required, allow access
     if (!requiredRoles && !requiredPermissions) {
@@ -52,7 +53,14 @@ export class RolesGuard implements CanActivate {
 
     // Check permission-based access
     if (requiredPermissions && requiredPermissions.length > 0) {
+      // Minted with the member by the session guard (0.5.6): the matrix is
+      // read inside the member's tenant transaction.
+      const ctx = request.tenantContext;
+      if (!ctx) {
+        throw new ForbiddenException('User not authenticated');
+      }
       const hasPermission = await this.checkPermissions(
+        ctx,
         user.role,
         requiredPermissions,
       );
@@ -66,14 +74,16 @@ export class RolesGuard implements CanActivate {
   }
 
   private async checkPermissions(
+    ctx: AuthorizedTenantContext,
     role: UserRole,
-    permissions: string[],
+    permissions: PermissionKey[],
   ): Promise<boolean> {
     // Check if user has ALL required permissions
     for (const permission of permissions) {
       const hasPerm = await this.permissionService.hasPermission(
+        ctx,
         role,
-        permission as any,
+        permission,
       );
       if (!hasPerm) {
         return false;

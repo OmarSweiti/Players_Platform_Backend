@@ -14,7 +14,6 @@ import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
-import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
 import { CreateMedicalRecordDto } from './dto/create-medical-record.dto';
 import { UpdateMedicalRecordDto } from './dto/update-medical-record.dto';
 import { CreateTreatmentSessionDto } from './dto/create-treatment-session.dto';
@@ -53,7 +52,7 @@ export class MedicalController {
   // ==================== MEDICAL RECORDS ====================
 
   @Post('records')
-  @Permissions(PERMISSIONS.MEDICAL_CREATE)
+  @Permissions('medical.create')
   @ApiOperation({ summary: 'Create medical record' })
   async createRecord(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -72,7 +71,7 @@ export class MedicalController {
   }
 
   @Get('records')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get all medical records' })
   async getRecords(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -91,7 +90,7 @@ export class MedicalController {
   }
 
   @Get('records/player/:playerId')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get medical records for a player' })
   async getPlayerRecords(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -114,7 +113,7 @@ export class MedicalController {
   }
 
   @Get('records/:id')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get medical record by ID' })
   async getRecord(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -124,7 +123,7 @@ export class MedicalController {
   }
 
   @Patch('records/:id')
-  @Permissions(PERMISSIONS.MEDICAL_UPDATE)
+  @Permissions('medical.update')
   @ApiOperation({ summary: 'Update medical record' })
   async updateRecord(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -150,7 +149,7 @@ export class MedicalController {
   }
 
   @Delete('records/:id')
-  @Permissions(PERMISSIONS.MEDICAL_UPDATE)
+  @Permissions('medical.update')
   @ApiOperation({ summary: 'Delete medical record' })
   async deleteRecord(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -160,7 +159,7 @@ export class MedicalController {
   }
 
   @Get('records/player/:playerId/active-injuries')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get active injuries for a player' })
   async getActiveInjuries(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -170,7 +169,7 @@ export class MedicalController {
   }
 
   @Get('records/player/:playerId/history')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get player injury history statistics' })
   async getInjuryHistory(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -182,7 +181,7 @@ export class MedicalController {
   // ==================== TREATMENT SESSIONS ====================
 
   @Post('sessions')
-  @Permissions(PERMISSIONS.MEDICAL_CREATE)
+  @Permissions('medical.create')
   @ApiOperation({ summary: 'Create treatment session' })
   async createSession(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -198,7 +197,7 @@ export class MedicalController {
   }
 
   @Get('sessions/player/:playerId')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get treatment sessions for a player' })
   async getPlayerSessions(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -223,7 +222,7 @@ export class MedicalController {
   }
 
   @Get('sessions/:id')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get treatment session by ID' })
   async getSession(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -233,7 +232,7 @@ export class MedicalController {
   }
 
   @Patch('sessions/:id')
-  @Permissions(PERMISSIONS.MEDICAL_UPDATE)
+  @Permissions('medical.update')
   @ApiOperation({ summary: 'Update treatment session' })
   async updateSession(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -256,7 +255,7 @@ export class MedicalController {
   }
 
   @Patch('sessions/:id/status')
-  @Permissions(PERMISSIONS.MEDICAL_UPDATE)
+  @Permissions('medical.update')
   @ApiOperation({ summary: 'Update treatment session status' })
   async updateSessionStatus(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -268,7 +267,7 @@ export class MedicalController {
   }
 
   @Delete('sessions/:id')
-  @Permissions(PERMISSIONS.MEDICAL_UPDATE)
+  @Permissions('medical.update')
   @ApiOperation({ summary: 'Delete treatment session' })
   async deleteSession(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -278,7 +277,7 @@ export class MedicalController {
   }
 
   @Get('sessions/player/:playerId/upcoming')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get upcoming treatment sessions' })
   async getUpcomingSessions(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
@@ -288,7 +287,7 @@ export class MedicalController {
   }
 
   @Get('sessions/player/:playerId/stats')
-  @Permissions(PERMISSIONS.MEDICAL_READ)
+  @Permissions('medical.read')
   @ApiOperation({ summary: 'Get treatment session statistics' })
   async getSessionStats(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,

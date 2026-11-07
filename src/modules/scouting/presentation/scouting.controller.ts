@@ -22,7 +22,6 @@ import { CurrentTenantContext } from '../../../common/decorators/tenant-context.
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { Permissions } from '../../../common/decorators/permissions.decorator';
 import { RequiresRecentAuth } from '../../../common/decorators/requires-recent-auth.decorator';
-import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
 import { CreateScoutingReportDto } from './dto/create-scouting-report.dto';
 import { UpdateScoutingReportDto } from './dto/update-scouting-report.dto';
 import { QueryScoutingReportsDto } from './dto/query-scouting-reports.dto';
@@ -64,7 +63,7 @@ export class ScoutingController {
   // ==================== SCOUTING REPORTS ====================
 
   @Post('reports')
-  @Permissions(PERMISSIONS.SREPORT_CREATE)
+  @Permissions('scouting.report.create')
   @ApiOperation({ summary: 'Create a new scouting report' })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -79,7 +78,7 @@ export class ScoutingController {
   }
 
   @Get('reports')
-  @Permissions(PERMISSIONS.REPORT_VIEW)
+  @Permissions('report.view')
   @ApiOperation({ summary: 'Get all scouting reports' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -105,7 +104,7 @@ export class ScoutingController {
   }
 
   @Get('reports/:id')
-  @Permissions(PERMISSIONS.REPORT_VIEW)
+  @Permissions('report.view')
   @ApiOperation({ summary: 'Get scouting report by ID' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -119,7 +118,7 @@ export class ScoutingController {
   }
 
   @Patch('reports/:id')
-  @Permissions(PERMISSIONS.SREPORT_UPDATE)
+  @Permissions('scouting.report.update')
   @ApiOperation({ summary: 'Update scouting report' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -140,7 +139,7 @@ export class ScoutingController {
 
   @Post('reports/:id/submit')
   @HttpCode(HttpStatus.OK)
-  @Permissions(PERMISSIONS.SREPORT_SUBMIT)
+  @Permissions('scouting.report.submit')
   @ApiOperation({ summary: 'Submit scouting report for review' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -157,7 +156,7 @@ export class ScoutingController {
 
   @Post('reports/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @Permissions(PERMISSIONS.SREPORT_APPROVE)
+  @Permissions('scouting.report.approve')
   // An approval decision: a recent authentication (0.5.8).
   @RequiresRecentAuth()
   @ApiOperation({ summary: 'Approve scouting report' })
@@ -182,7 +181,7 @@ export class ScoutingController {
 
   @Post('reports/:id/reject')
   @HttpCode(HttpStatus.OK)
-  @Permissions(PERMISSIONS.SREPORT_REJECT)
+  @Permissions('scouting.report.reject')
   // An approval decision: a recent authentication (0.5.8).
   @RequiresRecentAuth()
   @ApiOperation({ summary: 'Reject scouting report' })
@@ -200,7 +199,7 @@ export class ScoutingController {
   }
 
   @Delete('reports/:id')
-  @Permissions(PERMISSIONS.SREPORT_DELETE)
+  @Permissions('scouting.report.delete')
   @ApiOperation({ summary: 'Delete scouting report' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -214,7 +213,7 @@ export class ScoutingController {
   }
 
   @Get('reports/stats/my-stats')
-  @Permissions(PERMISSIONS.REPORT_VIEW)
+  @Permissions('report.view')
   @ApiOperation({ summary: 'Get my scouting report statistics' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Scout statistics' })
   async getMyStats(
@@ -226,7 +225,7 @@ export class ScoutingController {
   // ==================== WATCHLIST ====================
 
   @Post('watchlist')
-  @Permissions(PERMISSIONS.WATCHLIST_MANAGE)
+  @Permissions('scouting.watchlist.manage')
   @ApiOperation({ summary: 'Add player to watchlist' })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -247,7 +246,7 @@ export class ScoutingController {
   }
 
   @Get('watchlist')
-  @Permissions(PERMISSIONS.WATCHLIST_VIEW)
+  @Permissions('scouting.watchlist.view')
   @ApiOperation({ summary: 'Get my watchlist' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -260,7 +259,7 @@ export class ScoutingController {
   }
 
   @Delete('watchlist/:playerId')
-  @Permissions(PERMISSIONS.WATCHLIST_MANAGE)
+  @Permissions('scouting.watchlist.manage')
   @ApiOperation({ summary: 'Remove player from watchlist' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -274,7 +273,7 @@ export class ScoutingController {
   }
 
   @Get('watchlist/check/:playerId')
-  @Permissions(PERMISSIONS.WATCHLIST_VIEW)
+  @Permissions('scouting.watchlist.view')
   @ApiOperation({ summary: 'Check if player is in watchlist' })
   @ApiResponse({ status: HttpStatus.OK, description: 'Watchlist check result' })
   async checkWatchlist(
@@ -292,7 +291,7 @@ export class ScoutingController {
   // ==================== ASSIGNMENTS ====================
 
   @Post('assignments')
-  @Permissions(PERMISSIONS.ASSIGNMENT_MANAGE)
+  @Permissions('scouting.assignment.manage')
   @ApiOperation({ summary: 'Create scouting assignment' })
   @ApiResponse({
     status: HttpStatus.CREATED,
@@ -314,7 +313,7 @@ export class ScoutingController {
   }
 
   @Get('assignments/my-assignments')
-  @Permissions(PERMISSIONS.ASSIGNMENT_VIEW)
+  @Permissions('scouting.assignment.view')
   @ApiOperation({ summary: 'Get my assignments (for scouts)' })
   @ApiResponse({ status: HttpStatus.OK, description: 'List of assignments' })
   async getMyAssignments(
@@ -328,7 +327,7 @@ export class ScoutingController {
   }
 
   @Get('assignments/director-view')
-  @Permissions(PERMISSIONS.ASSIGNMENT_VIEW)
+  @Permissions('scouting.assignment.view')
   @ApiOperation({ summary: 'Get assignments created by director' })
   @ApiResponse({ status: HttpStatus.OK, description: 'List of assignments' })
   async getDirectorAssignments(
@@ -342,7 +341,7 @@ export class ScoutingController {
   }
 
   @Patch('assignments/:id')
-  @Permissions(PERMISSIONS.ASSIGNMENT_MANAGE)
+  @Permissions('scouting.assignment.manage')
   @ApiOperation({ summary: 'Update assignment' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -367,7 +366,7 @@ export class ScoutingController {
   }
 
   @Patch('assignments/:id/status')
-  @Permissions(PERMISSIONS.ASSIGNMENT_UPDATE)
+  @Permissions('scouting.assignment.update')
   @ApiOperation({ summary: 'Update assignment status' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -390,7 +389,7 @@ export class ScoutingController {
   }
 
   @Delete('assignments/:id')
-  @Permissions(PERMISSIONS.ASSIGNMENT_MANAGE)
+  @Permissions('scouting.assignment.manage')
   @ApiOperation({ summary: 'Delete assignment' })
   @ApiResponse({
     status: HttpStatus.OK,
