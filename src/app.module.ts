@@ -26,6 +26,7 @@ import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/security/csrf.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 import { RecentAuthGuard } from './common/guards/recent-auth.guard';
+import { PermissionCatalogCheck } from './common/authz/permission-catalog-check';
 
 @Module({
   imports: [
@@ -54,6 +55,9 @@ import { RecentAuthGuard } from './common/guards/recent-auth.guard';
     RateLimitModule,
   ],
   providers: [
+    // The API refuses to start when the database's permission catalog or
+    // default matrix is not the code's (0.6.1).
+    PermissionCatalogCheck,
     // Global guards run in this order. The feature gate is first: a disabled
     // module's routes answer 404 before authentication can answer 401.
     { provide: APP_GUARD, useClass: FeatureGateGuard },
