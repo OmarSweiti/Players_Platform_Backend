@@ -19,6 +19,7 @@ import { PrismaService } from '../../src/infrastructure/prisma/prisma.service';
 import { bootApp, type BootedApp } from '../harness/app';
 import { testContext } from '../harness/fixtures';
 import { LogCapture } from '../harness/log-capture';
+import { SignedIn } from '../../src/common/decorators/signed-in.decorator';
 
 // A random value that must never come back in an error or reach a log.
 const CANARY = `canary-${randomBytes(12).toString('hex')}`;
@@ -48,7 +49,8 @@ class ErrorsProbeController {
     return member;
   }
 
-  @Get('private') // not @Public(): the session guard refuses it
+  @SignedIn() // not @Public(): the session guard refuses it
+  @Get('private')
   private(): string {
     return 'never';
   }

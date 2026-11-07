@@ -14,6 +14,7 @@ import { PermissionService } from '../../src/modules/users/application/services/
 import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant, testContext } from '../harness/fixtures';
 import { signedInAs } from '../harness/session';
+import { RequirePermission } from '../../src/common/decorators/permissions.decorator';
 
 // The medical and scouting modules switched on before AppModule loads, so
 // their not-found answers are checked too.
@@ -42,6 +43,7 @@ class PlayersProbeController {
     );
   }
 
+  @RequirePermission('player.create')
   @Post()
   create(
     @CurrentUser() member: User,
@@ -55,6 +57,7 @@ class PlayersProbeController {
     );
   }
 
+  @RequirePermission('player.read')
   @Get()
   list(@CurrentUser() member: User) {
     return this.as(member, (tx) =>
@@ -65,6 +68,7 @@ class PlayersProbeController {
     );
   }
 
+  @RequirePermission('player.read')
   @Get(':id')
   async read(
     @CurrentUser() member: User,
@@ -80,6 +84,7 @@ class PlayersProbeController {
     return player;
   }
 
+  @RequirePermission('player.delete')
   @Delete(':id')
   async remove(
     @CurrentUser() member: User,

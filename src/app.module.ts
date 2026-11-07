@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
 import { configOptions } from './config/env.schema';
 import { BodyParsingModule } from './common/http/body-parsing.module';
 import { LoggingModule } from './infrastructure/logging/logging.module';
@@ -24,9 +24,10 @@ import { RateLimitGuard } from './common/rate-limit/rate-limit.guard';
 import { FeatureGateGuard } from './common/feature-flags/feature-gate.guard';
 import { SessionGuard } from './common/guards/session.guard';
 import { CsrfGuard } from './common/security/csrf.guard';
-import { RolesGuard } from './common/guards/roles.guard';
+import { PermissionGuard } from './common/guards/permission.guard';
 import { RecentAuthGuard } from './common/guards/recent-auth.guard';
 import { PermissionCatalogCheck } from './common/authz/permission-catalog-check';
+import { RouteAccessCheck } from './common/authz/route-access-check';
 
 @Module({
   imports: [
@@ -53,11 +54,15 @@ import { PermissionCatalogCheck } from './common/authz/permission-catalog-check'
     MedicalModule,
     HealthModule,
     RateLimitModule,
+    // Every controller's routes, read at boot by RouteAccessCheck.
+    DiscoveryModule,
   ],
   providers: [
     // The API refuses to start when the database's permission catalog or
     // default matrix is not the code's (0.6.1).
     PermissionCatalogCheck,
+    // ... and when a route declares no access rule, or more than one (0.6.2).
+    RouteAccessCheck,
     // Global guards run in this order. The feature gate is first: a disabled
     // module's routes answer 404 before authentication can answer 401.
     { provide: APP_GUARD, useClass: FeatureGateGuard },
@@ -70,7 +75,9 @@ import { PermissionCatalogCheck } from './common/authz/permission-catalog-check'
     // After the session, whose token a write must carry (0.5.6); before
     // permissions, so that a forged write learns nothing of them.
     { provide: APP_GUARD, useClass: CsrfGuard },
-    { provide: APP_GUARD, useClass: RolesGuard },
+    // Deny by default: a route's permission, a signed-in member on their own
+    // session, or anyone — exactly one, declared (0.6.2).
+    { provide: APP_GUARD, useClass: PermissionGuard },
     // Last: a sensitive action asks for a recent authentication (0.5.8) only
     // of a member who may take it.
     { provide: APP_GUARD, useClass: RecentAuthGuard },

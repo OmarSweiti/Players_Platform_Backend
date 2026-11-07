@@ -18,6 +18,7 @@ import {
 import { signedInAs } from '../harness/session';
 import { setCookiesOf } from '../support/set-cookies';
 import { TestIssuer, type Hostile } from '../support/test-issuer';
+import { SignedIn } from '../../src/common/decorators/signed-in.decorator';
 
 // MFA assurance for privileged roles; recent authentication for sensitive
 // actions (0.5.8; SR-AUTH-002). A privileged member holds no session without
@@ -32,6 +33,7 @@ const sha256 = (value: string) => createHash('sha256').update(value).digest();
 const suffix = () => randomBytes(4).toString('hex');
 const now = () => Math.floor(Date.now() / 1000);
 
+@SignedIn()
 @Controller('probe/assurance')
 class SensitiveProbe {
   @RequiresRecentAuth()

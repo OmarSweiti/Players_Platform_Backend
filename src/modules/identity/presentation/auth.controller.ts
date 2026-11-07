@@ -16,6 +16,7 @@ import { z } from 'zod';
 import type { Request, Response } from 'express';
 import { API_VERSION } from '../../../app.setup';
 import { Public } from '../../../common/decorators/public.decorator';
+import { SignedIn } from '../../../common/decorators/signed-in.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
 import type { Page } from '../../../common/pagination/paginate';
 import {
@@ -176,6 +177,7 @@ export class AuthController {
     navigate(response, outcome.returnTo);
   }
 
+  @SignedIn()
   @RateLimit('auth')
   @Get('step-up')
   @ApiOperation({
@@ -197,6 +199,7 @@ export class AuthController {
     navigate(response, authorizationUrl.href);
   }
 
+  @SignedIn()
   @Get('session')
   @ApiOperation({
     summary:
@@ -212,6 +215,7 @@ export class AuthController {
     return this.readSession.execute(ctx);
   }
 
+  @SignedIn()
   @Post('logout')
   @HttpCode(200)
   @ApiOperation({
@@ -232,6 +236,7 @@ export class AuthController {
     return signedOut;
   }
 
+  @SignedIn()
   @Post('logout-all')
   @HttpCode(200)
   @ApiOperation({
@@ -251,6 +256,7 @@ export class AuthController {
     return signedOut;
   }
 
+  @SignedIn()
   @Get('sessions')
   @ApiOperation({ summary: "The member's own live sessions, newest first" })
   @ReturnsPage(SessionSummaryResponse)
@@ -263,6 +269,7 @@ export class AuthController {
     return this.ownSessions.list(ctx, query);
   }
 
+  @SignedIn()
   @Delete('sessions/:id')
   @ApiOperation({ summary: "End one of the member's own sessions" })
   @Returns(z.null())
