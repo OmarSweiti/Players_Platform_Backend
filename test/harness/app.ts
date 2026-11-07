@@ -76,8 +76,15 @@ export async function bootApp(
     moduleRef.createNestApplication<NestExpressApplication>(APP_OPTIONS);
   configureApp(app);
   if (opts.trustedProxies) app.set('trust proxy', opts.trustedProxies);
-  // As main.ts does: every route first, then what none serves.
-  await app.init();
+  // As main.ts does: every route first, then what none serves. An app that
+  // refuses to start (a check at boot) closes what it opened before the
+  // refusal reaches the test.
+  try {
+    await app.init();
+  } catch (error) {
+    await app.close().catch(() => undefined);
+    throw error;
+  }
   answerUnknownPaths(app);
   // Listen on 127.0.0.1 itself, on a port free there. Handed the server,
   // supertest would listen on every interface and then connect to 127.0.0.1,
