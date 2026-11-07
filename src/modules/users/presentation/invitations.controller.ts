@@ -23,7 +23,6 @@ import type { Page } from '../../../common/pagination/paginate';
 import { RateLimit } from '../../../common/rate-limit/rate-limit.decorator';
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { IdParams } from '../../../common/validation/schemas';
-import { PERMISSIONS } from '../../../shared/constants/permissions.constants';
 import type { ListedInvitation } from '../application/ports/invitation-records.port';
 import { InviteMemberUseCase } from '../application/use-cases/invite-member.usecase';
 import { ManageInvitationsUseCase } from '../application/use-cases/manage-invitations.usecase';
@@ -49,7 +48,7 @@ export class InvitationsController {
   ) {}
 
   @Post()
-  @Permissions(PERMISSIONS.USER_INVITE)
+  @Permissions('user.invite')
   @RequiresRecentAuth()
   @RateLimit('privileged')
   @ApiOperation({
@@ -66,7 +65,7 @@ export class InvitationsController {
   }
 
   @Get()
-  @Permissions(PERMISSIONS.USER_INVITE)
+  @Permissions('user.invite')
   @ApiOperation({
     summary:
       "The tenant's invitations, newest first: pending, accepted, expired and revoked",
@@ -83,7 +82,7 @@ export class InvitationsController {
   }
 
   @Delete(':id')
-  @Permissions(PERMISSIONS.USER_INVITE)
+  @Permissions('user.invite')
   @ApiOperation({
     summary: 'Revoke an open invitation: its link no longer works',
   })

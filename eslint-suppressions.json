@@ -1,23 +1,10 @@
 {
-  "src/common/guards/roles.guard.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    }
-  },
   "src/infrastructure/prisma/prisma.service.ts": {
     "@typescript-eslint/no-unsafe-call": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 3
-    }
-  },
-  "src/modules/users/application/services/permission.service.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "no-restricted-imports": {
-      "count": 1
     }
   }
 }

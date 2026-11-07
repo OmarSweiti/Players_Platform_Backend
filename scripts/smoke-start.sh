@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # The production image starts and answers (0.2.6). Builds it from this checkout
 # (or takes IMAGE), starts it beside a throwaway PostgreSQL 18, with the roles
-# every environment has (0.4.2), and Valkey, on a network of their own; waits
-# until it is live; then runs the image's test (test/image) against it. Every
-# request is made inside the container, so no port is published: the same on
+# every environment has (0.4.2) and every migration applied, and Valkey, on a
+# network of their own; waits until it is live; then runs the image's test
+# (test/image) against it. Every request to the API is made inside its
+# container, so the API publishes no port; the database publishes one on the
+# host's loopback only, to be migrated, as `just migrations` does: the same on
 # Docker Desktop, Colima and CI. Everything it started is removed on exit.
 #
 #   bash scripts/smoke-start.sh                          build, then test
@@ -28,7 +30,7 @@ cleanup() {
 trap cleanup EXIT
 
 docker network create "$run" >/dev/null
-docker run -d --name "$run-db" --network "$run" \
+docker run -d --name "$run-db" --network "$run" -p 127.0.0.1::5432 \
   -e POSTGRES_USER=smoke -e POSTGRES_PASSWORD=smoke -e POSTGRES_DB=smoke \
   -e POSTGRES_INITDB_ARGS="--locale-provider=builtin --locale=C.UTF-8" "$POSTGRES" >/dev/null
 docker run -d --name "$run-valkey" --network "$run" "$VALKEY" >/dev/null
@@ -37,6 +39,11 @@ until docker exec "$run-db" pg_isready -h 127.0.0.1 -U smoke -d smoke >/dev/null
 # A disposable database's passwords, not secrets
 docker exec -i -e SADARA_MIGRATOR_PASSWORD=smoke-migrator -e SADARA_APP_PASSWORD=smoke-app \
   "$run-db" psql -q -U smoke -d smoke -f - <scripts/database-roles.sql >/dev/null
+# Migrated as the migrator, as every environment is before the API starts:
+# the API refuses to boot on a database that is not the code's (0.6.1).
+port=$(docker port "$run-db" 5432/tcp | head -n 1 | sed 's/.*://')
+MIGRATION_DATABASE_URL="postgresql://sadara_migrator:smoke-migrator@127.0.0.1:$port/smoke" \
+  npx --no-install prisma migrate deploy >/dev/null
 
 # Production mode, every setting from the environment: the runtime role, never
 # a privileged one (the API refuses those).

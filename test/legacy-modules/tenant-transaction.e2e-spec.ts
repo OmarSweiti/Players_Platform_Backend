@@ -269,10 +269,8 @@ describe('the existing modules on the tenant transaction', () => {
     ).toEqual([]);
     expect(
       sources
-        .filter(
-          ([path, text]) =>
-            !path.endsWith('permission.service.ts') &&
-            /infrastructure\/prisma\/prisma\.service/.test(text),
+        .filter(([, text]) =>
+          /infrastructure\/prisma\/prisma\.service/.test(text),
         )
         .map(([path]) => path),
     ).toEqual([]);
@@ -280,8 +278,24 @@ describe('the existing modules on the tenant transaction', () => {
     // Every repository method takes the transaction and the context first,
     // and still names the context's tenant in its predicate: row-level
     // security is the backstop, not the only filter.
-    const repositories = sources.filter(([path]) =>
-      path.includes('/repositories/'),
+    // The one exception reads reference data that belongs to no tenant —
+    // the permission matrix (0.6.1) — so it has no tenant to name; it still
+    // reads inside the caller's tenant transaction.
+    const REFERENCE = 'permission.repository.ts';
+    const reference = sources.filter(
+      ([path]) => path.includes('/repositories/') && path.endsWith(REFERENCE),
+    );
+    expect(reference.map(([path]) => path)).toEqual([
+      `users/infrastructure/repositories/${REFERENCE}`,
+    ]);
+    for (const [, text] of reference) {
+      expect(text).not.toMatch(/tenantId/);
+      for (const chunk of text.split(/^ {2}async /m).slice(1)) {
+        expect(/^\w+\(\s*tx: TenantTx,/.test(chunk)).toBe(true);
+      }
+    }
+    const repositories = sources.filter(
+      ([path]) => path.includes('/repositories/') && !path.endsWith(REFERENCE),
     );
     // The users module's invitations (0.5.10) are the sixth.
     expect(repositories.length).toBe(6);
