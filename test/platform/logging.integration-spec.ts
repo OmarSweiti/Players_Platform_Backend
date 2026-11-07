@@ -12,6 +12,7 @@ import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { LogCapture } from '../harness/log-capture';
 import { signedInAs } from '../harness/session';
+import { SignedIn } from '../../src/common/decorators/signed-in.decorator';
 
 const connection = {
   host: process.env.REDIS_HOST ?? '127.0.0.1',
@@ -25,7 +26,8 @@ const CANARY = `canary-${randomBytes(8).toString('hex')}`;
 // Test-only routes, served through the real pipeline (test/harness/app.ts).
 @Controller('probe/logging')
 class LoggingProbeController {
-  @Get('players/:playerId') // a member's read; not @Public()
+  @SignedIn() // a member's read; not @Public()
+  @Get('players/:playerId')
   read() {
     return { read: true };
   }

@@ -11,7 +11,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { z } from 'zod';
-import { Permissions } from '../../../common/decorators/permissions.decorator';
+import { RequirePermission } from '../../../common/decorators/permissions.decorator';
 import { RequiresRecentAuth } from '../../../common/decorators/requires-recent-auth.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
 import {
@@ -48,7 +48,7 @@ export class InvitationsController {
   ) {}
 
   @Post()
-  @Permissions('user.invite')
+  @RequirePermission('user.invite')
   @RequiresRecentAuth()
   @RateLimit('privileged')
   @ApiOperation({
@@ -65,7 +65,7 @@ export class InvitationsController {
   }
 
   @Get()
-  @Permissions('user.invite')
+  @RequirePermission('user.invite')
   @ApiOperation({
     summary:
       "The tenant's invitations, newest first: pending, accepted, expired and revoked",
@@ -82,7 +82,7 @@ export class InvitationsController {
   }
 
   @Delete(':id')
-  @Permissions('user.invite')
+  @RequirePermission('user.invite')
   @ApiOperation({
     summary: 'Revoke an open invitation: its link no longer works',
   })

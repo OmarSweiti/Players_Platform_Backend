@@ -20,6 +20,7 @@ import {
 import { signedInAs } from '../harness/session';
 import { setCookiesOf } from '../support/set-cookies';
 import { TestIssuer } from '../support/test-issuer';
+import { SignedIn } from '../../src/common/decorators/signed-in.decorator';
 
 // Server sessions, the session cookie and CSRF (0.5.6; ADR-0003, ADR-0023,
 // SR-AUTH-003, SR-ACL-007). The session sign-in opened (0.5.5) authenticates
@@ -34,6 +35,7 @@ const PREVIOUS_KEY = vi.hoisted(() => {
 
 const SESSION = '__Host-Http-sadara_session';
 
+@SignedIn()
 @Controller('probe/sessions')
 class SessionProbe {
   /** Who the request acts as: the context the session guard minted. */

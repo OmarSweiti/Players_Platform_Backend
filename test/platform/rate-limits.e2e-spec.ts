@@ -15,6 +15,7 @@ import { bootApp, type BootedApp } from '../harness/app';
 import { createMember, createTenant } from '../harness/fixtures';
 import { controllersOf } from '../harness/routes';
 import { signedInAs } from '../harness/session';
+import { SignedIn } from '../../src/common/decorators/signed-in.decorator';
 
 // Test-only routes, one per category; the undecorated one is `default`.
 @Public()
@@ -57,6 +58,7 @@ class LimitedController {
 }
 
 // The same categories behind a session: who counts is the signed-in member.
+@SignedIn()
 @Controller('probe/members')
 class MemberController {
   @RateLimit('export')
