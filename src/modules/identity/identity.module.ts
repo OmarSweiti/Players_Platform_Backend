@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { RateLimitModule } from '../../common/rate-limit/rate-limit.module';
 import { CsrfTokens } from '../../common/security/csrf-tokens';
 import { CLOCK, systemClock } from '../../common/time/clock';
+import { PermissionsModule } from '../users/permissions.module';
 import { AssurancePolicy } from './application/assurance.policy';
 import { IdentityProviderPort } from './application/ports/identity-provider.port';
 import { LogoutTokenReplays } from './application/ports/logout-token-replays.port';
@@ -26,10 +27,12 @@ import { AuthController } from './presentation/auth.controller';
 // the API (0.5.5), the sessions it opens (0.5.6), which the global session and
 // CSRF guards (app.module.ts) check, signing out (0.5.7), and assurance:
 // second factors for privileged roles and step-up for sensitive actions
-// (0.5.8). Invitations (0.5.10) join it.
+// (0.5.8). Invitations (0.5.10) join it. The session lists the member's
+// effective permissions (0.6.6).
 @Module({
-  // The limiter counts the account being signed in to (0.3.8).
-  imports: [RateLimitModule],
+  // The limiter counts the account being signed in to (0.3.8); the session
+  // lists the member's effective permissions (0.6.6).
+  imports: [RateLimitModule, PermissionsModule],
   controllers: [AuthController],
   providers: [
     { provide: IdentityProviderPort, useClass: KeycloakIdentityProvider },

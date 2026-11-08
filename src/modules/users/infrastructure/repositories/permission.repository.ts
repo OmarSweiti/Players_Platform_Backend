@@ -19,4 +19,15 @@ export class PermissionRepository extends PermissionRecords {
     });
     return grant !== null;
   }
+
+  async permissionsOf(
+    tx: TenantTx,
+    role: UserRole,
+  ): Promise<readonly string[]> {
+    const grants = await tx.rolePermission.findMany({
+      where: { roleId: role },
+      select: { permission: { select: { name: true } } },
+    });
+    return grants.map(({ permission }) => permission.name);
+  }
 }

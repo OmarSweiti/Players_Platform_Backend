@@ -13,4 +13,10 @@ export abstract class PermissionRecords {
     role: UserRole,
     permission: PermissionKey,
   ): Promise<boolean>;
+
+  /** The names of the permissions `role` holds in the database's matrix. */
+  abstract permissionsOf(
+    tx: TenantTx,
+    role: UserRole,
+  ): Promise<readonly string[]>;
 }

@@ -1,7 +1,8 @@
 import { UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { PERMISSION_KEYS } from '../../../users/domain/permission-catalog';
 
-/** The signed-in member's own session (0.5.6): `GET /api/v1/auth/session`. */
+/** The signed-in member's own session (0.5.6, 0.6.6): `GET /api/v1/auth/session`. */
 export const CurrentSessionResponse = z
   .strictObject({
     member: z.strictObject({
@@ -16,6 +17,11 @@ export const CurrentSessionResponse = z
       name: z.string(),
       locale: z.enum(['ar', 'en']).describe('The language members start in'),
     }),
+    permissions: z
+      .array(z.enum(PERMISSION_KEYS))
+      .describe(
+        "The permissions the member's role holds, in the catalog's order (0.6.6): for shaping navigation only — the API decides every call",
+      ),
     csrfToken: z
       .string()
       .describe('Sent back in X-CSRF-Token with every write of this session'),

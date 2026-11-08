@@ -7,7 +7,10 @@ import {
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { CONFIDENTIAL_GRANTS } from '../../domain/confidential-grants';
-import type { PermissionKey } from '../../domain/permission-catalog';
+import {
+  PERMISSION_KEYS,
+  type PermissionKey,
+} from '../../domain/permission-catalog';
 import { PermissionRecords } from '../ports/permission-records.port';
 
 /**
@@ -31,6 +34,27 @@ export class PermissionService {
     return this.transactions.withTenantTransaction(ctx, (tx) =>
       this.records.roleHolds(tx, role, permission),
     );
+  }
+
+  /**
+   * The permissions the member's role holds, in the catalog's order (0.6.6):
+   * what the session lists, so the web app can shape its navigation. Read
+   * from the stored matrix on every call, for the role the session guard
+   * minted on this request — the role `hasPermission` decides with — so a
+   * role change shows on the member's next request. Display only: every
+   * route still asks `hasPermission`. A job holds none.
+   */
+  async effectivePermissions(
+    ctx: AuthorizedTenantContext,
+  ): Promise<readonly PermissionKey[]> {
+    const { actor } = ctx;
+    if (actor.kind !== 'USER') return [];
+    const held = new Set(
+      await this.transactions.withTenantTransaction(ctx, (tx) =>
+        this.records.permissionsOf(tx, actor.role),
+      ),
+    );
+    return PERMISSION_KEYS.filter((permission) => held.has(permission));
   }
 
   /**
