@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import type { RecommendationLevel, ScoutReportStatus } from '@prisma/client';
-import { NotFoundError } from '../../../../common/errors/domain-error';
+import { authorizeRead } from '../../../../common/policy/policy';
 import {
   actingMemberOf,
   type AuthorizedTenantContext,
 } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { scoutingReportPolicy } from '../policies/scouting-report.policy';
 import { ScoutingReports } from '../ports/scouting-reports.port';
 
 /**
@@ -37,12 +38,15 @@ export class ReadScoutingReportsUseCase {
     return reports;
   }
 
-  async get(ctx: AuthorizedTenantContext, id: string) {
-    const report = await this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.scoutingReportRepo.findById(tx, ctx, id),
+  get(ctx: AuthorizedTenantContext, id: string) {
+    return this.tenants.withTenantTransaction(ctx, async (tx) =>
+      authorizeRead(
+        ctx,
+        scoutingReportPolicy,
+        await this.scoutingReportRepo.findById(tx, ctx, id),
+        'Scouting report not found',
+      ),
     );
-    if (!report) throw new NotFoundError('Scouting report not found');
-    return report;
   }
 
   /** The acting member's own report counts, as a scout. */
