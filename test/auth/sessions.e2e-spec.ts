@@ -229,7 +229,12 @@ describe('server sessions, the session cookie and CSRF', () => {
     expect(response.body).toEqual({
       data: {
         tenantId: agency.id,
-        actor: { kind: 'USER', userId: member.id, sessionId },
+        actor: {
+          kind: 'USER',
+          userId: member.id,
+          sessionId,
+          role: member.role,
+        },
       },
     });
   });

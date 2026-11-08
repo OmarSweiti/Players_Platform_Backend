@@ -151,7 +151,12 @@ describe('member emails and lifetime memberships', () => {
     const admin = await createMember(a, 'ADMIN');
     const asAdminOfA = mintTenantContext({
       tenantId: a.id,
-      actor: { kind: 'USER', userId: admin.id, sessionId: randomUUID() },
+      actor: {
+        kind: 'USER',
+        userId: admin.id,
+        sessionId: randomUUID(),
+        role: admin.role,
+      },
       requestId: randomUUID(),
       locale: 'en',
     });
