@@ -53,11 +53,12 @@ export interface PolicyMember {
 export type Rule<View> = (member: PolicyMember, resource: View) => Decision;
 
 export interface Policy<Action extends string, View> {
-  authorize(
+  /** A function, not a method: it reads no `this`, so it may be passed on. */
+  readonly authorize: (
     ctx: AuthorizedTenantContext,
     action: Action,
     resource: View,
-  ): Decision;
+  ) => Decision;
 }
 
 /**
@@ -70,11 +71,11 @@ export function definePolicy<Action extends string, View>(
   rules: Readonly<Record<Action | 'read', Rule<View>>>,
 ): Policy<Action | 'read', View> {
   return Object.freeze({
-    authorize(
+    authorize: (
       ctx: AuthorizedTenantContext,
       action: Action | 'read',
       resource: View,
-    ): Decision {
+    ): Decision => {
       if (ctx.actor.kind !== 'USER') return deny('NOT_A_MEMBER');
       const rule: Rule<View> | undefined = Object.hasOwn(rules, action)
         ? rules[action]
