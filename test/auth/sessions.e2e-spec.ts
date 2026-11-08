@@ -194,6 +194,8 @@ describe('server sessions, the session cookie and CSRF', () => {
         name: agency.name,
         locale: 'ar',
       },
+      // The role's effective permissions (0.6.6): effective-permissions.e2e-spec.ts.
+      permissions: expect.any(Array) as unknown,
       csrfToken: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) as string,
     });
 

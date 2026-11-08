@@ -133,6 +133,9 @@ export const RESPONSES: Readonly<Record<string, Fields>> = {
     'tenant.slug': 'OPERATIONAL',
     'tenant.name': 'OPERATIONAL',
     'tenant.locale': 'OPERATIONAL',
+    // The member's own role's permissions (0.6.6), for shaping their
+    // navigation: the role matrix is the product's, not a confidential fact.
+    'permissions[]': 'OPERATIONAL',
     // The session's own anti-forgery token, for its own page's writes.
     csrfToken: 'OPERATIONAL',
   },

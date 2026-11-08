@@ -3,12 +3,16 @@ import { AuthenticationRequiredError } from '../../../../common/errors/domain-er
 import { CsrfTokens } from '../../../../common/security/csrf-tokens';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { PermissionService } from '../../../users/application/services/permission.service';
+import type { PermissionKey } from '../../../users/domain/permission-catalog';
 import { type SessionView, SessionViews } from '../ports/session-views.port';
 
-/** What `GET /api/v1/auth/session` answers (0.5.6). */
+/** What `GET /api/v1/auth/session` answers (0.5.6, 0.6.6). */
 export interface CurrentSession {
   readonly member: SessionView['member'];
   readonly tenant: SessionView['tenant'];
+  /** What the member's role holds, for the web app's navigation only. */
+  readonly permissions: readonly PermissionKey[];
   /** Sent back in `X-CSRF-Token` with every write. */
   readonly csrfToken: string;
 }
@@ -18,6 +22,9 @@ export interface CurrentSession {
  * the CSRF token their writes carry — derived from the session, never stored,
  * so every tab reads the same one until the session rotates (ADR-0003). The
  * web app asks here; it never reads a cookie, which its scripts cannot see.
+ * It lists the member's effective permissions too (0.6.6), read from the
+ * database on every request, so a role change shows on the next one; they
+ * shape the web app's navigation, and every route still decides for itself.
  */
 @Injectable()
 export class ReadSessionUseCase {
@@ -25,6 +32,7 @@ export class ReadSessionUseCase {
     private readonly tenants: TenantTransactions,
     private readonly views: SessionViews,
     private readonly csrf: CsrfTokens,
+    private readonly permissions: PermissionService,
   ) {}
 
   async execute(ctx: AuthorizedTenantContext): Promise<CurrentSession> {
@@ -36,6 +44,7 @@ export class ReadSessionUseCase {
     return {
       member: view.member,
       tenant: view.tenant,
+      permissions: await this.permissions.effectivePermissions(ctx),
       csrfToken: this.csrf.issue(view.tokenHash),
     };
   }
