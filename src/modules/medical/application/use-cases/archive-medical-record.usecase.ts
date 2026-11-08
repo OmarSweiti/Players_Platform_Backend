@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { medicalRecordPolicy } from '../policies/medical-record.policy';
 import { MedicalRecords } from '../ports/medical-records.port';
 
 /**
@@ -15,8 +17,15 @@ export class ArchiveMedicalRecordUseCase {
   ) {}
 
   async execute(ctx: AuthorizedTenantContext, id: string): Promise<void> {
-    await this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.medicalRecordRepo.archive(tx, ctx, id),
-    );
+    await this.tenants.withTenantTransaction(ctx, async (tx) => {
+      authorizeChange(
+        ctx,
+        medicalRecordPolicy,
+        'archive',
+        await this.medicalRecordRepo.findById(tx, ctx, id),
+        'Medical record not found',
+      );
+      await this.medicalRecordRepo.archive(tx, ctx, id);
+    });
   }
 }
