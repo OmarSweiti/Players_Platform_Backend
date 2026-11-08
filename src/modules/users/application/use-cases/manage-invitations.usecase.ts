@@ -1,13 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
-import {
-  InvalidTransitionError,
-  NotFoundError,
-} from '../../../../common/errors/domain-error';
+import { InvalidTransitionError } from '../../../../common/errors/domain-error';
 import { type Page, paginate } from '../../../../common/pagination/paginate';
+import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
 import { type InvitationStatus, statusOf } from '../../domain/invitation';
+import { invitationPolicy } from '../policies/invitation.policy';
 import {
   InvitationRecords,
   type ListedInvitation,
@@ -60,17 +59,21 @@ export class ManageInvitationsUseCase {
     invitationId: string,
   ): Promise<void> {
     await this.transactions.withTenantTransaction(ctx, async (tx) => {
-      const invitation = await this.records.find(tx, ctx, invitationId);
-      if (!invitation) throw new NotFoundError('No such invitation');
+      const stays = () =>
+        new InvalidTransitionError('an accepted invitation stays accepted');
+      const invitation = authorizeChange(
+        ctx,
+        invitationPolicy,
+        'revoke',
+        await this.records.find(tx, ctx, invitationId),
+        'No such invitation',
+        { STATE: stays },
+      );
       if (invitation.revokedAt !== null) return;
       const at = this.clock.now();
-      if (
-        invitation.acceptedAt !== null ||
-        !(await this.records.revoke(tx, ctx, invitationId, at))
-      ) {
-        throw new InvalidTransitionError(
-          'an accepted invitation stays accepted',
-        );
+      // Accepted since it was read: the revocation changes no row.
+      if (!(await this.records.revoke(tx, ctx, invitationId, at))) {
+        throw stays();
       }
       await this.records.audit(tx, ctx, {
         action: 'invitation.revoked',

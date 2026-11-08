@@ -1,3 +1,4 @@
+import { UserRole } from '@prisma/client';
 import { z } from 'zod';
 import { ForbiddenError } from '../errors/domain-error';
 
@@ -14,12 +15,19 @@ export type TenantId = Branded<string, 'TenantId'>;
 export type UserId = Branded<string, 'UserId'>;
 export type SessionId = Branded<string, 'SessionId'>;
 
-/** Who acts: a signed-in member, or the system doing a job — never an invented account. PLATFORM arrives in 4.1. */
+/**
+ * Who acts: a signed-in member, or the system doing a job — never an invented
+ * account. PLATFORM arrives in 4.1. A member acts in their role in this
+ * tenant, as their membership held it when the context was minted: object
+ * policies decide from it (0.6.3), so a use case called directly is decided
+ * as one called over HTTP is.
+ */
 export type Actor =
   | {
       readonly kind: 'USER';
       readonly userId: UserId;
       readonly sessionId: SessionId;
+      readonly role: UserRole;
     }
   | { readonly kind: 'SYSTEM'; readonly job: string };
 
@@ -40,6 +48,7 @@ const Fields = z.strictObject({
       kind: z.literal('USER'),
       userId: z.uuid(),
       sessionId: z.uuid(),
+      role: z.enum(UserRole),
     }),
     z.strictObject({
       kind: z.literal('SYSTEM'),

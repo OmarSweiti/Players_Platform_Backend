@@ -58,7 +58,7 @@ export class SessionGuard implements CanActivate {
     request.session = { id: sessionId, tokenHash, authTime, acr };
     request.tenantContext = mintTenantContext({
       tenantId: member.tenantId,
-      actor: { kind: 'USER', userId: member.id, sessionId },
+      actor: { kind: 'USER', userId: member.id, sessionId, role: member.role },
       requestId: requestIdOf(request) ?? randomUUID(),
       locale: localeOf(request.header('accept-language')),
     });

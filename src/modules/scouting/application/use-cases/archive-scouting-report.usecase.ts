@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { scoutingReportPolicy } from '../policies/scouting-report.policy';
 import { ScoutingReports } from '../ports/scouting-reports.port';
 
 /**
@@ -15,8 +17,15 @@ export class ArchiveScoutingReportUseCase {
   ) {}
 
   async execute(ctx: AuthorizedTenantContext, id: string): Promise<void> {
-    await this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.scoutingReportRepo.archive(tx, ctx, id),
-    );
+    await this.tenants.withTenantTransaction(ctx, async (tx) => {
+      authorizeChange(
+        ctx,
+        scoutingReportPolicy,
+        'archive',
+        await this.scoutingReportRepo.findById(tx, ctx, id),
+        'Scouting report not found',
+      );
+      await this.scoutingReportRepo.archive(tx, ctx, id);
+    });
   }
 }

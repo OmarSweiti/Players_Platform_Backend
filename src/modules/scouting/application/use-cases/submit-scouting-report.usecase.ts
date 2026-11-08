@@ -3,14 +3,12 @@ import { ScoutingReports } from '../ports/scouting-reports.port';
 import {
   ForbiddenError,
   InvalidTransitionError,
-  NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
-import {
-  actingMemberOf,
-  type AuthorizedTenantContext,
-} from '../../../../common/tenancy/tenant-context';
+import { authorizeChange } from '../../../../common/policy/policy';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { scoutingReportPolicy } from '../policies/scouting-report.policy';
 
 @Injectable()
 export class SubmitScoutingReportUseCase {
@@ -20,25 +18,24 @@ export class SubmitScoutingReportUseCase {
   ) {}
 
   async execute(ctx: AuthorizedTenantContext, id: string) {
-    const scoutId = actingMemberOf(ctx);
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
-      const report = await this.scoutingReportRepo.findById(tx, ctx, id);
-
-      if (!report) {
-        throw new NotFoundError('Scouting report not found');
-      }
-
-      if (report.scoutId !== scoutId) {
-        throw new ForbiddenError(
-          'Only the assigned scout can submit this report',
-        );
-      }
-
-      if (report.status !== 'DRAFT') {
-        throw new InvalidTransitionError(
-          'Report must be in DRAFT status to submit',
-        );
-      }
+      const report = authorizeChange(
+        ctx,
+        scoutingReportPolicy,
+        'submit',
+        await this.scoutingReportRepo.findById(tx, ctx, id),
+        'Scouting report not found',
+        {
+          UNRELATED: () =>
+            new ForbiddenError(
+              'Only the assigned scout can submit this report',
+            ),
+          STATE: () =>
+            new InvalidTransitionError(
+              'Report must be in DRAFT status to submit',
+            ),
+        },
+      );
 
       // Validate required fields before submission
       if (!report.overallRating) {

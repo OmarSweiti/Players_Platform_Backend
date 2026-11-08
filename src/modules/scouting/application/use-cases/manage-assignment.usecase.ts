@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import {
   ForbiddenError,
-  NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
+import { authorizeChange } from '../../../../common/policy/policy';
 import {
   actingMemberOf,
   type AuthorizedTenantContext,
 } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { scoutingAssignmentPolicy } from '../policies/scouting-assignment.policy';
 import {
   Assignments,
   type CreateScoutingAssignmentInput,
@@ -17,8 +18,8 @@ import {
 
 /**
  * Scouting assignments in the context's tenant (0.4.12): the acting member
- * gives them, as the director, or works them, as the scout. `memberRole` is
- * the signed-in member's, from the session.
+ * gives them, as the director, or works them, as the scout. Who may change
+ * one is the assignment policy's (0.6.3).
  */
 @Injectable()
 export class ManageAssignmentUseCase {
@@ -84,20 +85,20 @@ export class ManageAssignmentUseCase {
       );
     }
 
-    const directorId = actingMemberOf(ctx);
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
-      const assignment = await this.assignmentRepo.findById(tx, ctx, id);
-      if (!assignment) {
-        throw new NotFoundError('Assignment not found');
-      }
-
-      // Only the creator (sporting director) can update
-      if (assignment.assignedById !== directorId) {
-        throw new ForbiddenError(
-          'Only the assigning director can update this assignment',
-        );
-      }
-
+      authorizeChange(
+        ctx,
+        scoutingAssignmentPolicy,
+        'update',
+        await this.assignmentRepo.findById(tx, ctx, id),
+        'Assignment not found',
+        {
+          UNRELATED: () =>
+            new ForbiddenError(
+              'Only the assigning director can update this assignment',
+            ),
+        },
+      );
       return this.assignmentRepo.update(tx, ctx, id, input);
     });
   }
@@ -105,12 +106,7 @@ export class ManageAssignmentUseCase {
   /**
    * Update assignment status
    */
-  async updateStatus(
-    ctx: AuthorizedTenantContext,
-    id: string,
-    status: string,
-    memberRole: string,
-  ) {
+  async updateStatus(ctx: AuthorizedTenantContext, id: string, status: string) {
     // Validate status transition
     const validStatuses = ['OPEN', 'IN_PROGRESS', 'COMPLETED'];
     if (!validStatuses.includes(status)) {
@@ -120,25 +116,22 @@ export class ManageAssignmentUseCase {
       );
     }
 
-    const memberId = actingMemberOf(ctx);
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
-      const assignment = await this.assignmentRepo.findById(tx, ctx, id);
-      if (!assignment) {
-        throw new NotFoundError('Assignment not found');
-      }
-
-      // Scout can only update their own assignments to IN_PROGRESS or COMPLETED
-      if (memberRole === 'SCOUT' && assignment.assignedToId !== memberId) {
-        throw new ForbiddenError('You can only update your own assignments');
-      }
-
-      // Sporting Director can update any assignment
-      if (memberRole !== 'SPORTING_DIRECTOR' && memberRole !== 'SCOUT') {
-        throw new ForbiddenError(
-          'Insufficient permissions to update assignment status',
-        );
-      }
-
+      authorizeChange(
+        ctx,
+        scoutingAssignmentPolicy,
+        'setStatus',
+        await this.assignmentRepo.findById(tx, ctx, id),
+        'Assignment not found',
+        {
+          UNRELATED: () =>
+            new ForbiddenError('You can only update your own assignments'),
+          ROLE: () =>
+            new ForbiddenError(
+              'Insufficient permissions to update assignment status',
+            ),
+        },
+      );
       return this.assignmentRepo.updateStatus(tx, ctx, id, status);
     });
   }
@@ -170,20 +163,20 @@ export class ManageAssignmentUseCase {
    * Delete assignment
    */
   async deleteAssignment(ctx: AuthorizedTenantContext, id: string) {
-    const directorId = actingMemberOf(ctx);
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
-      const assignment = await this.assignmentRepo.findById(tx, ctx, id);
-      if (!assignment) {
-        throw new NotFoundError('Assignment not found');
-      }
-
-      // Only the creator can delete
-      if (assignment.assignedById !== directorId) {
-        throw new ForbiddenError(
-          'Only the assigning director can delete this assignment',
-        );
-      }
-
+      authorizeChange(
+        ctx,
+        scoutingAssignmentPolicy,
+        'delete',
+        await this.assignmentRepo.findById(tx, ctx, id),
+        'Assignment not found',
+        {
+          UNRELATED: () =>
+            new ForbiddenError(
+              'Only the assigning director can delete this assignment',
+            ),
+        },
+      );
       return this.assignmentRepo.delete(tx, ctx, id);
     });
   }

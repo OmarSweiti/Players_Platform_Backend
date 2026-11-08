@@ -69,6 +69,27 @@ export function testContext(
 }
 
 /**
+ * The context the session guard mints for `member` (0.5.6): their tenant, a
+ * session of theirs and their role, for calling a use case directly as that
+ * member would through a route.
+ */
+export function memberContext(
+  member: Pick<User, 'id' | 'tenantId' | 'role'>,
+): AuthorizedTenantContext {
+  return mintTenantContext({
+    tenantId: member.tenantId,
+    actor: {
+      kind: 'USER',
+      userId: member.id,
+      sessionId: randomUUID(),
+      role: member.role,
+    },
+    requestId: randomUUID(),
+    locale: 'en',
+  });
+}
+
+/**
  * Runs `work` as `tenantId`, the way a use case does (0.4.3): one tenant
  * transaction, through the real TenantTransactions, so row-level security
  * (0.4.5) shows and accepts that tenant's rows only.

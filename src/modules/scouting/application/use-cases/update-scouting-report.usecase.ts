@@ -6,14 +6,12 @@ import {
 import {
   ForbiddenError,
   InvalidTransitionError,
-  NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
-import {
-  actingMemberOf,
-  type AuthorizedTenantContext,
-} from '../../../../common/tenancy/tenant-context';
+import { authorizeChange } from '../../../../common/policy/policy';
+import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { scoutingReportPolicy } from '../policies/scouting-report.policy';
 
 @Injectable()
 export class UpdateScoutingReportUseCase {
@@ -80,27 +78,24 @@ export class UpdateScoutingReportUseCase {
       input.overallRating = average;
     }
 
-    const scoutId = actingMemberOf(ctx);
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
-      // Verify ownership - only the scout who created the report can update it (unless DRAFT status)
-      const report = await this.scoutingReportRepo.findById(tx, ctx, id);
-
-      if (!report) {
-        throw new NotFoundError('Scouting report not found');
-      }
-
-      if (report.scoutId !== scoutId && report.status !== 'DRAFT') {
-        throw new ForbiddenError(
-          'Only the assigned scout can update this report',
-        );
-      }
-
-      if (report.status !== 'DRAFT') {
-        throw new InvalidTransitionError(
-          'Cannot update a report that has already been submitted',
-        );
-      }
-
+      authorizeChange(
+        ctx,
+        scoutingReportPolicy,
+        'update',
+        await this.scoutingReportRepo.findById(tx, ctx, id),
+        'Scouting report not found',
+        {
+          UNRELATED: () =>
+            new ForbiddenError(
+              'Only the assigned scout can update this report',
+            ),
+          STATE: () =>
+            new InvalidTransitionError(
+              'Cannot update a report that has already been submitted',
+            ),
+        },
+      );
       return this.scoutingReportRepo.update(tx, ctx, id, input);
     });
   }

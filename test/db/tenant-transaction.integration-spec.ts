@@ -106,7 +106,12 @@ describe('the tenant transaction', () => {
       // Every field a request could send, in a body, headers or a token claim.
       await refuse({
         tenantId: a.id,
-        actor: { kind: 'USER', userId: randomUUID(), sessionId: randomUUID() },
+        actor: {
+          kind: 'USER',
+          userId: randomUUID(),
+          sessionId: randomUUID(),
+          role: 'OWNER',
+        },
         requestId: randomUUID(),
         locale: 'en',
       });

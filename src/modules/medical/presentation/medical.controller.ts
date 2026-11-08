@@ -9,8 +9,6 @@ import {
   Patch,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import type { SessionMember } from '../../../common/interfaces/request-with-user.interface';
-import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
 import type { AuthorizedTenantContext } from '../../../common/tenancy/tenant-context';
 import { RequirePermission } from '../../../common/decorators/permissions.decorator';
@@ -127,23 +125,17 @@ export class MedicalController {
   @ApiOperation({ summary: 'Update medical record' })
   async updateRecord(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
-    @CurrentUser() member: SessionMember,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: UpdateMedicalRecordDto }) dto: UpdateMedicalRecordDto,
   ) {
-    const record = await this.updateMedicalRecordUseCase.execute(
-      ctx,
-      id,
-      {
-        ...dto,
-        injuryDate: dto.injuryDate ? new Date(dto.injuryDate) : undefined,
-        recoveryDate: dto.recoveryDate ? new Date(dto.recoveryDate) : undefined,
-        returnToPlayDate: dto.returnToPlayDate
-          ? new Date(dto.returnToPlayDate)
-          : undefined,
-      },
-      member.role,
-    );
+    const record = await this.updateMedicalRecordUseCase.execute(ctx, id, {
+      ...dto,
+      injuryDate: dto.injuryDate ? new Date(dto.injuryDate) : undefined,
+      recoveryDate: dto.recoveryDate ? new Date(dto.recoveryDate) : undefined,
+      returnToPlayDate: dto.returnToPlayDate
+        ? new Date(dto.returnToPlayDate)
+        : undefined,
+    });
 
     return record;
   }
@@ -236,20 +228,14 @@ export class MedicalController {
   @ApiOperation({ summary: 'Update treatment session' })
   async updateSession(
     @CurrentTenantContext() ctx: AuthorizedTenantContext,
-    @CurrentUser() member: SessionMember,
     @Param({ schema: IdParams }) { id }: IdParams,
     @Body({ schema: UpdateTreatmentSessionDto }) dto: UpdateTreatmentSessionDto,
   ) {
-    const session = await this.updateTreatmentSessionUseCase.execute(
-      ctx,
-      id,
-      {
-        ...dto,
-        sessionDate: dto.sessionDate ? new Date(dto.sessionDate) : undefined,
-        status: dto.status,
-      },
-      member.role,
-    );
+    const session = await this.updateTreatmentSessionUseCase.execute(ctx, id, {
+      ...dto,
+      sessionDate: dto.sessionDate ? new Date(dto.sessionDate) : undefined,
+      status: dto.status,
+    });
 
     return session;
   }

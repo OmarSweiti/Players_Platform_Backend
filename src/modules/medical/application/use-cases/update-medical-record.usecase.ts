@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import {
   ForbiddenError,
-  NotFoundError,
   ValidationFailedError,
 } from '../../../../common/errors/domain-error';
+import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { medicalRecordPolicy } from '../policies/medical-record.policy';
 import {
   MedicalRecords,
   type UpdateMedicalRecordInput,
@@ -18,12 +19,10 @@ export class UpdateMedicalRecordUseCase {
     private readonly medicalRecordRepo: MedicalRecords,
   ) {}
 
-  /** `memberRole` is the signed-in member's, from the session. */
   async execute(
     ctx: AuthorizedTenantContext,
     id: string,
     input: UpdateMedicalRecordInput,
-    memberRole: string,
   ) {
     // Validate dates if updating
     if (
@@ -38,21 +37,19 @@ export class UpdateMedicalRecordUseCase {
     }
 
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
-      const record = await this.medicalRecordRepo.findById(tx, ctx, id);
-      if (!record) {
-        throw new NotFoundError('Medical record not found');
-      }
-
-      // Only medical staff can update confidential records
-      if (
-        record.isConfidential &&
-        !['MEDICAL', 'PHYSIOTHERAPIST', 'SUPER_ADMIN'].includes(memberRole)
-      ) {
-        throw new ForbiddenError(
-          'Insufficient permissions to update confidential medical records',
-        );
-      }
-
+      authorizeChange(
+        ctx,
+        medicalRecordPolicy,
+        'update',
+        await this.medicalRecordRepo.findById(tx, ctx, id),
+        'Medical record not found',
+        {
+          CONFIDENTIAL: () =>
+            new ForbiddenError(
+              'Insufficient permissions to update confidential medical records',
+            ),
+        },
+      );
       return this.medicalRecordRepo.update(tx, ctx, id, input);
     });
   }

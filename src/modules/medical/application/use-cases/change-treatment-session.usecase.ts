@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { TreatmentStatus } from '@prisma/client';
+import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { treatmentSessionPolicy } from '../policies/treatment-session.policy';
 import { TreatmentSessions } from '../ports/treatment-sessions.port';
 
 /**
@@ -16,14 +18,28 @@ export class ChangeTreatmentSessionUseCase {
   ) {}
 
   setStatus(ctx: AuthorizedTenantContext, id: string, status: TreatmentStatus) {
-    return this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.treatmentSessionRepo.updateStatus(tx, ctx, id, status),
-    );
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      authorizeChange(
+        ctx,
+        treatmentSessionPolicy,
+        'setStatus',
+        await this.treatmentSessionRepo.findById(tx, ctx, id),
+        'Treatment session not found',
+      );
+      return this.treatmentSessionRepo.updateStatus(tx, ctx, id, status);
+    });
   }
 
   async delete(ctx: AuthorizedTenantContext, id: string): Promise<void> {
-    await this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.treatmentSessionRepo.delete(tx, ctx, id),
-    );
+    await this.tenants.withTenantTransaction(ctx, async (tx) => {
+      authorizeChange(
+        ctx,
+        treatmentSessionPolicy,
+        'delete',
+        await this.treatmentSessionRepo.findById(tx, ctx, id),
+        'Treatment session not found',
+      );
+      await this.treatmentSessionRepo.delete(tx, ctx, id);
+    });
   }
 }

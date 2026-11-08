@@ -1,8 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { TreatmentStatus } from '@prisma/client';
-import { NotFoundError } from '../../../../common/errors/domain-error';
+import { authorizeRead } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { treatmentSessionPolicy } from '../policies/treatment-session.policy';
 import { TreatmentSessions } from '../ports/treatment-sessions.port';
 
 /** The treatment session reads (0.4.12): each in one tenant transaction, as the context's tenant. */
@@ -30,12 +31,15 @@ export class ReadTreatmentSessionsUseCase {
     return sessions;
   }
 
-  async get(ctx: AuthorizedTenantContext, id: string) {
-    const session = await this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.treatmentSessionRepo.findById(tx, ctx, id),
+  get(ctx: AuthorizedTenantContext, id: string) {
+    return this.tenants.withTenantTransaction(ctx, async (tx) =>
+      authorizeRead(
+        ctx,
+        treatmentSessionPolicy,
+        await this.treatmentSessionRepo.findById(tx, ctx, id),
+        'Treatment session not found',
+      ),
     );
-    if (!session) throw new NotFoundError('Treatment session not found');
-    return session;
   }
 
   upcoming(ctx: AuthorizedTenantContext, playerId: string) {

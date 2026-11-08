@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { NotFoundError } from '../../../../common/errors/domain-error';
+import { authorizeRead } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { medicalRecordPolicy } from '../policies/medical-record.policy';
 import { MedicalRecords } from '../ports/medical-records.port';
 
 type Page = { skip?: number; take?: number };
@@ -45,12 +46,15 @@ export class ReadMedicalRecordsUseCase {
     return records;
   }
 
-  async get(ctx: AuthorizedTenantContext, id: string) {
-    const record = await this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.medicalRecordRepo.findById(tx, ctx, id),
+  get(ctx: AuthorizedTenantContext, id: string) {
+    return this.tenants.withTenantTransaction(ctx, async (tx) =>
+      authorizeRead(
+        ctx,
+        medicalRecordPolicy,
+        await this.medicalRecordRepo.findById(tx, ctx, id),
+        'Medical record not found',
+      ),
     );
-    if (!record) throw new NotFoundError('Medical record not found');
-    return record;
   }
 
   activeInjuries(ctx: AuthorizedTenantContext, playerId: string) {
