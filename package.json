@@ -16,6 +16,7 @@
     "openapi": "ts-node --transpile-only scripts/export-openapi.ts",
     "seed": "ts-node --transpile-only src/database/seed.ts",
     "tenant:provision": "node dist/cli/provision-tenant.js",
+    "security-events:import": "node dist/cli/import-security-events.js",
     "test": "vitest run --project unit",
     "test:int": "vitest run --project integration",
     "test:e2e": "vitest run --project e2e",

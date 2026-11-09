@@ -227,8 +227,38 @@ export type ProvisioningEnv = Env & z.infer<typeof Provisioner>;
 export function parseProvisioningEnv(
   raw: Record<string, unknown>,
 ): ProvisioningEnv {
+  return parseCommandEnv(Provisioner, raw);
+}
+
+/**
+ * What the security-event import needs besides the API's own settings
+ * (0.7.3): the event reader's service account, which may read the realm's
+ * login and admin events and nothing else. Only that command reads these;
+ * the API never holds them.
+ */
+const EventReader = z.object({
+  OIDC_EVENTS_CLIENT_ID: clientId,
+  OIDC_EVENTS_CLIENT_SECRET: z.string().min(16),
+});
+export type EventImportEnv = Env & z.infer<typeof EventReader>;
+
+/** The security-event import's environment: the API's, and the reader's. */
+export function parseEventImportEnv(
+  raw: Record<string, unknown>,
+): EventImportEnv {
+  return parseCommandEnv(EventReader, raw);
+}
+
+/**
+ * A command's environment: the API's settings and the command's own, or an
+ * error naming every problem with either, never a value.
+ */
+function parseCommandEnv<T extends z.ZodType<object>>(
+  own: T,
+  raw: Record<string, unknown>,
+): Env & z.output<T> {
   const problems: string[] = [];
-  const attempt = <T>(parse: () => T): T | undefined => {
+  const attempt = <R>(parse: () => R): R | undefined => {
     try {
       return parse();
     } catch (error) {
@@ -237,9 +267,9 @@ export function parseProvisioningEnv(
     }
   };
   const env = attempt(() => parseEnv(raw));
-  const provisioner = attempt(() => parseWith(Provisioner, raw));
-  if (!env || !provisioner) throw new Error(problems.join(' '));
-  return { ...env, ...provisioner };
+  const command = attempt(() => parseWith(own, raw));
+  if (!env || !command) throw new Error(problems.join(' '));
+  return { ...env, ...command };
 }
 
 /** How the application loads its configuration: validated, once, at boot. */
