@@ -149,6 +149,16 @@ WHERE NOT (
   )
 );
 
+-- violations: platform_membership
+-- A member holding SUPER_ADMIN, a platform role no tenant membership holds
+-- (0.6.7): the seed made one before 0.5.11, archived members included, since
+-- reactivation brings back the role. The owner decides what becomes of it; it
+-- is never deleted to let users_role_check pass.
+SELECT 'users' AS table_name, u.id AS row_id, u.tenant_id AS tenant_id,
+       'users row holds SUPER_ADMIN, a platform role no membership holds' AS reason
+FROM users u
+WHERE u.role = 'SUPER_ADMIN';
+
 -- generate violations: check_violation
 -- A row that breaks a CHECK of 0.4.10: a negative count, an end before its
 -- start, a score off its scale, a value that is not finite, a tenant key not in

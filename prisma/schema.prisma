@@ -456,6 +456,9 @@ model User {
   identityId            String?   @db.Uuid @map("identity_id")
   identity              Identity? @relation(fields: [identityId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
+  /// A tenant role, never SUPER_ADMIN (0.6.7): a platform role, which no
+  /// membership holds — a CHECK (hand-written SQL) refuses it on every row,
+  /// so no invitation, role change or reactivation makes a member one.
   role                  UserRole
 
   firstName             String?   @db.VarChar(100) @map("first_name")

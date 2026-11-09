@@ -107,6 +107,12 @@ const CONSTRAINTS_BEFORE_0_4_10 = [
   'DROP INDEX player_media_tenant_id_player_id_featured_key',
 ];
 
+// And no CHECK on a member's role, as before 0.6.7: the seed of before 0.5.11
+// made a SUPER_ADMIN member, which the platform rule must find.
+const ROLES_BEFORE_0_6_7 = [
+  'ALTER TABLE users DROP CONSTRAINT users_role_check',
+];
+
 const PERSONAL = {
   memberEmail: 'Layla.Haddad@agency-one.test',
   duplicateEmail: ' layla.haddad@agency-one.test',
@@ -114,6 +120,7 @@ const PERSONAL = {
   // Deliberately off the reserved domains, as a real person's address would
   // be; the address itself is invented.
   realLookingEmail: 'k.nasser@nasser-sports.com',
+  platformEmail: 'platform.operator@agency-one.test',
   playerName: 'Yousef Abu Hamdan',
   otherPlayerName: 'Sami Al-Khatib',
   ticketSubject: 'Agent dispute about Yousef Abu Hamdan',
@@ -134,6 +141,7 @@ interface Seeded {
   money: string[];
   deletedAudit: string;
   realAccount: string;
+  platformMember: string;
   checks: Array<[table: string, rowId: string, reason: string]>;
   currentSeasons: string[];
   seasonNames: string[];
@@ -189,6 +197,16 @@ async function seedCounterExamples(
       const memberA = await member(tx, a.id, PERSONAL.memberEmail);
       const duplicate = await member(tx, a.id, PERSONAL.duplicateEmail);
       const realAccount = await member(tx, a.id, PERSONAL.realLookingEmail);
+      // A SUPER_ADMIN member, archived: reactivation would bring the role back.
+      const platformMember = await tx.user.create({
+        data: {
+          tenantId: a.id,
+          email: PERSONAL.platformEmail,
+          normalizedEmail: normalizeEmail(PERSONAL.platformEmail),
+          role: 'SUPER_ADMIN',
+          deletedAt: new Date(),
+        },
+      });
       const player = await tx.player.create({
         data: { tenantId: a.id, fullName: PERSONAL.playerName },
       });
@@ -430,6 +448,7 @@ async function seedCounterExamples(
         money: [contract.id, enrollment.id, programTwo.id, overPrecise.id],
         deletedAudit: deletedAudit.id,
         realAccount: realAccount.id,
+        platformMember: platformMember.id,
         currentSeasons: currentSeasons.map((s) => s.id),
         seasonNames: namesakes.map((s) => s.id),
         featured: featured.map((m) => m.id),
@@ -509,6 +528,7 @@ describe('the preflight report', () => {
         ...EMAILS_BEFORE_0_4_9,
         ...TIMESTAMPS_BEFORE_0_4_8,
         ...CONSTRAINTS_BEFORE_0_4_10,
+        ...ROLES_BEFORE_0_6_7,
       ].map((statement) => [statement]),
       dirty.migrationUrl,
     );
@@ -575,6 +595,16 @@ describe('the preflight report', () => {
     expect(ofRule(report, 'real_account').map((v) => v.rowId)).toEqual([
       seeded.realAccount,
     ]);
+    expect(ofRule(report, 'platform_membership')).toEqual([
+      {
+        rule: 'platform_membership',
+        table: 'users',
+        rowId: seeded.platformMember,
+        tenantId: seeded.a.id,
+        reason:
+          'users row holds SUPER_ADMIN, a platform role no membership holds',
+      },
+    ]);
     expect(
       ofRule(report, 'check_violation')
         .map((v) => [v.table, v.rowId, v.reason])
@@ -608,6 +638,7 @@ describe('the preflight report', () => {
       money_out_of_range: 4,
       deleted_audit_row: 1,
       real_account: 1,
+      platform_membership: 1,
       check_violation: 5,
       duplicate_current_season: 2,
       duplicate_season_name: 2,
@@ -630,7 +661,7 @@ describe('the preflight report', () => {
       [],
     );
     expect(unknown('timestamp_provenance', 'users', 'created_at')?.count).toBe(
-      4,
+      5,
     );
     expect(report.schemaVersion).toMatch(/^\d{14}_\w+$/);
   });
