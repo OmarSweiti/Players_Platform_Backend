@@ -45,7 +45,7 @@ describe('unfinished modules stay behind their flags', () => {
     // the stand-in for sessions (test/harness/session.ts)
     booted = await bootApp();
     const tenant = await createTenant();
-    const member = await createMember(tenant, 'SUPER_ADMIN');
+    const member = await createMember(tenant, 'OWNER');
     signedIn = await signedInAs(member);
   });
 

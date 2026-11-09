@@ -106,8 +106,8 @@ describe('one success envelope', () => {
     booted = await bootApp({
       controllers: [PlayersProbeController],
     });
-    const admin = await createMember(await createTenant(), 'SUPER_ADMIN');
-    member = await signedInAs(admin);
+    const owner = await createMember(await createTenant(), 'OWNER');
+    member = await signedInAs(owner);
     vi.spyOn(PermissionService.prototype, 'hasPermission').mockResolvedValue(
       true,
     );
