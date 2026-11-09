@@ -1,4 +1,6 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { PrismaClient, Tenant, User } from '@prisma/client';
 import { Client } from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -146,11 +148,12 @@ describe('audit inside the business transaction', () => {
     }
   });
 
-  describe('with a fault injected into the audit insert', () => {
+  describe("in a schema of the test's own", () => {
     let isolated: IsolatedSchema;
     let db: ReturnType<typeof prismaFor>;
     let tenant: Tenant;
     let owner: User;
+    let migrator: Client;
 
     // A schema of its own, so that the fault touches no other test's audit.
     beforeAll(async () => {
@@ -161,20 +164,19 @@ describe('audit inside the business transaction', () => {
       const { connectionString, options } = databaseConnectionOf(
         isolated.migrationUrl,
       );
-      const migrator = new Client({ connectionString, options });
+      migrator = new Client({ connectionString, options });
       await migrator.connect();
-      try {
+      {
         await migrator.query(`
           CREATE FUNCTION fail_audit_insert() RETURNS trigger LANGUAGE plpgsql AS $$
           BEGIN RAISE EXCEPTION 'injected fault: the audit insert fails'; END $$;
           CREATE TRIGGER audit_logs_injected_fault BEFORE INSERT ON audit_logs
             FOR EACH ROW EXECUTE FUNCTION fail_audit_insert();`);
-      } finally {
-        await migrator.end();
       }
     });
 
     afterAll(async () => {
+      await migrator?.end();
       await db?.close();
       await isolated?.drop();
     });
@@ -218,6 +220,73 @@ describe('audit inside the business transaction', () => {
           db.prisma,
         ),
       ).toBe(0);
+    });
+
+    it('the_inet_migration_keeps_every_address', async () => {
+      // The fault lifted, and the column as it was before 0.7.2: text.
+      const root = join(__dirname, '../../prisma/migrations');
+      const [folder] = readdirSync(root).filter((name) =>
+        name.endsWith('_audit_client_inet'),
+      );
+      const migration = readFileSync(
+        join(root, folder, 'migration.sql'),
+        'utf8',
+      );
+      await migrator.query(`
+        DROP TRIGGER audit_logs_injected_fault ON audit_logs;
+        ALTER TABLE audit_logs ALTER COLUMN ip_address TYPE VARCHAR(45);`);
+      const row = (address: string) =>
+        migrator.query(
+          `INSERT INTO audit_logs (id, event_id, tenant_id, actor_type, actor_job, outcome,
+                                   schema_version, action, entity_type, entity_id, ip_address)
+           VALUES (gen_random_uuid(), uuidv7(), $1, 'SYSTEM', 'test-fixture', 'SUCCEEDED', 1,
+                   'test.probe', 'Player', gen_random_uuid(), $2)`,
+          [tenant.id, address],
+        );
+      const addresses = async () =>
+        (
+          await migrator.query<{ address: string }>(
+            'SELECT host(ip_address) AS address FROM audit_logs ORDER BY 1',
+          )
+        ).rows.map(({ address }) => address);
+      await migrator.query('BEGIN');
+      await migrator.query(
+        'ALTER TABLE audit_logs NO FORCE ROW LEVEL SECURITY',
+      );
+      await row('198.51.100.4');
+      await row('2001:db8::42');
+      await migrator.query('ALTER TABLE audit_logs FORCE ROW LEVEL SECURITY');
+      await migrator.query('COMMIT');
+
+      // An address inet would not take stops it, and nothing changes.
+      await migrator.query('BEGIN');
+      let failure: Error | undefined;
+      try {
+        await migrator.query(
+          'ALTER TABLE audit_logs NO FORCE ROW LEVEL SECURITY',
+        );
+        await row('198.51.100.999');
+        await migrator.query(migration);
+      } catch (error) {
+        failure = error as Error;
+      } finally {
+        await migrator.query('ROLLBACK');
+      }
+      expect(failure?.message).toBe(
+        'an audit row holds a client address that is not an inet value',
+      );
+
+      // Otherwise every address is kept, as inet.
+      await migrator.query('BEGIN');
+      await migrator.query(migration);
+      await migrator.query('COMMIT');
+      expect(await addresses()).toEqual(['198.51.100.4', '2001:db8::42']);
+      const { rows } = await migrator.query<{ type: string }>(
+        `SELECT data_type AS type FROM information_schema.columns
+          WHERE table_schema = current_schema() AND table_name = 'audit_logs'
+            AND column_name = 'ip_address'`,
+      );
+      expect(rows).toEqual([{ type: 'inet' }]);
     });
   });
 
