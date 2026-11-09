@@ -135,6 +135,12 @@ export const Env = z
     // session it served has expired (12 hours).
     CSRF_SECRET: z.string().min(32),
     CSRF_SECRET_PREVIOUS: optional(z.string().min(32)),
+    // The key a security event's network data is hashed under (0.7.3): an
+    // HMAC of the client's address, so that one address is recognised across
+    // events and none is stored. A key of its own, apart from CSRF_SECRET's,
+    // so that rotating either never touches the other; rotating it starts a
+    // new series of hashes, which no longer match the old ones.
+    SECURITY_EVENT_KEY: z.string().min(32),
     MAIL_FROM: z.email(),
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),
