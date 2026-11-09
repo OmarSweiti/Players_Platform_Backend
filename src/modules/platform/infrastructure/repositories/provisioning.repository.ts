@@ -1,6 +1,4 @@
-import { auditedChangeOf } from '../../../../common/audit/audit-actor';
 import { Injectable } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import type { TenantTx } from '../../../../common/tenancy/tenant-transaction';
 import type { Locale } from '../../../identity/application/ports/identity-provider.port';
@@ -100,24 +98,5 @@ export class ProvisioningRepository implements ProvisioningRecords {
       select: { id: true },
     });
     return id;
-  }
-
-  async recordProvisioning(
-    tx: TenantTx,
-    ctx: AuthorizedTenantContext,
-    changes: Readonly<Record<string, unknown>>,
-  ): Promise<void> {
-    await tx.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        // A platform operation, as the CLI's job: no member acted.
-        ...auditedChangeOf(ctx),
-        action: 'tenant.provisioned',
-        entityType: 'Tenant',
-        entityId: ctx.tenantId,
-        newValues: changes as Prisma.InputJsonValue,
-      },
-      select: { id: true },
-    });
   }
 }

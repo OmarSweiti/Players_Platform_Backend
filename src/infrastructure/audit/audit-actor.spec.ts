@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import type { Actor, AuthorizedTenantContext } from '../tenancy/tenant-context';
+import type {
+  Actor,
+  AuthorizedTenantContext,
+} from '../../common/tenancy/tenant-context';
 import { AUDIT_SCHEMA_VERSION, auditedChangeOf } from './audit-actor';
 
 // What an audit row says about who made a change (0.7.1): the context's actor,

@@ -1,20 +1,23 @@
-import { auditedChangeOf } from '../../../../common/audit/audit-actor';
 import { Injectable } from '@nestjs/common';
 import { ConflictError } from '../../../../common/errors/domain-error';
 import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { AuditService } from '../../../../infrastructure/audit/audit.service';
 import { membershipPolicy } from '../policies/membership.policy';
 
 /**
  * Brings an archived member back (0.4.9; SR-ACL-002): the same membership, its
  * id and its history, never a second account — the address stays reserved to
- * it while it is archived. The change and its audit entry commit together; the
- * audit service of 0.7.2 takes over writing the entry.
+ * it while it is archived. The change and its audit entry commit together
+ * (0.7.2): an entry that cannot be written aborts the reactivation.
  */
 @Injectable()
 export class ReactivateMembership {
-  constructor(private readonly tenants: TenantTransactions) {}
+  constructor(
+    private readonly tenants: TenantTransactions,
+    private readonly audit: AuditService,
+  ) {}
 
   async execute(
     ctx: AuthorizedTenantContext,
@@ -38,16 +41,11 @@ export class ReactivateMembership {
         where: { id_tenantId: { id: member.id, tenantId: ctx.tenantId } },
         data: { deletedAt: null, isActive: true },
       });
-      await tx.auditLog.create({
-        data: {
-          tenantId: ctx.tenantId,
-          ...auditedChangeOf(ctx),
-          action: 'membership.reactivated',
-          entityType: 'User',
-          entityId: member.id,
-          oldValues: { archivedAt: archivedAt.toISOString() },
-          newValues: { archivedAt: null },
-        },
+      await this.audit.record(tx, ctx, {
+        action: 'membership.reactivated',
+        entityId: member.id,
+        before: { archivedAt },
+        after: { archivedAt: null },
       });
       return { id: member.id };
     });

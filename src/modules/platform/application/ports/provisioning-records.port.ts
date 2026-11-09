@@ -62,11 +62,4 @@ export abstract class ProvisioningRecords {
     ctx: AuthorizedTenantContext,
     owner: { email: string; normalizedEmail: string; identityId: string },
   ): Promise<string>;
-
-  /** The audit entry of a provisioning run that changed something. */
-  abstract recordProvisioning(
-    tx: TenantTx,
-    ctx: AuthorizedTenantContext,
-    changes: Readonly<Record<string, unknown>>,
-  ): Promise<void>;
 }

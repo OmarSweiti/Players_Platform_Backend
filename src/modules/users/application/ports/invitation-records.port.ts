@@ -1,4 +1,4 @@
-import type { Prisma, UserRole } from '@prisma/client';
+import type { UserRole } from '@prisma/client';
 import type { KeysetArgs } from '../../../../common/pagination/paginate';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import type { TenantTx } from '../../../../common/tenancy/tenant-transaction';
@@ -32,14 +32,6 @@ export interface NewInvitation {
   /** When it is made, by the use case's clock, which its expiry counts from. */
   readonly createdAt: Date;
   readonly expiresAt: Date;
-}
-
-/** One audit entry about an invitation: what changed, never an address. */
-export interface InvitationAudit {
-  readonly action: 'invitation.created' | 'invitation.revoked';
-  readonly invitationId: string;
-  readonly oldValues?: Prisma.InputJsonObject;
-  readonly newValues?: Prisma.InputJsonObject;
 }
 
 /**
@@ -115,10 +107,4 @@ export abstract class InvitationRecords {
     tokenHash: Uint8Array,
     at: Date,
   ): Promise<InvitationView | null>;
-
-  abstract audit(
-    tx: TenantTx,
-    ctx: AuthorizedTenantContext,
-    entry: InvitationAudit,
-  ): Promise<void>;
 }

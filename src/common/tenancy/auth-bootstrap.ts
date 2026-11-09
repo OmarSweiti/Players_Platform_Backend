@@ -1,4 +1,4 @@
-import { AUDIT_SCHEMA_VERSION } from '../audit/audit-actor';
+import { AuditService } from '../../infrastructure/audit/audit.service';
 import { currentRequestId } from '../../infrastructure/logging/correlation';
 import { Injectable } from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
@@ -122,7 +122,10 @@ export interface StoredSession {
  */
 @Injectable()
 export class AuthBootstrap {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /** The language the tenant's members start in. */
   async localeOf(tenant: HostTenant): Promise<'ar' | 'en'> {
@@ -394,27 +397,27 @@ export class AuthBootstrap {
         },
       });
       // The new member accepted it, in the role it grants; their first
-      // session comes after, so none is named.
-      await tx.auditLog.create({
-        data: {
+      // session comes after, so none is named. Sign-in's network data is its
+      // security event's (0.7.3).
+      await this.audit.recordAcceptance(
+        tx,
+        {
           tenantId: tenant.id,
-          actorType: 'USER',
-          userId: member.id,
-          actorRole: invitation.role,
-          requestId: currentRequestId(),
-          outcome: 'SUCCEEDED',
-          schemaVersion: AUDIT_SCHEMA_VERSION,
+          memberId: member.id,
+          role: invitation.role,
+          requestId: currentRequestId() ?? null,
+        },
+        {
           action: 'invitation.accepted',
-          entityType: 'Invitation',
           entityId: invitation.id,
-          oldValues: { status: 'pending' },
-          newValues: {
+          before: { status: 'pending' },
+          after: {
             status: 'accepted',
             memberId: member.id,
             role: invitation.role,
           },
         },
-      });
+      );
       return { kind: 'accepted', memberId: member.id };
     });
   }

@@ -5,6 +5,7 @@ import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
+import { AuditService } from '../../../../infrastructure/audit/audit.service';
 import { type InvitationStatus, statusOf } from '../../domain/invitation';
 import { invitationPolicy } from '../policies/invitation.policy';
 import {
@@ -24,6 +25,7 @@ export class ManageInvitationsUseCase {
     private readonly transactions: TenantTransactions,
     private readonly records: InvitationRecords,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly audit: AuditService,
   ) {}
 
   list(
@@ -75,11 +77,11 @@ export class ManageInvitationsUseCase {
       if (!(await this.records.revoke(tx, ctx, invitationId, at))) {
         throw stays();
       }
-      await this.records.audit(tx, ctx, {
+      await this.audit.record(tx, ctx, {
         action: 'invitation.revoked',
-        invitationId,
-        oldValues: { status: statusOf(invitation, at) },
-        newValues: { status: 'revoked' },
+        entityId: invitationId,
+        before: { status: statusOf(invitation, at) },
+        after: { status: 'revoked' },
       });
     });
   }

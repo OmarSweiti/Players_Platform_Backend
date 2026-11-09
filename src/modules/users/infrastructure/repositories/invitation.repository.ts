@@ -1,4 +1,3 @@
-import { auditedChangeOf } from '../../../../common/audit/audit-actor';
 import { Injectable } from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
 import {
@@ -10,7 +9,6 @@ import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-
 import type { TenantTx } from '../../../../common/tenancy/tenant-transaction';
 import type { Locale } from '../../../identity/application/ports/identity-provider.port';
 import {
-  type InvitationAudit,
   InvitationRecords,
   type InvitationView,
   type NewInvitation,
@@ -180,23 +178,5 @@ export class InvitationRepository implements InvitationRecords {
       data: { tokenHash: new Uint8Array(tokenHash), tokenIssuedAt: at },
     });
     return count === 1 ? this.find(tx, ctx, invitationId) : null;
-  }
-
-  async audit(
-    tx: TenantTx,
-    ctx: AuthorizedTenantContext,
-    entry: InvitationAudit,
-  ): Promise<void> {
-    await tx.auditLog.create({
-      data: {
-        tenantId: ctx.tenantId,
-        ...auditedChangeOf(ctx),
-        action: entry.action,
-        entityType: 'Invitation',
-        entityId: entry.invitationId,
-        oldValues: entry.oldValues,
-        newValues: entry.newValues,
-      },
-    });
   }
 }
