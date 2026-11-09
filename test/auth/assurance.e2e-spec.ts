@@ -152,7 +152,12 @@ describe('assurance: second factors and recent authentication', () => {
   });
 
   it('a_privileged_member_without_mfa_gets_no_session', async () => {
-    for (const role of PRIVILEGED_ROLES) {
+    // Every privileged tenant role: no membership holds SUPER_ADMIN, a
+    // platform role (0.6.7), though the policy would demand a second factor
+    // of it too.
+    for (const role of [...PRIVILEGED_ROLES].filter(
+      (role) => role !== 'SUPER_ADMIN',
+    )) {
       const { member, subject } = await memberAs(role);
       const browser = new Browser();
       const login = await browser.get('/api/v1/auth/login?returnTo=%2Far');

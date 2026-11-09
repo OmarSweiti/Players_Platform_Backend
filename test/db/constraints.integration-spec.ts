@@ -51,6 +51,8 @@ const OTHER_STEPS_CHECKS = [
   'invitations_role_check',
   'invitations_token_check',
   'invitations_token_hash_check',
+  // 0.6.7: test/authz/platform-access.e2e-spec.ts
+  'users_role_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */

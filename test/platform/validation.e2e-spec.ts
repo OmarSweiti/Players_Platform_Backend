@@ -67,9 +67,9 @@ describe('strict validation, one mechanism', () => {
   beforeAll(async () => {
     booted = await bootApp();
     const tenant = await createTenant();
-    const admin = await createMember(tenant, 'SUPER_ADMIN');
-    member = await signedInAs(admin);
-    tenantId = admin.tenantId;
+    const owner = await createMember(tenant, 'OWNER');
+    member = await signedInAs(owner);
+    tenantId = owner.tenantId;
     // Every permission, so that only validation can refuse.
     vi.spyOn(PermissionService.prototype, 'hasPermission').mockResolvedValue(
       true,

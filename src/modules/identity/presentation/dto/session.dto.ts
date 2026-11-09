@@ -7,7 +7,12 @@ export const CurrentSessionResponse = z
   .strictObject({
     member: z.strictObject({
       id: z.uuid(),
-      role: z.enum(UserRole),
+      role: z
+        .enum(UserRole)
+        .exclude(['SUPER_ADMIN'])
+        .describe(
+          "The member's tenant role: never SUPER_ADMIN, a platform role no membership holds (0.6.7)",
+        ),
       firstName: z.string().nullable(),
       lastName: z.string().nullable(),
     }),
