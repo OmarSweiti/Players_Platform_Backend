@@ -664,6 +664,55 @@ describe('invitations', () => {
     expect((await revoke(randomUUID())).status).toBe(404);
   });
 
+  it('a_change_is_audited_with_its_request_and_client', async () => {
+    // The request's client, through a trusted proxy (loopback, for this app),
+    // and its user agent: the audit entry keeps both, with the request id the
+    // answer carried (0.7.2).
+    const email = address('audited');
+    const created = await booted.http
+      .post(`${API}/users/invitations`)
+      .set(await signedInAs(owner))
+      .set('X-Forwarded-For', '203.0.113.9')
+      .set('User-Agent', 'Sadara-Validation/1.0 (synthetic)')
+      .send({ email, role: 'COACH' });
+    expect(created.status).toBe(201);
+    const audit = await asTenant(agency.id, (tx) =>
+      tx.auditLog.findMany({
+        where: { entityId: invitationOf(created).id },
+        select: {
+          action: true,
+          actorType: true,
+          userId: true,
+          actorRole: true,
+          requestId: true,
+          ipAddress: true,
+          userAgent: true,
+          newValues: true,
+          schemaVersion: true,
+        },
+      }),
+    );
+    expect(audit).toEqual([
+      {
+        action: 'invitation.created',
+        actorType: 'USER',
+        userId: owner.id,
+        actorRole: 'OWNER',
+        requestId: created.headers['x-request-id'],
+        ipAddress: '203.0.113.9',
+        userAgent: 'Sadara-Validation/1.0 (synthetic)',
+        newValues: expect.objectContaining({
+          email: {
+            ref: `Invitation/${invitationOf(created).id}/email`,
+            class: 'PERSONAL',
+          },
+        }) as unknown,
+        schemaVersion: 2,
+      },
+    ]);
+    expect(JSON.stringify(audit).toLowerCase()).not.toContain(email);
+  });
+
   it('an_address_a_member_holds_or_a_pending_invitation_names_is_refused', async () => {
     const owners = await signedInAs(owner);
     const member = await createMember(agency, 'COACH');
