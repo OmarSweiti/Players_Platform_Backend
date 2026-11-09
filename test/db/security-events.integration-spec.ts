@@ -467,7 +467,8 @@ describe('security events', () => {
           time: at(28),
           type: 'LOGIN_ERROR',
           realmId,
-          clientId: 'Whoever Typed This',
+          // In a client id's own form: only the provider's verdict keeps it out.
+          clientId: 'a-client-someone-typed',
           ipAddress: '203.0.113.52',
           error: 'client_not_found',
         },
@@ -600,7 +601,7 @@ describe('security events', () => {
         typed,
         'someone-else@agency.test',
         'invitee@agency.test',
-        'Whoever Typed This',
+        'a-client-someone-typed',
         '203.0.113.5',
         '198.51.100.9',
       ]) {
