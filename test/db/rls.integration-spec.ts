@@ -350,7 +350,8 @@ describe('row-level security on every tenant-owned table', () => {
     // The runtime role's privileges, table by table: data rights on a
     // tenant's tables, but deleting the rows a table keeps, and changing or
     // removing the evidence a table appends; reading reference data, reading
-    // and adding identities, nothing on migration history.
+    // and adding identities, adding security events and reading none (0.7.3),
+    // nothing on migration history.
     const privileges = async (table: string) =>
       (
         await app.query<{ granted: string[] }>(
@@ -362,6 +363,7 @@ describe('row-level security on every tenant-owned table', () => {
     const GLOBAL_RIGHTS = {
       'read-only': ['SELECT'],
       'append-only': ['SELECT', 'INSERT'],
+      'insert-only': ['INSERT'],
       'own-tenant-row': ['SELECT', 'INSERT', 'UPDATE', 'DELETE'],
     };
     for (const { table, class: modelClass } of tables) {

@@ -1683,3 +1683,78 @@ model AuditLog {
   @@index([tenantId, userId])
   @@map("audit_logs")
 }
+
+//////////////////////////
+// SECURITY EVENTS
+//////////////////////////
+
+/// Who saw a security event (0.7.3): Sadara itself, or the identity provider,
+/// whose own login and admin events are imported (DB-61).
+enum SecurityEventSource {
+  SADARA
+  PROVIDER
+
+  @@map("security_event_source")
+}
+
+/// How the attempt ended: it took effect, or it was refused.
+enum SecurityEventOutcome {
+  SUCCEEDED
+  REFUSED
+
+  @@map("security_event_outcome")
+}
+
+/// Security events, with or without a tenant (0.7.3; SR-AUD-001, DB-33,
+/// DB-61): sign-ins and their refusals, step-ups, sign-outs, session
+/// revocations and back-channel logouts as Sadara saw them, and the identity
+/// provider's own login and admin events, imported. Global: a refused sign-in
+/// on an unknown host belongs to no tenant, and none is invented. Evidence,
+/// append-only: the runtime role inserts rows and reads none (grants, hand-
+/// written SQL), since reading is a security operator's; triggers refuse
+/// UPDATE, DELETE and TRUNCATE for every role, the owner included. CHECKs
+/// (hand-written SQL) hold the event type's and the reason's form, a refusal
+/// to its reason, the provider's id to its source, the hash's size and the
+/// metadata's shape and size.
+model SecurityEvent {
+  /// UUIDv7 (0.4.11): an append-heavy table. Prisma makes it.
+  id         String               @id @default(uuid(7)) @db.Uuid
+  source     SecurityEventSource
+  /// What happened, lower_snake and dotted: `sign_in`, `step_up`,
+  /// `provider.login_error`, `provider.admin.user.delete`.
+  eventType  String               @map("event_type") @db.VarChar(100)
+  outcome    SecurityEventOutcome
+  /// Why it was refused, as a code (`state`, `no_account`,
+  /// `invalid_user_credentials`), never a value; a refusal always has one.
+  reasonCode String?              @map("reason_code") @db.VarChar(100)
+  /// When it happened: as the provider says, for an imported event; when it
+  /// was written, for Sadara's own, which are written as they happen.
+  occurredAt DateTime             @default(now()) @map("occurred_at") @db.Timestamptz(3)
+
+  /// The tenant the request's host named, if it named one: a hint, not proof
+  /// of membership, and no foreign key — an unknown host has none, and an
+  /// event is never given an invented one.
+  tenantHint      String? @map("tenant_hint") @db.Uuid
+  /// Who, as the identity provider names them: its issuer and subject, a
+  /// pseudonymous id, never a name or an address. Empty when no one was proven.
+  issuer          String? @db.VarChar(500)
+  subject         String? @db.VarChar(255)
+  /// The Sadara session the event concerns: opened, stepped up or ended.
+  sessionId       String? @map("session_id") @db.Uuid
+  /// The request it happened in (0.3.8): a problem's requestId, and the log's.
+  requestId       String? @map("request_id") @db.VarChar(128)
+  /// The client's address as HMAC-SHA-256 under SECURITY_EVENT_KEY: one
+  /// address always gives one hash, and a hash gives no address back.
+  networkHash     Bytes?  @map("network_hash")
+  /// An imported event's own id at the provider, `login:<id>` or `admin:<id>`:
+  /// an event imported twice is kept once (DB-61). Set exactly for PROVIDER.
+  providerEventId String? @unique @map("provider_event_id") @db.VarChar(200)
+  /// Redacted details: codes, counts and ids, never a value a person typed.
+  metadata        Json?
+
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+
+  @@index([occurredAt])
+  @@index([tenantHint, occurredAt])
+  @@map("security_events")
+}

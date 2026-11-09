@@ -80,7 +80,7 @@ describe('UUIDv7 for high-ingest tables', () => {
       Object.entries(MODEL_CLASSIFICATION)
         .filter(([, modelClass]) => modelClass.ids === 'time-ordered')
         .map(([model]) => model),
-    ).toEqual(['UserSession', 'AuditLog']);
+    ).toEqual(['SecurityEvent', 'UserSession', 'AuditLog']);
 
     // Audit rows written through Prisma, one after another, in two tenants:
     // version 7, stamped with the time of writing, in creation order.

@@ -30,6 +30,18 @@ export function rlsFor({
       `REVOKE UPDATE, DELETE ON ${table} FROM ${RUNTIME_ROLE};`,
     ].join('\n');
   }
+  // Evidence of no one tenant's (0.7.3): reject_evidence_mutation() is the
+  // audit_append_only migration's.
+  if (modelClass.kind === 'global' && modelClass.runtime === 'insert-only') {
+    return [
+      `-- ${table}: global evidence; the runtime role adds rows and reads none, and no role changes or removes one.`,
+      `REVOKE SELECT, UPDATE, DELETE, TRUNCATE ON ${table} FROM ${RUNTIME_ROLE};`,
+      `CREATE TRIGGER ${table}_no_update_delete BEFORE UPDATE OR DELETE ON ${table}`,
+      `  FOR EACH ROW EXECUTE FUNCTION reject_evidence_mutation();`,
+      `CREATE TRIGGER ${table}_no_truncate BEFORE TRUNCATE ON ${table}`,
+      `  FOR EACH STATEMENT EXECUTE FUNCTION reject_evidence_mutation();`,
+    ].join('\n');
+  }
   if (tenantColumn === null) {
     return [
       `-- ${table}: reference data the migrations write; the runtime role reads it.`,
