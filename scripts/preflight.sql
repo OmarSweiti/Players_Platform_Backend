@@ -136,6 +136,18 @@ WHERE EXISTS (SELECT FROM information_schema.columns
                WHERE table_schema = current_schema()
                  AND table_name = 'audit_logs' AND column_name = 'deleted_at');
 
+-- generate violations: audit_address_not_inet
+-- An audit row whose client address PostgreSQL's inet would not take: 0.7.2
+-- converts the column to inet, and stops on one rather than change evidence.
+-- Asked while the column is still text; after it, inet holds every value.
+SELECT $q$SELECT 'audit_logs' AS table_name, a.id AS row_id, a.tenant_id AS tenant_id,
+       'audit_logs row holds a client address that is not an inet value' AS reason
+FROM audit_logs a
+WHERE a.ip_address IS NOT NULL AND NOT pg_input_is_valid(a.ip_address, 'inet')$q$ AS sql
+WHERE EXISTS (SELECT FROM information_schema.columns
+               WHERE table_schema = current_schema() AND table_name = 'audit_logs'
+                 AND column_name = 'ip_address' AND data_type <> 'inet');
+
 -- violations: real_account
 -- A member whose address is neither on a domain reserved for tests and
 -- examples (RFC 2606, RFC 6761) nor one the seed made before 0.5.11 moved it

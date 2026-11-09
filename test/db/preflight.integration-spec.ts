@@ -120,6 +120,12 @@ const AUDIT_BEFORE_0_7_1 = [
   'ALTER TABLE audit_logs ADD COLUMN deleted_at TIMESTAMPTZ(3)',
 ];
 
+// And audit's client address as text, as before 0.7.2 made it inet: the
+// address rule must find one inet would not take.
+const AUDIT_BEFORE_0_7_2 = [
+  'ALTER TABLE audit_logs ALTER COLUMN ip_address TYPE VARCHAR(45)',
+];
+
 const PERSONAL = {
   memberEmail: 'Layla.Haddad@agency-one.test',
   duplicateEmail: ' layla.haddad@agency-one.test',
@@ -147,6 +153,7 @@ interface Seeded {
   duplicates: string[];
   money: string[];
   deletedAudit: string;
+  badAddressAudit: string;
   realAccount: string;
   platformMember: string;
   checks: Array<[table: string, rowId: string, reason: string]>;
@@ -161,6 +168,8 @@ async function seedCounterExamples(
 ): Promise<Seeded> {
   /** An archived audit row, written below as it was before 0.7.1. */
   const deletedAudit = randomUUID();
+  /** An audit row whose client address inet would not take, as before 0.7.2. */
+  const badAddressAudit = randomUUID();
   // Row-level security (0.4.5): each row is written as its own tenant.
   const tenant = (name: string, slug: string) => {
     const id = randomUUID();
@@ -480,6 +489,13 @@ async function seedCounterExamples(
                gen_random_uuid(), now())`,
       [deletedAudit, a.id],
     ],
+    [
+      `INSERT INTO audit_logs (id, event_id, tenant_id, actor_type, actor_job, outcome,
+                               schema_version, action, entity_type, entity_id, ip_address)
+       VALUES ($1, uuidv7(), $2, 'SYSTEM', 'test-fixture', 'SUCCEEDED', 1, 'UPDATE', 'Player',
+               gen_random_uuid(), '203.0.113.300')`,
+      [badAddressAudit, a.id],
+    ],
   ]);
 
   const { enrollment, ...rest } = seeded;
@@ -487,6 +503,7 @@ async function seedCounterExamples(
     a,
     b,
     deletedAudit,
+    badAddressAudit,
     ...rest,
     // What the CHECKs of 0.4.10 refuse, the money rule's rows among them; the
     // contract has a salary but no period.
@@ -539,6 +556,7 @@ describe('the preflight report', () => {
         ...CONSTRAINTS_BEFORE_0_4_10,
         ...ROLES_BEFORE_0_6_7,
         ...AUDIT_BEFORE_0_7_1,
+        ...AUDIT_BEFORE_0_7_2,
       ].map((statement) => [statement]),
       dirty.migrationUrl,
     );
@@ -602,6 +620,9 @@ describe('the preflight report', () => {
     expect(ofRule(report, 'deleted_audit_row').map((v) => v.rowId)).toEqual([
       seeded.deletedAudit,
     ]);
+    expect(
+      ofRule(report, 'audit_address_not_inet').map((v) => v.rowId),
+    ).toEqual([seeded.badAddressAudit]);
     expect(ofRule(report, 'real_account').map((v) => v.rowId)).toEqual([
       seeded.realAccount,
     ]);
@@ -647,6 +668,7 @@ describe('the preflight report', () => {
       duplicate_email: 2,
       money_out_of_range: 4,
       deleted_audit_row: 1,
+      audit_address_not_inet: 1,
       real_account: 1,
       platform_membership: 1,
       check_violation: 5,
