@@ -15,17 +15,23 @@ import {
   type CreateScoutingAssignmentInput,
   type UpdateScoutingAssignmentInput,
 } from '../ports/assignments.port';
+import {
+  requireMember,
+  ScoutingDirectory,
+} from '../ports/scouting-directory.port';
 
 /**
  * Scouting assignments in the context's tenant (0.4.12): the acting member
  * gives them, as the director, or works them, as the scout. Who may change
- * one is the assignment policy's (0.6.3).
+ * one is the assignment policy's (0.6.3); whom one names, a member of the
+ * tenant — another tenant's is not found (0.6.9).
  */
 @Injectable()
 export class ManageAssignmentUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly assignmentRepo: Assignments,
+    private readonly directory: ScoutingDirectory,
   ) {}
 
   /**
@@ -64,9 +70,10 @@ export class ManageAssignmentUseCase {
     }
 
     const assignedById = actingMemberOf(ctx);
-    return this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.assignmentRepo.create(tx, ctx, { ...input, assignedById }),
-    );
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      await requireMember(this.directory, tx, ctx, input.assignedToId);
+      return this.assignmentRepo.create(tx, ctx, { ...input, assignedById });
+    });
   }
 
   /**
@@ -99,6 +106,10 @@ export class ManageAssignmentUseCase {
             ),
         },
       );
+      // Given, only to a member of the tenant.
+      if (input.assignedToId !== undefined) {
+        await requireMember(this.directory, tx, ctx, input.assignedToId);
+      }
       return this.assignmentRepo.update(tx, ctx, id, input);
     });
   }

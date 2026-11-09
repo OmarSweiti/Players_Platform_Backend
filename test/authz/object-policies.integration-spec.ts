@@ -6,6 +6,7 @@ import {
 } from '../../src/common/errors/domain-error';
 import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
 import { UpdateMedicalRecordUseCase } from '../../src/modules/medical/application/use-cases/update-medical-record.usecase';
+import { MedicalPlayerRepository } from '../../src/modules/medical/infrastructure/repositories/medical-player.repository';
 import { MedicalRecordRepository } from '../../src/modules/medical/infrastructure/repositories/medical-record.repository';
 import { SubmitScoutingReportUseCase } from '../../src/modules/scouting/application/use-cases/submit-scouting-report.usecase';
 import { ScoutingReportRepository } from '../../src/modules/scouting/infrastructure/repositories/scouting-report.repository';
@@ -101,7 +102,11 @@ describe('object policies, called directly', () => {
           isConfidential: true,
         }),
     );
-    const update = new UpdateMedicalRecordUseCase(tenants(), records);
+    const update = new UpdateMedicalRecordUseCase(
+      tenants(),
+      records,
+      new MedicalPlayerRepository(),
+    );
     const descriptionOf = () =>
       asTenant(a.id, async (tx) => {
         const row = await tx.medicalRecord.findUniqueOrThrow({

@@ -3,6 +3,10 @@ import {
   ScoutingReports,
   CreateScoutingReportInput,
 } from '../ports/scouting-reports.port';
+import {
+  requirePlayer,
+  ScoutingDirectory,
+} from '../ports/scouting-directory.port';
 import { Watchlists } from '../ports/watchlists.port';
 import { ValidationFailedError } from '../../../../common/errors/domain-error';
 import {
@@ -17,11 +21,13 @@ export class CreateScoutingReportUseCase {
     private readonly tenants: TenantTransactions,
     private readonly scoutingReportRepo: ScoutingReports,
     private readonly watchlistRepo: Watchlists,
+    private readonly directory: ScoutingDirectory,
   ) {}
 
   /**
-   * The report is the context's tenant's, by the acting member as its scout;
-   * with its automatic watchlist entry, in one transaction.
+   * The report is the context's tenant's, by the acting member as its scout,
+   * about a player of the tenant if it names one — another tenant's is not
+   * found (0.6.9); with its automatic watchlist entry, in one transaction.
    */
   async execute(
     ctx: AuthorizedTenantContext,
@@ -82,6 +88,9 @@ export class CreateScoutingReportUseCase {
 
     const scoutId = actingMemberOf(ctx);
     return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      if (input.playerId !== undefined) {
+        await requirePlayer(this.directory, tx, ctx, input.playerId);
+      }
       const report = await this.scoutingReportRepo.create(tx, ctx, {
         ...input,
         scoutId,

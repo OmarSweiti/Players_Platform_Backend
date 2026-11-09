@@ -7,6 +7,7 @@ import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { medicalRecordPolicy } from '../policies/medical-record.policy';
+import { MedicalPlayers, requirePlayer } from '../ports/medical-players.port';
 import {
   MedicalRecords,
   type UpdateMedicalRecordInput,
@@ -17,6 +18,7 @@ export class UpdateMedicalRecordUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly medicalRecordRepo: MedicalRecords,
+    private readonly players: MedicalPlayers,
   ) {}
 
   async execute(
@@ -50,6 +52,10 @@ export class UpdateMedicalRecordUseCase {
             ),
         },
       );
+      // Moved, only to a player of the tenant (0.6.9).
+      if (input.playerId !== undefined) {
+        await requirePlayer(this.players, tx, ctx, input.playerId);
+      }
       return this.medicalRecordRepo.update(tx, ctx, id, input);
     });
   }

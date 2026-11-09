@@ -32,6 +32,8 @@ export interface CreateScoutingReportInput {
 }
 
 export interface UpdateScoutingReportInput {
+  /** Moves the report to another of the tenant's players. */
+  playerId?: string;
   status?: ScoutReportStatus;
   recommendation?: RecommendationLevel;
   technicalScore?: number;

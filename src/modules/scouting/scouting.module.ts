@@ -3,6 +3,8 @@ import { ScoutingController } from './presentation/scouting.controller';
 import { ScoutingReportRepository } from './infrastructure/repositories/scouting-report.repository';
 import { ScoutingReports } from './application/ports/scouting-reports.port';
 import { WatchlistRepository } from './infrastructure/repositories/watchlist.repository';
+import { ScoutingDirectoryRepository } from './infrastructure/repositories/scouting-directory.repository';
+import { ScoutingDirectory } from './application/ports/scouting-directory.port';
 import { Watchlists } from './application/ports/watchlists.port';
 import { AssignmentRepository } from './infrastructure/repositories/assignment.repository';
 import { Assignments } from './application/ports/assignments.port';
@@ -27,6 +29,7 @@ import { behindFeature } from '../../common/feature-flags/feature-gate.guard';
     { provide: ScoutingReports, useClass: ScoutingReportRepository },
     { provide: Watchlists, useClass: WatchlistRepository },
     { provide: Assignments, useClass: AssignmentRepository },
+    { provide: ScoutingDirectory, useClass: ScoutingDirectoryRepository },
 
     // Use Cases
     CreateScoutingReportUseCase,

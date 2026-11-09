@@ -5,6 +5,8 @@ import {
   type AuthorizedTenantContext,
 } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { MedicalPlayers, requirePlayer } from '../ports/medical-players.port';
+import { MedicalRecords, requireRecord } from '../ports/medical-records.port';
 import {
   type CreateTreatmentSessionInput,
   TreatmentSessions,
@@ -15,9 +17,15 @@ export class CreateTreatmentSessionUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly treatmentSessionRepo: TreatmentSessions,
+    private readonly players: MedicalPlayers,
+    private readonly records: MedicalRecords,
   ) {}
 
-  /** The session is the context's tenant's, conducted by the acting member. */
+  /**
+   * The session is the context's tenant's, conducted by the acting member, for
+   * a player of the tenant, under one of its records if it names one: another
+   * tenant's player or record is not found (0.6.9).
+   */
   async execute(
     ctx: AuthorizedTenantContext,
     input: Omit<CreateTreatmentSessionInput, 'conductedBy'>,
@@ -38,8 +46,15 @@ export class CreateTreatmentSessionUseCase {
     }
 
     const conductedBy = actingMemberOf(ctx);
-    return this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.treatmentSessionRepo.create(tx, ctx, { ...input, conductedBy }),
-    );
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      await requirePlayer(this.players, tx, ctx, input.playerId);
+      if (input.medicalRecordId !== undefined) {
+        await requireRecord(this.records, tx, ctx, input.medicalRecordId);
+      }
+      return this.treatmentSessionRepo.create(tx, ctx, {
+        ...input,
+        conductedBy,
+      });
+    });
   }
 }

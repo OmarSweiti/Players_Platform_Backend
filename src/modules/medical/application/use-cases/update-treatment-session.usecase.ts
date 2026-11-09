@@ -7,6 +7,8 @@ import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { treatmentSessionPolicy } from '../policies/treatment-session.policy';
+import { MedicalPlayers, requirePlayer } from '../ports/medical-players.port';
+import { MedicalRecords, requireRecord } from '../ports/medical-records.port';
 import {
   TreatmentSessions,
   type UpdateTreatmentSessionInput,
@@ -17,6 +19,8 @@ export class UpdateTreatmentSessionUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly treatmentSessionRepo: TreatmentSessions,
+    private readonly players: MedicalPlayers,
+    private readonly records: MedicalRecords,
   ) {}
 
   async execute(
@@ -42,6 +46,13 @@ export class UpdateTreatmentSessionUseCase {
             ),
         },
       );
+      // Moved, only to a player and a record of the tenant (0.6.9).
+      if (input.playerId !== undefined) {
+        await requirePlayer(this.players, tx, ctx, input.playerId);
+      }
+      if (input.medicalRecordId !== undefined) {
+        await requireRecord(this.records, tx, ctx, input.medicalRecordId);
+      }
       return this.treatmentSessionRepo.update(tx, ctx, id, input);
     });
   }

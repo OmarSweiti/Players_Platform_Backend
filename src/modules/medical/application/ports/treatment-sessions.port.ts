@@ -16,6 +16,9 @@ export interface CreateTreatmentSessionInput {
 }
 
 export interface UpdateTreatmentSessionInput {
+  /** Moves the session to another of the tenant's players, or records. */
+  playerId?: string;
+  medicalRecordId?: string;
   sessionDate?: Date;
   duration?: number;
   status?: TreatmentStatus;

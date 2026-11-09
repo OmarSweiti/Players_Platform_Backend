@@ -15,6 +15,8 @@ export interface CreateScoutingAssignmentInput {
 }
 
 export interface UpdateScoutingAssignmentInput {
+  /** Gives the assignment to another of the tenant's members. */
+  assignedToId?: string;
   region?: string;
   competition?: string;
   targetPosition?: PlayerPosition;

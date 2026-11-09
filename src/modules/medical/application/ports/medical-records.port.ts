@@ -1,4 +1,5 @@
 import type { MedicalRecord, Prisma } from '@prisma/client';
+import { NotFoundError } from '../../../../common/errors/domain-error';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import type { TenantTx } from '../../../../common/tenancy/tenant-transaction';
 
@@ -18,6 +19,8 @@ export interface CreateMedicalRecordInput {
 }
 
 export interface UpdateMedicalRecordInput {
+  /** Moves the record to another of the tenant's players. */
+  playerId?: string;
   injuryType?: string;
   bodyPart?: string;
   severity?: string;
@@ -100,4 +103,19 @@ export abstract class MedicalRecords {
     byType: Array<{ injuryType: string; _count: number }>;
     bySeverity: Array<{ severity: string | null; _count: number }>;
   }>;
+}
+
+/**
+ * Not found unless `id` is a live medical record of the context's tenant:
+ * another tenant's record answers as no one's does (0.6.9; SR-NFR-SEC-003).
+ */
+export async function requireRecord(
+  records: MedicalRecords,
+  tx: TenantTx,
+  ctx: AuthorizedTenantContext,
+  id: string,
+): Promise<void> {
+  if (!(await records.findById(tx, ctx, id))) {
+    throw new NotFoundError('Medical record not found');
+  }
 }

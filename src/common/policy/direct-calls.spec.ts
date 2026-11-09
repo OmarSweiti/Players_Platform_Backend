@@ -1,5 +1,6 @@
 import type { UserRole } from '@prisma/client';
 import { describe, expect, it, vi } from 'vitest';
+import type { MedicalPlayers } from '../../modules/medical/application/ports/medical-players.port';
 import type { MedicalRecords } from '../../modules/medical/application/ports/medical-records.port';
 import { ReadMedicalRecordsUseCase } from '../../modules/medical/application/use-cases/read-medical-records.usecase';
 import { UpdateMedicalRecordUseCase } from '../../modules/medical/application/use-cases/update-medical-record.usecase';
@@ -84,8 +85,10 @@ describe('object policies', () => {
       findById: vi.fn().mockResolvedValue({ id: ID, isConfidential: true }),
       update,
     } as unknown as MedicalRecords;
+    // Nothing here names a player.
+    const players = { exists: vi.fn() } as unknown as MedicalPlayers;
     await expect(
-      new UpdateMedicalRecordUseCase(transactions, records).execute(
+      new UpdateMedicalRecordUseCase(transactions, records, players).execute(
         as(OTHER, 'OWNER'),
         ID,
         { description: 'changed' },
@@ -95,7 +98,10 @@ describe('object policies', () => {
 
     // And a job reading it gets what absence gets.
     await expect(
-      new ReadMedicalRecordsUseCase(transactions, records).get(job, ID),
+      new ReadMedicalRecordsUseCase(transactions, records, players).get(
+        job,
+        ID,
+      ),
     ).rejects.toEqual(new NotFoundError('Medical record not found'));
   });
 });
