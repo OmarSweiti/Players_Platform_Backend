@@ -3495,7 +3495,6 @@
               "role": {
                 "type": "string",
                 "enum": [
-                  "SUPER_ADMIN",
                   "OWNER",
                   "ADMIN",
                   "SPORTING_DIRECTOR",
@@ -3513,7 +3512,8 @@
                   "TRAINING_MANAGER",
                   "PLAYER",
                   "GUARDIAN"
-                ]
+                ],
+                "description": "The member's tenant role: never SUPER_ADMIN, a platform role no membership holds (0.6.7)"
               },
               "firstName": {
                 "type": [
