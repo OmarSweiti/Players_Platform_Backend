@@ -18,6 +18,8 @@ import { API_VERSION } from '../../../app.setup';
 import { Public } from '../../../common/decorators/public.decorator';
 import { SignedIn } from '../../../common/decorators/signed-in.decorator';
 import { CurrentTenantContext } from '../../../common/decorators/tenant-context.decorator';
+import { clientOf } from '../../../common/http/client';
+import { requestIdOf } from '../../../common/logging/request-id';
 import type { Page } from '../../../common/pagination/paginate';
 import {
   Raises,
@@ -68,6 +70,11 @@ function cookieOf(request: Request, name: string): unknown {
 /** The query of the URL the browser asked for, without its `?`. */
 function queryOf(request: Request): string {
   return new URL(request.originalUrl, 'https://query.invalid').search.slice(1);
+}
+
+/** The request a security event happened in (0.7.3): its id and client. */
+function securityRequestOf(request: Request) {
+  return { requestId: requestIdOf(request) ?? null, client: clientOf(request) };
 }
 
 /** A redirect nothing may keep: it sets the browser's cookies. */
@@ -154,6 +161,7 @@ export class AuthController {
         query: queryOf(request),
         preauth: cookieOf(request, PREAUTH_COOKIE),
         session: cookieOf(request, SESSION_COOKIE),
+        request: securityRequestOf(request),
       });
     } catch (error) {
       // One callback per pre-auth cookie: refused, it is cleared.
@@ -295,10 +303,14 @@ export class AuthController {
   @Returns(z.null())
   async backchannelLogout(
     @Body({ schema: BackchannelLogoutBody }) body: BackchannelLogoutBody,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ): Promise<null> {
     response.setHeader('Cache-Control', 'no-store');
-    await this.backchannel.execute(body.logout_token);
+    await this.backchannel.execute(
+      body.logout_token,
+      securityRequestOf(request),
+    );
     return null;
   }
 }

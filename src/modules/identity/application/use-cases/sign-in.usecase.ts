@@ -18,6 +18,11 @@ import {
   TenantResolver,
 } from '../../../../common/tenancy/tenant-resolver';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
+import {
+  type ProviderIdentity,
+  SecurityEvents,
+  type SecurityRequest,
+} from '../../../../infrastructure/audit/security-events';
 import { mayGrant } from '../../../users/application/role-grants.policy';
 import { normalizeEmail } from '../../../users/domain/email';
 import { returnUrl } from '../../domain/return-path';
@@ -39,6 +44,7 @@ import {
   SECOND_FACTOR_LEVEL,
 } from '../assurance.policy';
 import {
+  checkWordsOf,
   IdentityProviderPort,
   type Locale,
   ProviderAnswerRefusedError,
@@ -74,6 +80,19 @@ export interface SignInStarted {
   readonly preauthMaxAgeMs: number;
 }
 
+/** The callback, as the browser and the provider made it. */
+interface CallbackInput {
+  readonly arrival: Arrival;
+  /** The callback's query, as the provider wrote it, without the `?`. */
+  readonly query: string;
+  /** The pre-auth cookie the browser holds, if any. */
+  readonly preauth: unknown;
+  /** The session cookie the browser holds, if any: a step-up's binding. */
+  readonly session: unknown;
+  /** The request's id and client, for its security event (0.7.3). */
+  readonly request: SecurityRequest;
+}
+
 /** What the callback came to (0.5.5; 0.5.8). */
 export type SignInOutcome =
   | {
@@ -96,6 +115,15 @@ export type SignInOutcome =
 /** How old an authentication a step-up accepts: none — it is made anew. */
 const STEP_UP_MAX_AGE_SECONDS = 0;
 
+/** What a callback had learned when it was refused, for its security event. */
+interface Seen {
+  stepUp?: boolean;
+  /** The session a step-up was bound to. */
+  sessionId?: string;
+  /** Whom the provider proved signed in. */
+  identity?: ProviderIdentity;
+}
+
 /**
  * Sign-in through the API (0.5.5; ADR-0003, SR-CORE-001): the authorization
  * code flow with PKCE, the API as the confidential client.
@@ -116,6 +144,14 @@ const STEP_UP_MAX_AGE_SECONDS = 0;
  * browser holds, and its callback updates that same session — its token
  * replaced, its authentication time and assurance renewed — if, and only if,
  * the same person authenticated, in the same browser.
+ *
+ * Security events (0.7.3; SR-AUD-001). Every callback is recorded: a session
+ * opened or stepped up, in the transaction that does it; any refusal, with
+ * what was known when it came — whom the provider proved, the session a
+ * step-up named, the tenant of the host, or none for a host that names no
+ * tenant. A refusal whose event cannot be written fails as any fault does:
+ * no refusal goes unrecorded. Sending a privileged member back for a second
+ * factor is neither, and is not recorded; the callback that follows is.
  */
 @Injectable()
 export class SignInUseCase {
@@ -127,6 +163,7 @@ export class SignInUseCase {
     private readonly limiter: RateLimiter,
     private readonly transactions: TenantTransactions,
     private readonly views: SessionViews,
+    private readonly events: SecurityEvents,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -213,15 +250,30 @@ export class SignInUseCase {
     });
   }
 
-  async complete(input: {
-    arrival: Arrival;
-    /** The callback's query, as the provider wrote it, without the `?`. */
-    query: string;
-    /** The pre-auth cookie the browser holds, if any. */
-    preauth: unknown;
-    /** The session cookie the browser holds, if any: a step-up's binding. */
-    session: unknown;
-  }): Promise<SignInOutcome> {
+  async complete(input: CallbackInput): Promise<SignInOutcome> {
+    const seen: Seen = {};
+    try {
+      return await this.finish(input, seen);
+    } catch (error) {
+      await this.events.record(
+        {
+          type: seen.stepUp ? 'step_up' : 'sign_in',
+          outcome: 'REFUSED',
+          reason: refusalOf(error),
+          tenantHint: await this.tenantHintOf(input.arrival),
+          identity: seen.identity,
+          sessionId: seen.sessionId,
+        },
+        input.request,
+      );
+      throw error;
+    }
+  }
+
+  private async finish(
+    input: CallbackInput,
+    seen: Seen,
+  ): Promise<SignInOutcome> {
     // The browser that began it, and an attempt it began: checked before
     // anything is sent to the provider. A browser that holds neither cookie
     // began nothing, and takes nothing.
@@ -233,6 +285,8 @@ export class SignInUseCase {
     const attempt = await this.attempts.take(state);
     if (!attempt) throw new SignInRefusedError('state');
     const stepUp = attempt.stepUpSessionId !== undefined;
+    seen.stepUp = stepUp;
+    seen.sessionId = attempt.stepUpSessionId;
     // A sign-in is bound to the pre-auth cookie; a step-up to the session.
     const bound = stepUp ? input.session : input.preauth;
     if (
@@ -256,6 +310,7 @@ export class SignInUseCase {
       expectedNonce: attempt.nonce,
       maxAge: attempt.maxAge,
     });
+    seen.identity = { issuer: proven.issuer, subject: proven.subject };
     // Recent authentication (0.5.8) is measured from it.
     if (proven.authTime === undefined) {
       throw new ProviderAnswerRefusedError('id_token:auth_time');
@@ -314,6 +369,7 @@ export class SignInUseCase {
           idleExpiresAt: (absolute) => idleExpiryAt(at, absolute),
         },
         admits,
+        input.request,
       );
       switch (steppedUp.kind) {
         case 'stepped-up':
@@ -338,6 +394,7 @@ export class SignInUseCase {
       identity,
       { tokenHash: digestOf(sessionToken), openedAt: at, ...lifetimesFrom(at) },
       admits,
+      input.request,
     );
     switch (opened.kind) {
       case 'opened':
@@ -367,6 +424,19 @@ export class SignInUseCase {
           preauth: bound,
           preauthMaxAgeMs: SIGN_IN_SECONDS * 1000,
         };
+    }
+  }
+
+  /**
+   * The tenant the request's host names, for a refusal's event: none for a
+   * host that names no tenant, or an inactive one's.
+   */
+  private async tenantHintOf(arrival: Arrival): Promise<string | null> {
+    try {
+      return (await this.tenants.resolve(arrival)).id;
+    } catch (error) {
+      if (error instanceof NoAccountHereError) return null;
+      throw error;
     }
   }
 
@@ -430,4 +500,15 @@ export class SignInUseCase {
     );
     return authorizationUrl;
   }
+}
+
+/** Why a callback was refused, as its security event's reason. */
+function refusalOf(error: unknown): string {
+  if (error instanceof SignInRefusedError) return error.check;
+  if (error instanceof NoAccountHereError) return 'no_account';
+  if (error instanceof ProviderAnswerRefusedError) {
+    return `provider:${checkWordsOf(error.check)}`;
+  }
+  if (error instanceof DomainError) return error.code;
+  return 'internal_error';
 }

@@ -428,6 +428,10 @@ describe('audit evidence is append-only', () => {
 
     // What 0.7.1 changed, undone: the schema as it stood after 0.6.7.
     const BEFORE_0_7_1 = `
+      -- Evidence a later step added on the same function: 0.7.3's.
+      DROP TABLE security_events;
+      DROP TYPE security_event_source;
+      DROP TYPE security_event_outcome;
       DROP TRIGGER audit_logs_no_update_delete ON audit_logs;
       DROP TRIGGER audit_logs_no_truncate ON audit_logs;
       DROP FUNCTION reject_evidence_mutation();

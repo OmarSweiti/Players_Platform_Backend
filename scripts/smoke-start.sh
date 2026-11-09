@@ -57,6 +57,7 @@ docker run -d --name "$run-api" --network "$run" \
   -e OIDC_CLIENT_ID=sadara-api -e OIDC_CLIENT_SECRET=not-a-secret-not-a-secret \
   -e OIDC_ADMIN_CLIENT_ID=sadara-admin -e OIDC_ADMIN_CLIENT_SECRET=not-a-secret-not-a-secret \
   -e CSRF_SECRET=not-a-secret-not-a-secret-not-a-secret \
+  -e SECURITY_EVENT_KEY=not-a-secret-not-a-secret-not-a-secret \
   "$image" >/dev/null
 export SMOKE_CONTAINER="$run-api"
 

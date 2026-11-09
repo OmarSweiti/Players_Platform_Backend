@@ -13,6 +13,7 @@ import {
   createMember,
   createTenant,
   runPrisma,
+  securityEventsOf,
 } from '../harness/fixtures';
 import { LogCapture } from '../harness/log-capture';
 import { setCookiesOf } from '../support/set-cookies';
@@ -283,6 +284,23 @@ describe('sign-in through the API', () => {
       2000,
     );
 
+    // Its security event (0.7.3), written with the session: who, how, the
+    // session, the tenant, the request, and the address only as its hash.
+    expect(await securityEventsOf(signedIn.headers['x-request-id'])).toEqual([
+      expect.objectContaining({
+        source: 'SADARA',
+        eventType: 'sign_in',
+        outcome: 'SUCCEEDED',
+        reasonCode: null,
+        tenantHint: agency.id,
+        issuer: issuer.issuer,
+        subject: issuer.subject,
+        sessionId: row.id,
+        networkHash: expect.any(Uint8Array) as Uint8Array,
+        metadata: { acr: '1', amr: 'pwd' },
+      }),
+    ]);
+
     // Without a return path, sign-in returns to the start of the web app; a
     // tenant whose members start in English sees the provider in English.
     const englishBrowser = new Browser(`${english.slug}.localhost`);
@@ -339,6 +357,24 @@ describe('sign-in through the API', () => {
       const refused = await browser.callback(answer);
       expect([who, problemOf(refused)]).toEqual([who, unknown]);
       expectNoSession(refused);
+      // Recorded (0.7.3): whom the provider proved, refused in this tenant.
+      expect([
+        who,
+        await securityEventsOf(refused.headers['x-request-id']),
+      ]).toEqual([
+        who,
+        [
+          expect.objectContaining({
+            eventType: 'sign_in',
+            outcome: 'REFUSED',
+            reasonCode: 'no_account',
+            tenantHint: agency.id,
+            issuer: issuer.issuer,
+            subject,
+            sessionId: null,
+          }),
+        ],
+      ]);
     }
     for (const [tenant, user] of [
       [elsewhere, away],

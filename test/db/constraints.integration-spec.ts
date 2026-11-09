@@ -56,6 +56,15 @@ const OTHER_STEPS_CHECKS = [
   // 0.7.1: test/db/audit-immutability.integration-spec.ts
   'audit_logs_actor_check',
   'audit_logs_schema_version_check',
+  // 0.7.3: test/db/security-events.integration-spec.ts
+  'security_events_event_type_check',
+  'security_events_identity_check',
+  'security_events_metadata_check',
+  'security_events_network_hash_check',
+  'security_events_provider_event_id_check',
+  'security_events_reason_code_check',
+  'security_events_refusal_check',
+  'security_events_source_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
@@ -909,7 +918,11 @@ describe('integrity constraints in SQL', () => {
           'training_sessions.time_zone',
         ].sort(),
       );
-      expect(await columnsOf('jsonb')).toEqual(checked(/^jsonb_typeof/));
+      // And security events' metadata, held to its shape and size by 0.7.3's
+      // own CHECK (test/db/security-events.integration-spec.ts).
+      expect(await columnsOf('jsonb')).toEqual(
+        [...checked(/^jsonb_typeof/), 'security_events.metadata'].sort(),
+      );
 
       // Every amount is held to its currency's minor units by a constraint
       // trigger, which the exponent guard finds it by.

@@ -1,6 +1,11 @@
 import { ConfigModule } from '@nestjs/config';
 import { describe, expect, it, vi } from 'vitest';
-import { configOptions, parseEnv, parseProvisioningEnv } from './env.schema';
+import {
+  configOptions,
+  parseEnv,
+  parseEventImportEnv,
+  parseProvisioningEnv,
+} from './env.schema';
 
 // A complete, valid environment — synthetic values only.
 const valid = {
@@ -15,6 +20,7 @@ const valid = {
   OIDC_ADMIN_CLIENT_ID: 'sadara-admin',
   OIDC_ADMIN_CLIENT_SECRET: 'not-a-real-admin-secret',
   CSRF_SECRET: 'not-a-real-csrf-key-not-a-real-csrf-key',
+  SECURITY_EVENT_KEY: 'not-a-real-event-key-not-a-real-event-key',
 } as const;
 
 const failureOf = (raw: Record<string, unknown>): string => {
@@ -225,6 +231,48 @@ describe('the environment schema', () => {
     expect(message).toContain('OIDC_PROVISIONER_CLIENT_ID is missing');
     expect(message).toContain(
       'OIDC_PROVISIONER_CLIENT_SECRET must be at least 16 characters',
+    );
+    expect(message).not.toContain('short');
+  });
+
+  it('takes a key of its own for security events, with no default', () => {
+    const { SECURITY_EVENT_KEY: _omitted, ...rest } = valid;
+    expect(failureOf(rest)).toContain('SECURITY_EVENT_KEY is missing');
+    expect(failureOf({ ...valid, SECURITY_EVENT_KEY: 'too-short' })).toContain(
+      'SECURITY_EVENT_KEY must be at least 32 characters',
+    );
+  });
+
+  it('the_event_import_needs_its_own_account_besides_the_apis', () => {
+    expect(
+      parseEventImportEnv({
+        ...valid,
+        OIDC_EVENTS_CLIENT_ID: 'sadara-events',
+        OIDC_EVENTS_CLIENT_SECRET: 'not-a-real-events-secret',
+      }),
+    ).toMatchObject({
+      OIDC_EVENTS_CLIENT_ID: 'sadara-events',
+      OIDC_ADMIN_CLIENT_ID: valid.OIDC_ADMIN_CLIENT_ID,
+    });
+    // The API does not need it, and the command names what it lacks in
+    // either environment, never a value.
+    expect(() => parseEnv(valid)).not.toThrow();
+    const { CSRF_SECRET: _omitted, ...withoutCsrf } = valid;
+    const message = (() => {
+      try {
+        parseEventImportEnv({
+          ...withoutCsrf,
+          OIDC_EVENTS_CLIENT_SECRET: 'short',
+        });
+      } catch (error) {
+        return (error as Error).message;
+      }
+      return '';
+    })();
+    expect(message).toContain('CSRF_SECRET is missing');
+    expect(message).toContain('OIDC_EVENTS_CLIENT_ID is missing');
+    expect(message).toContain(
+      'OIDC_EVENTS_CLIENT_SECRET must be at least 16 characters',
     );
     expect(message).not.toContain('short');
   });

@@ -1,4 +1,10 @@
 import { AuditService } from '../../infrastructure/audit/audit.service';
+import {
+  METADATA_TEXT_MAX,
+  SecurityEvents,
+  type SecurityMetadata,
+  type SecurityRequest,
+} from '../../infrastructure/audit/security-events';
 import { currentRequestId } from '../../infrastructure/logging/correlation';
 import { Injectable } from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
@@ -125,6 +131,7 @@ export class AuthBootstrap {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly securityEvents: SecurityEvents,
   ) {}
 
   /** The language the tenant's members start in. */
@@ -143,13 +150,16 @@ export class AuthBootstrap {
    * Opens a session for the identity's membership in the tenant, in one
    * transaction with the lookup, if it has one that may sign in — active, not
    * archived, and admitted at the asserted assurance (0.5.8). A membership is
-   * found by its identity only, never by an email address (0.5.3).
+   * found by its identity only, never by an email address (0.5.3). The
+   * session's security event (0.7.3) is written in the same transaction: a
+   * session is never opened unrecorded.
    */
   openSession(
     tenant: HostTenant,
     identity: ProvenIdentity,
     session: NewSession,
     admits: Admits,
+    request: SecurityRequest,
   ): Promise<OpenedSession> {
     return this.inTenant(tenant, async (tx) => {
       const person = await tx.identity.findUnique({
@@ -193,6 +203,18 @@ export class AuthBootstrap {
         },
         select: { id: true },
       });
+      await this.securityEvents.record(
+        {
+          type: 'sign_in',
+          outcome: 'SUCCEEDED',
+          tenantHint: tenant.id,
+          identity: { issuer: identity.issuer, subject: identity.subject },
+          sessionId: id,
+          metadata: assuranceOf(identity),
+        },
+        request,
+        tx,
+      );
       return { kind: 'opened', sessionId: id, memberId: member.id };
     });
   }
@@ -204,7 +226,8 @@ export class AuthBootstrap {
    * its sign-in time and its absolute expiry stay. In one transaction: the
    * session must still be live under `currentTokenHash`, its member active,
    * the provider's person its own, and the member admitted at the new
-   * assurance; otherwise nothing changes.
+   * assurance; otherwise nothing changes. Its security event (0.7.3) is
+   * written with the update.
    */
   stepUpSession(
     tenant: HostTenant,
@@ -216,6 +239,7 @@ export class AuthBootstrap {
       idleExpiresAt: (absoluteExpiresAt: Date) => Date;
     },
     admits: Admits,
+    request: SecurityRequest,
   ): Promise<SteppedUp> {
     return this.inTenant(tenant, async (tx) => {
       const where = {
@@ -262,9 +286,20 @@ export class AuthBootstrap {
           revision: { increment: 1 },
         },
       });
-      return count === 1
-        ? { kind: 'stepped-up', absoluteExpiresAt: row.absoluteExpiresAt }
-        : { kind: 'gone' };
+      if (count !== 1) return { kind: 'gone' };
+      await this.securityEvents.record(
+        {
+          type: 'step_up',
+          outcome: 'SUCCEEDED',
+          tenantHint: tenant.id,
+          identity: { issuer: identity.issuer, subject: identity.subject },
+          sessionId: current.sessionId,
+          metadata: assuranceOf(identity),
+        },
+        request,
+        tx,
+      );
+      return { kind: 'stepped-up', absoluteExpiresAt: row.absoluteExpiresAt };
     });
   }
 
@@ -546,4 +581,17 @@ export class AuthBootstrap {
       return work(tx);
     });
   }
+}
+
+/**
+ * How the provider says the person authenticated, for the security event:
+ * the assurance level and the methods (`otp pwd`), as its ID token asserted
+ * them, each cut to a metadata value's bound.
+ */
+function assuranceOf(identity: ProvenIdentity): SecurityMetadata {
+  const methods = [...identity.amr].sort().join(' ');
+  return {
+    ...(identity.acr ? { acr: identity.acr.slice(0, METADATA_TEXT_MAX) } : {}),
+    ...(methods ? { amr: methods.slice(0, METADATA_TEXT_MAX) } : {}),
+  };
 }

@@ -8,7 +8,12 @@ import { IS_PUBLIC_KEY } from '../../src/common/decorators/public.decorator';
 import type { Env } from '../../src/config/env.schema';
 import { KeycloakIdentityProvider } from '../../src/modules/identity/infrastructure/keycloak/keycloak-identity-provider';
 import { bootApp, type BootedApp } from '../harness/app';
-import { asTenant, createMember, createTenant } from '../harness/fixtures';
+import {
+  asTenant,
+  createMember,
+  createTenant,
+  securityEventsOf,
+} from '../harness/fixtures';
 import { controllersOf, routesOf } from '../harness/routes';
 import { signedInAs } from '../harness/session';
 import { setCookiesOf } from '../support/set-cookies';
@@ -53,6 +58,9 @@ describe('sign-out, back-channel logout and session management', () => {
   };
   const refusedAs = (status: number, code: string) =>
     expect.objectContaining({ status, code }) as unknown;
+  /** The security events (0.7.3) the request behind `response` left. */
+  const eventsOf = (response: Response) =>
+    securityEventsOf(response.headers['x-request-id']);
 
   const read = (headers: Record<string, string>) =>
     booted.http.get('/api/v1/auth/session').set(headers);
@@ -132,10 +140,21 @@ describe('sign-out, back-channel logout and session management', () => {
     });
 
     // Ended in PostgreSQL: the cookie, kept or replayed, signs nobody in.
-    expect(await rowOf(agency, signedIn)).toMatchObject({
+    const ended = await rowOf(agency, signedIn);
+    expect(ended).toMatchObject({
       revokedAt: expect.any(Date) as Date,
       revokeReason: 'SIGN_OUT',
     });
+    // Recorded with it (0.7.3): this session, in this tenant.
+    expect(await eventsOf(signedOut)).toEqual([
+      expect.objectContaining({
+        eventType: 'sign_out',
+        outcome: 'SUCCEEDED',
+        tenantHint: agency.id,
+        sessionId: ended.id,
+        metadata: { revoked: 1 },
+      }),
+    ]);
     expect(problemOf(await read(signedIn))).toEqual(
       refusedAs(401, 'AUTHENTICATION_REQUIRED'),
     );
@@ -189,6 +208,15 @@ describe('sign-out, back-channel logout and session management', () => {
     expect((signedOut.body as { data: { revoked: number } }).data.revoked).toBe(
       3,
     );
+    expect(await eventsOf(signedOut)).toEqual([
+      expect.objectContaining({
+        eventType: 'sign_out_everywhere',
+        outcome: 'SUCCEEDED',
+        tenantHint: agency.id,
+        sessionId: (await rowOf(agency, mine[0])).id,
+        metadata: { revoked: 3 },
+      }),
+    ]);
     expect(setCookiesOf(signedOut).get(SESSION)?.value).toBe('');
     for (const headers of mine) {
       expect((await read(headers)).status).toBe(401);
@@ -233,8 +261,24 @@ describe('sign-out, back-channel logout and session management', () => {
     // never existed — and it goes on working.
     const end = (headers: Record<string, string>, id: string) =>
       booted.http.delete(`/api/v1/auth/sessions/${id}`).set(headers);
-    const notTheirs = problemOf(await end(first, theirRow.id));
+    const attempt = await end(first, theirRow.id);
+    const notTheirs = problemOf(attempt);
     expect(notTheirs).toEqual(refusedAs(404, 'NOT_FOUND'));
+    // The attempt on another's session is recorded (0.7.3), with the session
+    // it named and the one that asked.
+    expect(await eventsOf(attempt)).toEqual([
+      expect.objectContaining({
+        eventType: 'session_revoked',
+        outcome: 'REFUSED',
+        reasonCode: 'not_found',
+        tenantHint: agency.id,
+        sessionId: theirRow.id,
+        metadata: {
+          revokeReason: 'REVOKED_BY_MEMBER',
+          actorSessionId: firstRow.id,
+        },
+      }),
+    ]);
     expect(problemOf(await end(first, randomUUID()))).toEqual(notTheirs);
     expect((await read(theirs)).status).toBe(200);
 
@@ -244,6 +288,14 @@ describe('sign-out, back-channel logout and session management', () => {
     const ended = await end(first, secondRow.id);
     expect(ended.status).toBe(200);
     expect(ended.body).toEqual({ data: null });
+    expect(await eventsOf(ended)).toEqual([
+      expect.objectContaining({
+        eventType: 'session_revoked',
+        outcome: 'SUCCEEDED',
+        reasonCode: null,
+        sessionId: secondRow.id,
+      }),
+    ]);
     expect(setCookiesOf(ended).has(SESSION)).toBe(false);
     expect((await read(second)).status).toBe(401);
     expect((await rowOf(agency, second)).revokeReason).toBe(
@@ -317,6 +369,17 @@ describe('sign-out, back-channel logout and session management', () => {
       expect(answered.status).toBe(200);
       expect(answered.headers['cache-control']).toBe('no-store');
       expect(answered.body).toEqual({ data: null });
+      // Recorded (0.7.3) without a tenant: its sessions are in two.
+      expect(await eventsOf(answered)).toEqual([
+        expect.objectContaining({
+          eventType: 'backchannel_logout',
+          outcome: 'SUCCEEDED',
+          tenantHint: null,
+          issuer: issuer.issuer,
+          subject,
+          metadata: { revoked: 2 },
+        }),
+      ]);
       expect(await rowOf(agency, thisSession)).toMatchObject({
         revokeReason: 'PROVIDER_LOGOUT',
       });
@@ -394,6 +457,19 @@ describe('sign-out, back-channel logout and session management', () => {
       ];
       for (const [why, hostile] of forgeries) {
         const refused = await backchannel(await issuer.logoutToken(hostile));
+        // Recorded (0.7.3), naming nobody: the token proved no one.
+        expect([why, await eventsOf(refused)]).toEqual([
+          why,
+          [
+            expect.objectContaining({
+              eventType: 'backchannel_logout',
+              outcome: 'REFUSED',
+              reasonCode: expect.stringMatching(/^[a-z0-9_.:-]+$/) as string,
+              issuer: null,
+              subject: null,
+            }),
+          ],
+        ]);
         expect([why, problemOf(refused)]).toEqual([
           why,
           expect.objectContaining({
@@ -419,9 +495,16 @@ describe('sign-out, back-channel logout and session management', () => {
       expect((await read(target)).status).toBe(401);
       // Signed in again with the same provider session: the replay ends nothing.
       const replayed = await signedInAs(member, person);
-      expect(problemOf(await backchannel(token))).toEqual(
-        refusedAs(400, 'VALIDATION_FAILED'),
-      );
+      const again = await backchannel(token);
+      expect(problemOf(again)).toEqual(refusedAs(400, 'VALIDATION_FAILED'));
+      expect(await eventsOf(again)).toEqual([
+        expect.objectContaining({
+          outcome: 'REFUSED',
+          reasonCode: 'logout_token:replayed',
+          issuer: issuer.issuer,
+          subject,
+        }),
+      ]);
       expect((await read(replayed)).status).toBe(200);
     });
 

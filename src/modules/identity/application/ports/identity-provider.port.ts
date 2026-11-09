@@ -147,6 +147,56 @@ export class ProviderAnswerRefusedError extends DomainError {
   }
 }
 
+/**
+ * The words of a refusal's check that may reach a security event (0.7.3):
+ * the check's own name, then OAuth's registered error codes (RFC 6749,
+ * sections 4.1.2.1 and 5.2; OpenID Connect Core 1.0, section 3.1.2.6) and the
+ * token claims and checks a refusal names. An error in the callback's query is
+ * anyone's to write, so any other word is kept as `other`.
+ */
+export function checkWordsOf(check: string): string {
+  const [name, ...words] = check.split(':');
+  return [
+    name,
+    ...words.map((word) => (CHECK_WORDS.has(word) ? word : 'other')),
+  ].join(':');
+}
+
+const CHECK_WORDS = new Set([
+  // OAuth's and OpenID Connect's error codes
+  'access_denied',
+  'invalid_request',
+  'unauthorized_client',
+  'unsupported_response_type',
+  'invalid_scope',
+  'server_error',
+  'temporarily_unavailable',
+  'invalid_client',
+  'invalid_grant',
+  'unsupported_grant_type',
+  'interaction_required',
+  'login_required',
+  'account_selection_required',
+  'consent_required',
+  // the claims a token's check names
+  'iss',
+  'aud',
+  'azp',
+  'sub',
+  'sid',
+  'exp',
+  'iat',
+  'nbf',
+  'jti',
+  'nonce',
+  'auth_time',
+  'acr',
+  'events',
+  'sub_or_sid',
+  // a logout token honoured once (0.5.7)
+  'replayed',
+]);
+
 /** The provider already has an account for this address. */
 export class AccountExistsError extends ConflictError {
   constructor() {

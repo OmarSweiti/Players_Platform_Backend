@@ -135,6 +135,12 @@ export const Env = z
     // session it served has expired (12 hours).
     CSRF_SECRET: z.string().min(32),
     CSRF_SECRET_PREVIOUS: optional(z.string().min(32)),
+    // The key a security event's network data is hashed under (0.7.3): an
+    // HMAC of the client's address, so that one address is recognised across
+    // events and none is stored. A key of its own, apart from CSRF_SECRET's,
+    // so that rotating either never touches the other; rotating it starts a
+    // new series of hashes, which no longer match the old ones.
+    SECURITY_EVENT_KEY: z.string().min(32),
     MAIL_FROM: z.email(),
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),
@@ -221,8 +227,38 @@ export type ProvisioningEnv = Env & z.infer<typeof Provisioner>;
 export function parseProvisioningEnv(
   raw: Record<string, unknown>,
 ): ProvisioningEnv {
+  return parseCommandEnv(Provisioner, raw);
+}
+
+/**
+ * What the security-event import needs besides the API's own settings
+ * (0.7.3): the event reader's service account, which may read the realm's
+ * login and admin events and nothing else. Only that command reads these;
+ * the API never holds them.
+ */
+const EventReader = z.object({
+  OIDC_EVENTS_CLIENT_ID: clientId,
+  OIDC_EVENTS_CLIENT_SECRET: z.string().min(16),
+});
+export type EventImportEnv = Env & z.infer<typeof EventReader>;
+
+/** The security-event import's environment: the API's, and the reader's. */
+export function parseEventImportEnv(
+  raw: Record<string, unknown>,
+): EventImportEnv {
+  return parseCommandEnv(EventReader, raw);
+}
+
+/**
+ * A command's environment: the API's settings and the command's own, or an
+ * error naming every problem with either, never a value.
+ */
+function parseCommandEnv<T extends z.ZodType<object>>(
+  own: T,
+  raw: Record<string, unknown>,
+): Env & z.output<T> {
   const problems: string[] = [];
-  const attempt = <T>(parse: () => T): T | undefined => {
+  const attempt = <R>(parse: () => R): R | undefined => {
     try {
       return parse();
     } catch (error) {
@@ -231,9 +267,9 @@ export function parseProvisioningEnv(
     }
   };
   const env = attempt(() => parseEnv(raw));
-  const provisioner = attempt(() => parseWith(Provisioner, raw));
-  if (!env || !provisioner) throw new Error(problems.join(' '));
-  return { ...env, ...provisioner };
+  const command = attempt(() => parseWith(own, raw));
+  if (!env || !command) throw new Error(problems.join(' '));
+  return { ...env, ...command };
 }
 
 /** How the application loads its configuration: validated, once, at boot. */

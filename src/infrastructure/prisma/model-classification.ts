@@ -11,8 +11,13 @@ import { Prisma } from '@prisma/client';
  * - `append-only`: identities (0.5.3). The runtime role reads them and adds one
  *   when a person first joins a tenant, and never rewrites or removes one: an
  *   issuer and a subject name a person for good.
+ * - `insert-only`: security events (0.7.3), evidence of no one tenant's. The
+ *   runtime role adds them and reads none: reading is a security operator's.
+ *   As for `appended` rows, triggers refuse UPDATE, DELETE and TRUNCATE for
+ *   every role, the owner included.
  */
-export type GlobalAccess = 'own-tenant-row' | 'read-only' | 'append-only';
+export type GlobalAccess =
+  'own-tenant-row' | 'read-only' | 'append-only' | 'insert-only';
 
 /**
  * How a model's ids are made (0.4.11; SR-DB-002). UUIDv4 unless the class
@@ -68,6 +73,12 @@ export const MODEL_CLASSIFICATION: Readonly<
   RolePermission: { kind: 'global', runtime: 'read-only' },
   CurrencyDefinition: { kind: 'global', runtime: 'read-only' },
   Identity: { kind: 'global', runtime: 'append-only' },
+  // Appended on every sign-in, never updated: its index grows at one end.
+  SecurityEvent: {
+    kind: 'global',
+    runtime: 'insert-only',
+    ids: 'time-ordered',
+  },
 
   User: TENANT_OWNED,
   // A row per sign-in, rarely updated: its index grows at one end.

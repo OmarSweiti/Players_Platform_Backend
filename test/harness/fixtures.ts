@@ -44,6 +44,17 @@ export function migrationPrisma(): PrismaClient {
   return migrationClient.prisma;
 }
 
+/**
+ * The security events a request left (0.7.3), oldest first, as a security
+ * operator reads them: the runtime role adds them and may not read them.
+ */
+export function securityEventsOf(requestId: string) {
+  return migrationPrisma().securityEvent.findMany({
+    where: { requestId },
+    orderBy: [{ occurredAt: 'asc' }, { id: 'asc' }],
+  });
+}
+
 afterAll(async () => {
   await Promise.all([runClient?.close(), migrationClient?.close()]);
   runClient = undefined;

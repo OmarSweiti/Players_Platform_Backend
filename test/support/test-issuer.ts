@@ -16,6 +16,11 @@ import {
 // audience, a wrong nonce, an expired token, a key it never published, no
 // signature at all. Realm behaviour is Keycloak's own (0.5.1); this proves
 // what the API does with what an issuer sends. Every value is synthetic.
+//
+// It also serves the realm's events as Keycloak's admin API does (0.7.3): to
+// the event reader's service account only, by its client-credentials token,
+// newest first from `dateFrom`, paged by `first` and `max` — whatever events a
+// test gives it, in Keycloak's own shape.
 
 const LOGOUT_EVENT = 'http://schemas.openid.net/event/backchannel-logout';
 
@@ -68,9 +73,22 @@ async function body(request: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString('utf8');
 }
 
+/** The realm's events as the admin API answers with them: Keycloak's shape. */
+export interface StoredEvents {
+  login: Array<Record<string, unknown> & { time: number }>;
+  admin: Array<Record<string, unknown> & { time: number }>;
+}
+
 export class TestIssuer {
   readonly clientId = 'sadara-api';
   readonly clientSecret = 'test-issuer-client-secret';
+  /** The event reader's service account (0.7.3). */
+  readonly eventReaderId = 'sadara-events';
+  readonly eventReaderSecret = 'test-issuer-event-reader-secret';
+  /** The events the admin API serves; a test fills them. */
+  readonly events: StoredEvents = { login: [], admin: [] };
+  /** The admin API's event reads, as `kind?query`, so a test sees its paging. */
+  readonly eventReads: string[] = [];
   readonly subject = randomUUID();
   readonly sid = randomUUID();
   /** Requests for the key set, so a test can see a refetch. */
@@ -80,6 +98,7 @@ export class TestIssuer {
   private signing!: SigningKey;
   private unpublished!: SigningKey;
   private readonly grants = new Map<string, Grant>();
+  private readonly readerTokens = new Set<string>();
 
   private constructor(
     private readonly server: Server,
@@ -207,7 +226,31 @@ export class TestIssuer {
     ) {
       return this.token(new URLSearchParams(await body(request)), request);
     }
+    const admin = `/admin${realm}`;
+    if (
+      (path === `${admin}/events` || path === `${admin}/admin-events`) &&
+      request.method === 'GET'
+    ) {
+      return this.eventsFor(request, path.endsWith('/admin-events'));
+    }
     return { status: 404, json: { error: 'not_found' } };
+  }
+
+  /** The admin API's events: the reader's token, `dateFrom`, newest first, paged. */
+  private eventsFor(request: IncomingMessage, admin: boolean) {
+    const bearer = request.headers.authorization?.replace(/^Bearer /, '');
+    if (bearer === undefined || !this.readerTokens.has(bearer)) {
+      return { status: bearer === undefined ? 401 : 403, json: {} };
+    }
+    const query = new URL(request.url ?? '/', this.issuer).searchParams;
+    this.eventReads.push(`${admin ? 'admin' : 'login'}?${query.toString()}`);
+    const from = Number(query.get('dateFrom') ?? 0);
+    const first = Number(query.get('first') ?? 0);
+    const max = Number(query.get('max') ?? 100);
+    const events = (admin ? this.events.admin : this.events.login)
+      .filter((event) => event.time >= from)
+      .sort((x, y) => y.time - x.time);
+    return { status: 200, json: events.slice(first, first + max) };
   }
 
   private metadata() {
@@ -246,6 +289,18 @@ export class TestIssuer {
           .split(':')
           .map(decodeURIComponent)
       : [form.get('client_id'), form.get('client_secret')];
+    if (
+      basic[0] === this.eventReaderId &&
+      basic[1] === this.eventReaderSecret &&
+      form.get('grant_type') === 'client_credentials'
+    ) {
+      const token = randomBytes(24).toString('base64url');
+      this.readerTokens.add(token);
+      return {
+        status: 200,
+        json: { access_token: token, token_type: 'Bearer', expires_in: 300 },
+      };
+    }
     if (basic[0] !== this.clientId || basic[1] !== this.clientSecret) {
       return refuse('invalid_client', 401);
     }

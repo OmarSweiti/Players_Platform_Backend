@@ -5,6 +5,7 @@ import type { Request } from 'express';
 import { SessionService } from '../../modules/identity/application/session.service';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { localeOf } from '../errors/locale';
+import { clientOf } from '../http/client';
 import type {
   RequestSession,
   SessionMember,
@@ -66,13 +67,4 @@ export class SessionGuard implements CanActivate {
     });
     return true;
   }
-}
-
-/** The request's client: its address as the trusted proxies report it, and its user agent. */
-function clientOf(request: Request) {
-  const userAgent = request.header('user-agent');
-  return {
-    ...(request.ip === undefined ? {} : { address: request.ip }),
-    ...(userAgent === undefined ? {} : { userAgent }),
-  };
 }

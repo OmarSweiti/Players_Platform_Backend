@@ -14,6 +14,7 @@ import {
   createMember,
   createTenant,
   runPrisma,
+  securityEventsOf,
 } from '../harness/fixtures';
 import { signedInAs } from '../harness/session';
 import { setCookiesOf } from '../support/set-cookies';
@@ -328,6 +329,17 @@ describe('assurance: second factors and recent authentication', () => {
     });
     expect(Buffer.from(after.tokenHash)).toEqual(sha256(newToken));
     expect(after.authTime.getTime()).toBeGreaterThan(before.authTime.getTime());
+    // Its security event (0.7.3), written with the update: the same session.
+    expect(await securityEventsOf(done.headers['x-request-id'])).toEqual([
+      expect.objectContaining({
+        eventType: 'step_up',
+        outcome: 'SUCCEEDED',
+        tenantHint: before.tenantId,
+        subject,
+        sessionId: before.id,
+        metadata: { acr: '1', amr: 'pwd' },
+      }),
+    ]);
 
     // The old token signs nobody in; the new one acts at once.
     const stale = await booted.http
@@ -390,6 +402,17 @@ describe('assurance: second factors and recent authentication', () => {
       code: 'AUTHENTICATION_REQUIRED',
     });
     await unchanged();
+    // Recorded (0.7.3): a step-up of this session, refused, and whom the
+    // provider proved instead.
+    expect(await securityEventsOf(stranger.headers['x-request-id'])).toEqual([
+      expect.objectContaining({
+        eventType: 'step_up',
+        outcome: 'REFUSED',
+        reasonCode: 'identity',
+        sessionId: before.id,
+        subject: expect.not.stringMatching(subject) as string,
+      }),
+    ]);
 
     // An authentication that is not fresh, for max_age=0: refused.
     const old = await browser.callback(await stepUp(), {
