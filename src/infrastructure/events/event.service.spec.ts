@@ -15,16 +15,14 @@ describe('EventService', () => {
         return Promise.resolve();
       },
     } as unknown as Queue;
-    const events = new EventService(queue, queue, new EventEmitter2());
+    const events = new EventService(queue, new EventEmitter2());
 
     await runWithRequestId(REQUEST, async () => {
       await events.queueNotification({ kind: 'invitation' });
-      await events.queueAuditLog({ action: 'member.invited' });
     });
 
     expect(queued).toEqual([
       { kind: 'invitation', correlation: { requestId: REQUEST } },
-      { action: 'member.invited', correlation: { requestId: REQUEST } },
     ]);
   });
 });

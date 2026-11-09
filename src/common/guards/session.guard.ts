@@ -61,7 +61,18 @@ export class SessionGuard implements CanActivate {
       actor: { kind: 'USER', userId: member.id, sessionId, role: member.role },
       requestId: requestIdOf(request) ?? randomUUID(),
       locale: localeOf(request.header('accept-language')),
+      // For the audit of what this request changes (0.7.2), never a decision.
+      client: clientOf(request),
     });
     return true;
   }
+}
+
+/** The request's client: its address as the trusted proxies report it, and its user agent. */
+function clientOf(request: Request) {
+  const userAgent = request.header('user-agent');
+  return {
+    ...(request.ip === undefined ? {} : { address: request.ip }),
+    ...(userAgent === undefined ? {} : { userAgent }),
+  };
 }

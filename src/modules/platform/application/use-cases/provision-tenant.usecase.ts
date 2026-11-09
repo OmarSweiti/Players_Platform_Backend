@@ -8,6 +8,7 @@ import {
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import type { ProvisioningEnv } from '../../../../config/env.schema';
+import { AuditService } from '../../../../infrastructure/audit/audit.service';
 import {
   AccountExistsError,
   IdentityProviderPort,
@@ -65,6 +66,7 @@ export class ProvisionTenantUseCase {
     private readonly provider: IdentityProviderPort,
     private readonly clients: ProviderClients,
     private readonly config: ConfigService<ProvisioningEnv, true>,
+    private readonly audit: AuditService,
   ) {}
 
   async execute(
@@ -166,11 +168,18 @@ export class ProvisionTenantUseCase {
           changed.membership
         ) {
           // What changed, and nothing personal: no address, no name.
-          await this.records.recordProvisioning(tx, ctx, {
-            slug: input.slug,
-            domain: input.domain ?? null,
-            ownerMembershipId: membershipId,
-            created: changed,
+          await this.audit.record(tx, ctx, {
+            action: 'tenant.provisioned',
+            entityId: ctx.tenantId,
+            after: {
+              slug: input.slug,
+              domain: input.domain ?? null,
+              ownerMembershipId: membershipId,
+              tenantCreated: changed.tenant,
+              hostsRegistered: changed.hosts,
+              accountCreated: changed.account,
+              membershipCreated: changed.membership,
+            },
           });
         }
         return { membershipId, created: !member };

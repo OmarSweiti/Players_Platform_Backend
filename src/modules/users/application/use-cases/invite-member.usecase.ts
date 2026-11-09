@@ -13,6 +13,7 @@ import {
   type TenantTx,
 } from '../../../../common/tenancy/tenant-transaction';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
+import { AuditService } from '../../../../infrastructure/audit/audit.service';
 import { needsSecondFactor } from '../../../identity/application/assurance.policy';
 import {
   AccountExistsError,
@@ -56,6 +57,7 @@ export class InviteMemberUseCase {
     private readonly records: InvitationRecords,
     private readonly provider: IdentityProviderPort,
     @Inject(CLOCK) private readonly clock: Clock,
+    private readonly audit: AuditService,
   ) {}
 
   async execute(
@@ -95,11 +97,12 @@ export class InviteMemberUseCase {
         now,
       );
       if (expired && (await this.records.revoke(tx, ctx, expired.id, now))) {
-        await this.records.audit(tx, ctx, {
+        await this.audit.record(tx, ctx, {
           action: 'invitation.revoked',
-          invitationId: expired.id,
-          oldValues: { status: 'expired' },
-          newValues: { status: 'revoked', reason: 'invited-again' },
+          entityId: expired.id,
+          before: { status: 'expired' },
+          after: { status: 'revoked' },
+          reason: 'invited-again',
         });
       }
       const invitation = await this.records.create(tx, ctx, {
@@ -111,13 +114,15 @@ export class InviteMemberUseCase {
         createdAt: now,
         expiresAt: new Date(now.getTime() + INVITATION_LIFETIME_MS),
       });
-      await this.records.audit(tx, ctx, {
+      // The address is recorded as a reference to the invitation, never as itself.
+      await this.audit.record(tx, ctx, {
         action: 'invitation.created',
-        invitationId: invitation.id,
-        newValues: {
+        entityId: invitation.id,
+        after: {
+          email: invitation.email,
           role: invitation.role,
           locale: invitation.locale,
-          expiresAt: invitation.expiresAt.toISOString(),
+          expiresAt: invitation.expiresAt,
         },
       });
       return { ...invitation, status: statusOf(invitation, now) };

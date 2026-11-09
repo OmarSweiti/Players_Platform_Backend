@@ -10,6 +10,7 @@ import { mintTenantContext } from '../../src/common/tenancy/tenant-context';
 import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
 import { ReactivateMembership } from '../../src/modules/users/application/use-cases/reactivate-membership.usecase';
+import { AuditService } from '../../src/infrastructure/audit/audit.service';
 import { normalizeEmail } from '../../src/modules/users/domain/email';
 import {
   asTenant,
@@ -147,6 +148,7 @@ describe('member emails and lifetime memberships', () => {
     await Promise.all([archive(member), archive(memberOfB)]);
     const reactivate = new ReactivateMembership(
       new TenantTransactions(runPrisma()),
+      new AuditService(),
     );
     const admin = await createMember(a, 'ADMIN');
     const asAdminOfA = mintTenantContext({

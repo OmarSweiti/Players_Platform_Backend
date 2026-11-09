@@ -4,7 +4,10 @@ import { randomUUID } from 'node:crypto';
 import type { Tenant, User } from '@prisma/client';
 import { Client, type DatabaseError } from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { auditedChangeOf } from '../../src/common/audit/audit-actor';
+import {
+  AUDIT_SCHEMA_VERSION,
+  auditedChangeOf,
+} from '../../src/infrastructure/audit/audit-actor';
 import type { AuthorizedTenantContext } from '../../src/common/tenancy/tenant-context';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
 import {
@@ -264,7 +267,7 @@ describe('audit evidence is append-only', () => {
       actorJob: null,
       requestId: member.requestId,
       outcome: 'SUCCEEDED',
-      schemaVersion: 1,
+      schemaVersion: AUDIT_SCHEMA_VERSION,
       eventId: expect.stringMatching(UUID_V7) as unknown,
     });
     expect(await read((await auditAs(job)).id)).toEqual({
@@ -275,7 +278,7 @@ describe('audit evidence is append-only', () => {
       actorJob: 'test-fixture',
       requestId: job.requestId,
       outcome: 'SUCCEEDED',
-      schemaVersion: 1,
+      schemaVersion: AUDIT_SCHEMA_VERSION,
       eventId: expect.stringMatching(UUID_V7) as unknown,
     });
 

@@ -1665,7 +1665,10 @@ model AuditLog {
   oldValues      Json?          @map("old_values")
   newValues      Json?          @map("new_values")
 
-  ipAddress      String?        @map("ip_address") @db.VarChar(45)
+  /// The request's client (0.7.2; DB-56): an address PostgreSQL's inet
+  /// takes, and a user agent cut to 500 characters, so that neither can fail
+  /// the insert and abort the change. Empty when no request carried them.
+  ipAddress      String?        @map("ip_address") @db.Inet
   userAgent      String?        @map("user_agent") @db.VarChar(500)
 
   tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)

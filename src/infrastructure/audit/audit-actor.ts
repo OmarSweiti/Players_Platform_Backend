@@ -1,11 +1,13 @@
 import type { AuditActorType, AuditOutcome, UserRole } from '@prisma/client';
-import type { AuthorizedTenantContext } from '../tenancy/tenant-context';
+import type { AuthorizedTenantContext } from '../../common/tenancy/tenant-context';
 
 /**
- * The version of an audit row's old and new values (0.7.1): 1, the deltas as
- * the writers record them today. 0.7.2's allowlisted structural deltas are 2.
+ * The version of an audit row's old and new values. 1: the free-form deltas
+ * the writers recorded before 0.7.2. 2: the allowlisted structural deltas of
+ * the audit service (0.7.2; audited-actions.ts) — flat values, personal and
+ * confidential fields as references.
  */
-export const AUDIT_SCHEMA_VERSION = 1;
+export const AUDIT_SCHEMA_VERSION = 2;
 
 /**
  * What every audit row of a change says about who made it, in which request,
