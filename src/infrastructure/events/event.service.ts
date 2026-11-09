@@ -8,7 +8,6 @@ import { jobCorrelation } from '../logging/correlation';
 export class EventService {
   constructor(
     @InjectQueue('notifications') private notificationQueue: Queue,
-    @InjectQueue('audit-logs') private auditLogQueue: Queue,
     private eventEmitter: EventEmitter2,
   ) {}
 
@@ -31,17 +30,6 @@ export class EventService {
         type: 'exponential',
         delay: 2000,
       },
-    });
-  }
-
-  /**
-   * Queue audit log for async processing, correlated with the request that
-   * caused it
-   */
-  async queueAuditLog(data: any) {
-    const correlated = { ...(data as object), correlation: jobCorrelation() };
-    await this.auditLogQueue.add('create-audit-log', correlated, {
-      removeOnComplete: true,
     });
   }
 }

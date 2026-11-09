@@ -19,7 +19,8 @@ import type { Env } from '../../config/env.schema';
       },
       inject: [ConfigService],
     }),
-    BullModule.registerQueue({ name: 'notifications' }, { name: 'audit-logs' }),
+    // Audit is no queue's: it commits with the change it records (0.7.2).
+    BullModule.registerQueue({ name: 'notifications' }),
   ],
   providers: [EventService],
   exports: [EventService],
