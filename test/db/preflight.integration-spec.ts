@@ -113,6 +113,13 @@ const ROLES_BEFORE_0_6_7 = [
   'ALTER TABLE users DROP CONSTRAINT users_role_check',
 ];
 
+// And audit's deleted_at, which 0.7.1 drops once no row is archived: the
+// archived-audit rule must find one. Audit is appended, never updated, so the
+// row is written archived.
+const AUDIT_BEFORE_0_7_1 = [
+  'ALTER TABLE audit_logs ADD COLUMN deleted_at TIMESTAMPTZ(3)',
+];
+
 const PERSONAL = {
   memberEmail: 'Layla.Haddad@agency-one.test',
   duplicateEmail: ' layla.haddad@agency-one.test',
@@ -152,6 +159,8 @@ async function seedCounterExamples(
   prisma: PrismaClient,
   schema: IsolatedSchema,
 ): Promise<Seeded> {
+  /** An archived audit row, written below as it was before 0.7.1. */
+  const deletedAudit = randomUUID();
   // Row-level security (0.4.5): each row is written as its own tenant.
   const tenant = (name: string, slug: string) => {
     const id = randomUUID();
@@ -268,7 +277,10 @@ async function seedCounterExamples(
       const audit = await tx.auditLog.create({
         data: {
           tenantId: a.id,
+          actorType: 'USER',
           userId: memberB.id,
+          outcome: 'SUCCEEDED',
+          schemaVersion: 1,
           action: 'UPDATE',
           entityType: 'Player',
           entityId: player.id,
@@ -371,16 +383,6 @@ async function seedCounterExamples(
         },
       });
 
-      const deletedAudit = await tx.auditLog.create({
-        data: {
-          tenantId: a.id,
-          userId: memberA.id,
-          action: 'DELETE',
-          entityType: 'Player',
-          entityId: player.id,
-          deletedAt: new Date(),
-        },
-      });
       await tx.notification.create({
         data: {
           tenantId: a.id,
@@ -446,7 +448,6 @@ async function seedCounterExamples(
         orphans: [missingEntity.id, missingUploader.id],
         duplicates: [memberA.id, duplicate.id],
         money: [contract.id, enrollment.id, programTwo.id, overPrecise.id],
-        deletedAudit: deletedAudit.id,
         realAccount: realAccount.id,
         platformMember: platformMember.id,
         currentSeasons: currentSeasons.map((s) => s.id),
@@ -472,12 +473,20 @@ async function seedCounterExamples(
       [seeded.crossTenant.performance_records],
     ],
     ["UPDATE tenants SET domain = 'Agency-One.test' WHERE id = $1", [a.id]],
+    [
+      `INSERT INTO audit_logs (id, event_id, tenant_id, actor_type, actor_job, outcome,
+                               schema_version, action, entity_type, entity_id, deleted_at)
+       VALUES ($1, uuidv7(), $2, 'SYSTEM', 'test-fixture', 'SUCCEEDED', 1, 'DELETE', 'Player',
+               gen_random_uuid(), now())`,
+      [deletedAudit, a.id],
+    ],
   ]);
 
   const { enrollment, ...rest } = seeded;
   return {
     a,
     b,
+    deletedAudit,
     ...rest,
     // What the CHECKs of 0.4.10 refuse, the money rule's rows among them; the
     // contract has a salary but no period.
@@ -529,6 +538,7 @@ describe('the preflight report', () => {
         ...TIMESTAMPS_BEFORE_0_4_8,
         ...CONSTRAINTS_BEFORE_0_4_10,
         ...ROLES_BEFORE_0_6_7,
+        ...AUDIT_BEFORE_0_7_1,
       ].map((statement) => [statement]),
       dirty.migrationUrl,
     );

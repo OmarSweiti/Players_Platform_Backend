@@ -1598,35 +1598,85 @@ model Notification {
 // AUDIT LOG
 //////////////////////////
 
+/// Who an audit row says acted (0.7.1): a member, the system doing a job, or
+/// the platform (4.1) — as the context held it, never an invented account.
+enum AuditActorType {
+  USER
+  SYSTEM
+  PLATFORM
+
+  @@map("audit_actor_type")
+}
+
+/// How the audited action ended (0.7.1). A change is audited in its own
+/// transaction (0.7.2), so a row that exists recorded a change that took
+/// effect: SUCCEEDED. DENIED is for a refused attempt worth the record, which
+/// nothing writes yet.
+enum AuditOutcome {
+  SUCCEEDED
+  DENIED
+
+  @@map("audit_outcome")
+}
+
+/// Audit evidence (0.7.1; SR-AUD-005, SR-DB-009): append-only. The runtime
+/// role may insert and read its tenant's rows and nothing else (grants, hand-
+/// written SQL), and triggers refuse UPDATE, DELETE and TRUNCATE for every
+/// role, the owner included, until an approved retention path exists.
 model AuditLog {
   /// UUIDv7, time-ordered (0.4.11; SR-DB-002): an append-heavy table, so new
   /// keys land at the end of the index. Prisma makes it; a raw INSERT supplies
   /// its own, as the column has no SQL default. Existing ids are unchanged.
-  id          String   @id @default(uuid(7)) @db.Uuid
-  tenantId    String   @db.Uuid @map("tenant_id")
+  id             String         @id @default(uuid(7)) @db.Uuid
+  /// The event's own identity (0.7.1), UUIDv7, unique in its tenant: what
+  /// the outbox and its consumers name the same event by (0.7.5). A row from
+  /// before 0.7.1 got one stamped with its own createdAt. Prisma makes it, as
+  /// it makes the id.
+  eventId        String         @default(uuid(7)) @map("event_id") @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
 
-  userId      String?  @db.Uuid @map("user_id")
+  /// Who acted (0.7.1): a member is named (userId) exactly when actorType is
+  /// USER — a CHECK (hand-written SQL) holds it.
+  actorType      AuditActorType @map("actor_type")
+  userId         String?        @map("user_id") @db.Uuid
+  /// The actor as the context held it when it acted, never looked up later:
+  /// a member's role and session (USER only), or the job (SYSTEM only), as a
+  /// CHECK holds. Empty on a row from before 0.7.1, which did not record them,
+  /// and the session on an invitation's acceptance, which comes before the
+  /// member's first session.
+  actorRole      UserRole?      @map("actor_role")
+  actorSessionId String?        @map("actor_session_id") @db.Uuid
+  actorJob       String?        @map("actor_job") @db.VarChar(100)
+  /// The request or the job run it happened in (0.3.8): a problem's
+  /// requestId, and the log's. Empty on a row from before 0.7.1.
+  requestId      String?        @map("request_id") @db.VarChar(128)
 
-  action      String   @db.VarChar(100)
-  entityType  String   @db.VarChar(100) @map("entity_type")
-  entityId    String   @db.Uuid @map("entity_id")
+  action         String         @db.VarChar(100)
+  entityType     String         @map("entity_type") @db.VarChar(100)
+  entityId       String         @map("entity_id") @db.Uuid
+  /// Why, when the action carries a reason (a revocation's, a refusal's).
+  reason         String?        @db.VarChar(500)
+  outcome        AuditOutcome
 
-  oldValues   Json? @map("old_values")
-  newValues   Json? @map("new_values")
+  /// The version of the old and new values' shape (0.7.1): 1, the deltas as
+  /// written so far; 0.7.2's allowlisted structural deltas are the next. A
+  /// CHECK holds it at 1 or more.
+  schemaVersion  Int            @map("schema_version") @db.SmallInt
+  oldValues      Json?          @map("old_values")
+  newValues      Json?          @map("new_values")
 
-  ipAddress   String?  @db.VarChar(45) @map("ip_address")
-  userAgent   String?  @db.VarChar(500) @map("user_agent")
+  ipAddress      String?        @map("ip_address") @db.VarChar(45)
+  userAgent      String?        @map("user_agent") @db.VarChar(500)
 
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  user        User?    @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  user           User?          @relation(fields: [userId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
 
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
-  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(3)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
   @@unique([id, tenantId])
-
-  @@map("audit_logs")
+  @@unique([tenantId, eventId])
   @@index([tenantId, createdAt])
   @@index([tenantId, entityType, entityId])
   @@index([tenantId, userId])
+  @@map("audit_logs")
 }

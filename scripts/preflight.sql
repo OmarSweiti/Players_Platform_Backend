@@ -123,12 +123,18 @@ SELECT 'enrollments', n.id, n.tenant_id, 'enrollments.paid_amount is not a finit
 FROM enrollments n
 WHERE n.paid_amount = 'NaN' OR n.paid_amount < 0;
 
--- violations: deleted_audit_row
+-- generate violations: deleted_audit_row
 -- Audit is append-only (invariant 5): a soft-deleted audit row is a removed one.
-SELECT 'audit_logs' AS table_name, a.id AS row_id, a.tenant_id AS tenant_id,
+-- Asked while audit_logs still has deleted_at, which 0.7.1 drops once this
+-- finds none; after it, no row can be archived, and the rule has nothing to
+-- ask.
+SELECT $q$SELECT 'audit_logs' AS table_name, a.id AS row_id, a.tenant_id AS tenant_id,
        'audit_logs row is soft-deleted; audit is append-only' AS reason
 FROM audit_logs a
-WHERE a.deleted_at IS NOT NULL;
+WHERE a.deleted_at IS NOT NULL$q$ AS sql
+WHERE EXISTS (SELECT FROM information_schema.columns
+               WHERE table_schema = current_schema()
+                 AND table_name = 'audit_logs' AND column_name = 'deleted_at');
 
 -- violations: real_account
 -- A member whose address is neither on a domain reserved for tests and

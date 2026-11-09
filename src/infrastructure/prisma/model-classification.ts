@@ -28,13 +28,17 @@ interface Ids {
 }
 
 /**
- * What becomes of a tenant's rows. Removable unless the class says `kept`:
- * a record closed by a state of its own and never removed — an invitation
- * (0.5.10) is accepted or revoked, and the list shows each — so the runtime
- * role may not delete one.
+ * What becomes of a tenant's rows. Changed and removed unless the class says
+ * otherwise:
+ * - `kept`: a record closed by a state of its own and never removed — an
+ *   invitation (0.5.10) is accepted or revoked, and the list shows each — so
+ *   the runtime role may not delete one.
+ * - `appended`: evidence, written once and never changed or removed (0.7.1;
+ *   SR-AUD-005). The runtime role inserts and reads; triggers refuse UPDATE,
+ *   DELETE and TRUNCATE for every role, the owner included.
  */
 interface Rows {
-  readonly rows?: 'kept';
+  readonly rows?: 'kept' | 'appended';
 }
 
 export type ModelClass =
@@ -95,7 +99,7 @@ export const MODEL_CLASSIFICATION: Readonly<
   Message: TENANT_OWNED,
   Notification: TENANT_OWNED,
   // Appended on every change, never updated: its index grows at one end.
-  AuditLog: { ...TENANT_OWNED, ids: 'time-ordered' },
+  AuditLog: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'appended' },
 };
 
 /** A model as the database knows it: its table, and the column that names its tenant. */

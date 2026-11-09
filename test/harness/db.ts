@@ -93,7 +93,17 @@ export async function createIsolatedSchema(
     const { DATABASE_URL: _app, ...env } = process.env;
     await run('npx', ['--no-install', 'prisma', 'migrate', 'deploy'], {
       cwd: BACKEND_ROOT,
-      env: { ...env, MIGRATION_DATABASE_URL: migrationUrl },
+      env: {
+        ...env,
+        MIGRATION_DATABASE_URL: migrationUrl,
+        // Prisma's advisory lock is one per database, and keeps two
+        // migrations of the same schema apart. This schema is its own, with
+        // its own migration history, and no migration touches anything
+        // database-wide: the lock would only make test files that migrate
+        // their schemas at once wait on each other, past Prisma's ten
+        // seconds, into a P1002.
+        PRISMA_SCHEMA_DISABLE_ADVISORY_LOCK: '1',
+      },
     });
   } catch (error) {
     await drop();

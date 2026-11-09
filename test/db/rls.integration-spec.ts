@@ -348,8 +348,9 @@ describe('row-level security on every tenant-owned table', () => {
     );
 
     // The runtime role's privileges, table by table: data rights on a
-    // tenant's tables, but deleting the rows a table keeps; reading reference
-    // data, reading and adding identities, nothing on migration history.
+    // tenant's tables, but deleting the rows a table keeps, and changing or
+    // removing the evidence a table appends; reading reference data, reading
+    // and adding identities, nothing on migration history.
     const privileges = async (table: string) =>
       (
         await app.query<{ granted: string[] }>(
@@ -369,7 +370,9 @@ describe('row-level security on every tenant-owned table', () => {
           ? GLOBAL_RIGHTS[modelClass.runtime]
           : modelClass.rows === 'kept'
             ? ['SELECT', 'INSERT', 'UPDATE']
-            : ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
+            : modelClass.rows === 'appended'
+              ? ['SELECT', 'INSERT']
+              : ['SELECT', 'INSERT', 'UPDATE', 'DELETE'];
       expect([table, await privileges(table)]).toEqual([table, expected]);
     }
     expect(await privileges('_prisma_migrations')).toEqual([]);

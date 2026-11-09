@@ -236,8 +236,13 @@ describe('composite and same-parent foreign keys', () => {
         row: (user) => [
           'audit_logs',
           {
+            event_id: randomUUID(),
             tenant_id: a.id,
+            // A member is named exactly when one acted (0.7.1).
+            actor_type: user === null ? 'SYSTEM' : 'USER',
             user_id: user,
+            outcome: 'SUCCEEDED',
+            schema_version: 1,
             action: 'UPDATE',
             entity_type: 'Player',
             entity_id: playerA.id,

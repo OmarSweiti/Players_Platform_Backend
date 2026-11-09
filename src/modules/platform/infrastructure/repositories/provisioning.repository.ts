@@ -1,3 +1,4 @@
+import { auditedChangeOf } from '../../../../common/audit/audit-actor';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@prisma/client';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
@@ -109,7 +110,8 @@ export class ProvisioningRepository implements ProvisioningRecords {
     await tx.auditLog.create({
       data: {
         tenantId: ctx.tenantId,
-        userId: null, // a platform operation: no member acted
+        // A platform operation, as the CLI's job: no member acted.
+        ...auditedChangeOf(ctx),
         action: 'tenant.provisioned',
         entityType: 'Tenant',
         entityId: ctx.tenantId,
