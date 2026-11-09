@@ -1,8 +1,17 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ValidationFailedError } from '../../../../common/errors/domain-error';
 import { AuthBootstrap } from '../../../../common/tenancy/auth-bootstrap';
+import {
+  DomainError,
+  ValidationFailedError,
+} from '../../../../common/errors/domain-error';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
 import {
+  type ProviderIdentity,
+  SecurityEvents,
+  type SecurityRequest,
+} from '../../../../infrastructure/audit/security-events';
+import {
+  checkWordsOf,
   IdentityProviderPort,
   LOGOUT_TOKEN_MAX_AGE_SECONDS,
   ProviderAnswerRefusedError,
@@ -36,6 +45,12 @@ export class LogoutTokenRefusedError extends ValidationFailedError {
  * event, `sid` or `sub`, no nonce (the adapter) — then honoured once: a
  * replayed `jti` is refused. The sessions it names end, in every tenant. No
  * session or CSRF token is involved: the token itself is the proof.
+ *
+ * Each delivery is a security event (0.7.3), with no tenant — its sessions
+ * may be in several: honoured, with whom the token named and how many
+ * sessions ended, or refused, with the check that failed. An honoured logout
+ * whose event cannot be written is not honoured: the provider delivers it
+ * again.
  */
 @Injectable()
 export class BackchannelLogoutUseCase {
@@ -43,35 +58,75 @@ export class BackchannelLogoutUseCase {
     private readonly provider: IdentityProviderPort,
     private readonly replays: LogoutTokenReplays,
     private readonly bootstrap: AuthBootstrap,
+    private readonly events: SecurityEvents,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
-  async execute(logoutToken: string): Promise<{ revoked: number }> {
-    let claims;
+  async execute(
+    logoutToken: string,
+    request: SecurityRequest,
+  ): Promise<{ revoked: number }> {
+    let identity: ProviderIdentity | undefined;
     try {
-      claims = await this.provider.verifyLogoutToken(logoutToken);
-    } catch (error) {
-      if (error instanceof ProviderAnswerRefusedError) {
-        throw new LogoutTokenRefusedError(error.check);
+      let claims;
+      try {
+        claims = await this.provider.verifyLogoutToken(logoutToken);
+      } catch (error) {
+        if (error instanceof ProviderAnswerRefusedError) {
+          throw new LogoutTokenRefusedError(error.check);
+        }
+        throw error;
       }
-      throw error;
-    }
-    const first = await this.replays.claim(
-      claims.issuer,
-      claims.jti,
-      LOGOUT_TOKEN_REMEMBERED_SECONDS,
-    );
-    if (!first) throw new LogoutTokenRefusedError('logout_token:replayed');
-    try {
-      const revoked = await this.bootstrap.revokeProviderSessions(
-        claims,
-        this.clock.now(),
+      identity = {
+        issuer: claims.issuer,
+        ...(claims.subject !== undefined ? { subject: claims.subject } : {}),
+      };
+      const first = await this.replays.claim(
+        claims.issuer,
+        claims.jti,
+        LOGOUT_TOKEN_REMEMBERED_SECONDS,
       );
-      return { revoked };
+      if (!first) throw new LogoutTokenRefusedError('logout_token:replayed');
+      try {
+        const revoked = await this.bootstrap.revokeProviderSessions(
+          claims,
+          this.clock.now(),
+        );
+        await this.events.record(
+          {
+            type: 'backchannel_logout',
+            outcome: 'SUCCEEDED',
+            identity,
+            metadata: { revoked },
+          },
+          request,
+        );
+        return { revoked };
+      } catch (error) {
+        // Not honoured: the provider may deliver it again.
+        await this.replays.release(claims.issuer, claims.jti);
+        throw error;
+      }
     } catch (error) {
-      // Not honoured: the provider may deliver it again.
-      await this.replays.release(claims.issuer, claims.jti);
+      await this.events.record(
+        {
+          type: 'backchannel_logout',
+          outcome: 'REFUSED',
+          reason: refusalOf(error),
+          identity,
+        },
+        request,
+      );
       throw error;
     }
   }
+}
+
+/** Why a delivery was not honoured, as its security event's reason. */
+function refusalOf(error: unknown): string {
+  if (error instanceof LogoutTokenRefusedError) {
+    return checkWordsOf(error.check);
+  }
+  if (error instanceof DomainError) return error.code;
+  return 'internal_error';
 }

@@ -8,6 +8,7 @@ import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { hostOf } from '../../../../common/tenancy/tenant-resolver';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
+import { SecurityEvents } from '../../../../infrastructure/audit/security-events';
 import { IdentityProviderPort } from '../ports/identity-provider.port';
 import { OwnSessions } from '../ports/own-sessions.port';
 
@@ -27,7 +28,8 @@ export interface SignedOut {
  * member's (`everywhere`), ended in PostgreSQL first — from the next request
  * they sign nobody in — and then the provider's end-session URL, which
  * returns the browser to this host's start page. The controller clears the
- * cookie.
+ * cookie. The sign-out's security event (0.7.3) is written in the transaction
+ * that ends the sessions.
  */
 @Injectable()
 export class SignOutUseCase {
@@ -37,6 +39,7 @@ export class SignOutUseCase {
     private readonly tenants: TenantTransactions,
     private readonly sessions: OwnSessions,
     private readonly provider: IdentityProviderPort,
+    private readonly events: SecurityEvents,
     @Inject(CLOCK) private readonly clock: Clock,
   ) {}
 
@@ -49,12 +52,27 @@ export class SignOutUseCase {
     }
     const { sessionId } = ctx.actor;
     const at = this.clock.now();
-    const revoked = await this.tenants.withTenantTransaction(ctx, async (tx) =>
-      input.everywhere
-        ? this.sessions.revokeAll(tx, ctx, 'SIGN_OUT_EVERYWHERE', at)
-        : Number(
-            await this.sessions.revoke(tx, ctx, sessionId, 'SIGN_OUT', at),
-          ),
+    const revoked = await this.tenants.withTenantTransaction(
+      ctx,
+      async (tx) => {
+        const ended = input.everywhere
+          ? await this.sessions.revokeAll(tx, ctx, 'SIGN_OUT_EVERYWHERE', at)
+          : Number(
+              await this.sessions.revoke(tx, ctx, sessionId, 'SIGN_OUT', at),
+            );
+        await this.events.record(
+          {
+            type: input.everywhere ? 'sign_out_everywhere' : 'sign_out',
+            outcome: 'SUCCEEDED',
+            tenantHint: ctx.tenantId,
+            sessionId,
+            metadata: { revoked: ended },
+          },
+          ctx,
+          tx,
+        );
+        return ended;
+      },
     );
     return {
       revoked,
