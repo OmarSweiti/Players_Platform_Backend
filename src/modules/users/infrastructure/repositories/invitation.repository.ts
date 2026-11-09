@@ -1,3 +1,4 @@
+import { auditedChangeOf } from '../../../../common/audit/audit-actor';
 import { Injectable } from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
 import {
@@ -189,7 +190,7 @@ export class InvitationRepository implements InvitationRecords {
     await tx.auditLog.create({
       data: {
         tenantId: ctx.tenantId,
-        userId: ctx.actor.kind === 'USER' ? ctx.actor.userId : null,
+        ...auditedChangeOf(ctx),
         action: entry.action,
         entityType: 'Invitation',
         entityId: entry.invitationId,

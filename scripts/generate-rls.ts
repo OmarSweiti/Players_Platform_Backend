@@ -40,7 +40,7 @@ export function rlsFor({
     modelClass.kind === 'tenant-owned'
       ? `one tenant's rows, by ${tenantColumn}`
       : `each tenant sees and writes its own row`;
-  const kept = modelClass.kind === 'tenant-owned' && modelClass.rows === 'kept';
+  const rows = modelClass.kind === 'tenant-owned' ? modelClass.rows : undefined;
   return [
     `-- ${table}: ${whose}.`,
     `ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY;`,
@@ -52,10 +52,22 @@ export function rlsFor({
     `CREATE TRIGGER ${table}_tenant_immutable BEFORE UPDATE ON ${table}`,
     `  FOR EACH ROW WHEN (OLD.${tenantColumn} IS DISTINCT FROM NEW.${tenantColumn})`,
     `  EXECUTE FUNCTION refuse_tenant_change('${tenantColumn}');`,
-    ...(kept
+    ...(rows === 'kept'
       ? [
           `-- Closed by a state of its own, never removed.`,
           `REVOKE DELETE ON ${table} FROM ${RUNTIME_ROLE};`,
+        ]
+      : []),
+    // Evidence (0.7.1): reject_evidence_mutation() is the audit_append_only
+    // migration's, for every table of evidence.
+    ...(rows === 'appended'
+      ? [
+          `-- Evidence: appended, and never changed or removed by any role.`,
+          `REVOKE UPDATE, DELETE, TRUNCATE ON ${table} FROM ${RUNTIME_ROLE};`,
+          `CREATE TRIGGER ${table}_no_update_delete BEFORE UPDATE OR DELETE ON ${table}`,
+          `  FOR EACH ROW EXECUTE FUNCTION reject_evidence_mutation();`,
+          `CREATE TRIGGER ${table}_no_truncate BEFORE TRUNCATE ON ${table}`,
+          `  FOR EACH STATEMENT EXECUTE FUNCTION reject_evidence_mutation();`,
         ]
       : []),
   ].join('\n');

@@ -1,3 +1,5 @@
+import { AUDIT_SCHEMA_VERSION } from '../audit/audit-actor';
+import { currentRequestId } from '../../infrastructure/logging/correlation';
 import { Injectable } from '@nestjs/common';
 import type { Prisma, UserRole } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma/prisma.service';
@@ -391,10 +393,17 @@ export class AuthBootstrap {
           acceptedIdentityId: identity.id,
         },
       });
+      // The new member accepted it, in the role it grants; their first
+      // session comes after, so none is named.
       await tx.auditLog.create({
         data: {
           tenantId: tenant.id,
+          actorType: 'USER',
           userId: member.id,
+          actorRole: invitation.role,
+          requestId: currentRequestId(),
+          outcome: 'SUCCEEDED',
+          schemaVersion: AUDIT_SCHEMA_VERSION,
           action: 'invitation.accepted',
           entityType: 'Invitation',
           entityId: invitation.id,

@@ -53,6 +53,9 @@ const OTHER_STEPS_CHECKS = [
   'invitations_token_hash_check',
   // 0.6.7: test/authz/platform-access.e2e-spec.ts
   'users_role_check',
+  // 0.7.1: test/db/audit-immutability.integration-spec.ts
+  'audit_logs_actor_check',
+  'audit_logs_schema_version_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
@@ -254,8 +257,10 @@ describe('integrity constraints in SQL', () => {
     if (table === 'audit_logs') {
       return attempt(
         a,
-        `INSERT INTO audit_logs (id, tenant_id, action, entity_type, entity_id, ${columns.join(', ')})
-         VALUES (gen_random_uuid(), $1, 'test.probe', 'Player', gen_random_uuid(), ${expressions.join(', ')})
+        `INSERT INTO audit_logs (id, event_id, tenant_id, actor_type, actor_job, outcome, schema_version,
+                                 action, entity_type, entity_id, ${columns.join(', ')})
+         VALUES (gen_random_uuid(), uuidv7(), $1, 'SYSTEM', 'test-fixture', 'SUCCEEDED', 1,
+                 'test.probe', 'Player', gen_random_uuid(), ${expressions.join(', ')})
          RETURNING tenant_id AS id`,
         [a.id],
       );

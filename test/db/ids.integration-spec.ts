@@ -92,6 +92,10 @@ describe('UUIDv7 for high-ingest tables', () => {
         tx.auditLog.create({
           data: {
             tenantId: tenant.id,
+            actorType: 'SYSTEM',
+            actorJob: 'test-fixture',
+            outcome: 'SUCCEEDED',
+            schemaVersion: 1,
             action: 'test.probe',
             entityType: 'Player',
             entityId: randomUUID(),
@@ -145,8 +149,9 @@ describe('UUIDv7 for high-ingest tables', () => {
     try {
       await app.query("SELECT set_config('app.tenant_id', $1, true)", [b.id]);
       const { rows } = await app.query<{ id: string }>(
-        `INSERT INTO audit_logs (id, tenant_id, action, entity_type, entity_id)
-         VALUES ($1, $2, 'test.probe', 'Player', gen_random_uuid())
+        `INSERT INTO audit_logs (id, event_id, tenant_id, actor_type, outcome, schema_version,
+                                 action, entity_type, entity_id)
+         VALUES ($1, uuidv7(), $2, 'SYSTEM', 'SUCCEEDED', 1, 'test.probe', 'Player', gen_random_uuid())
          RETURNING id`,
         [earlier, b.id],
       );

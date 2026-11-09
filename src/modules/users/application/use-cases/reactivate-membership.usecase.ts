@@ -1,3 +1,4 @@
+import { auditedChangeOf } from '../../../../common/audit/audit-actor';
 import { Injectable } from '@nestjs/common';
 import { ConflictError } from '../../../../common/errors/domain-error';
 import { authorizeChange } from '../../../../common/policy/policy';
@@ -40,7 +41,7 @@ export class ReactivateMembership {
       await tx.auditLog.create({
         data: {
           tenantId: ctx.tenantId,
-          userId: ctx.actor.kind === 'USER' ? ctx.actor.userId : null,
+          ...auditedChangeOf(ctx),
           action: 'membership.reactivated',
           entityType: 'User',
           entityId: member.id,
