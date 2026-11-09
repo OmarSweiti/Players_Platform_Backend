@@ -31,6 +31,18 @@ export type Actor =
     }
   | { readonly kind: 'SYSTEM'; readonly job: string };
 
+/**
+ * The client a request came from, as the trusted proxies report it (0.3.8):
+ * recorded with audit (0.7.2), as the request id is, and never used to decide
+ * anything. Only a request's context has one — the session guard's — and its
+ * values are what the request carried, unchecked: the audit service keeps
+ * them only as values that cannot fail its insert.
+ */
+export interface TenantClient {
+  readonly address?: string;
+  readonly userAgent?: string;
+}
+
 declare const minted: unique symbol;
 
 /** A context only `mintTenantContext` makes: an object literal, a copy or a parsed body is not one. */
@@ -39,6 +51,7 @@ export type AuthorizedTenantContext = Readonly<{
   actor: Actor;
   requestId: string;
   locale: 'ar' | 'en';
+  client?: TenantClient;
 }> & { readonly [minted]: true };
 
 const Fields = z.strictObject({
@@ -57,6 +70,14 @@ const Fields = z.strictObject({
   ]),
   requestId: z.string().min(1).max(128),
   locale: z.enum(['ar', 'en']),
+  // Unbounded here: a long user agent must not fail the request. The audit
+  // service bounds what it keeps.
+  client: z
+    .strictObject({
+      address: z.string().optional(),
+      userAgent: z.string().optional(),
+    })
+    .optional(),
 });
 export type TenantContextFields = z.input<typeof Fields>;
 
@@ -84,6 +105,7 @@ export function mintTenantContext(
   const context = Object.freeze({
     ...checked,
     actor: Object.freeze({ ...checked.actor }),
+    ...(checked.client ? { client: Object.freeze({ ...checked.client }) } : {}),
   }) as unknown as AuthorizedTenantContext;
   mintedContexts.add(context);
   return context;

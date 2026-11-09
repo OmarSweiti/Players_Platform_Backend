@@ -10,6 +10,7 @@ import { afterAll, inject } from 'vitest';
 import {
   type AuthorizedTenantContext,
   mintTenantContext,
+  type TenantClient,
 } from '../../src/common/tenancy/tenant-context';
 import {
   TenantTransactions,
@@ -71,10 +72,12 @@ export function testContext(
 /**
  * The context the session guard mints for `member` (0.5.6): their tenant, a
  * session of theirs and their role, for calling a use case directly as that
- * member would through a route.
+ * member would through a route — and, when given, the request's client
+ * (0.7.2).
  */
 export function memberContext(
   member: Pick<User, 'id' | 'tenantId' | 'role'>,
+  client?: TenantClient,
 ): AuthorizedTenantContext {
   return mintTenantContext({
     tenantId: member.tenantId,
@@ -86,6 +89,7 @@ export function memberContext(
     },
     requestId: randomUUID(),
     locale: 'en',
+    ...(client ? { client } : {}),
   });
 }
 
