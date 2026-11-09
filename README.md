@@ -1,5 +1,7 @@
 # Sadara — backend
 
+![visitors](https://img.shields.io/endpoint?url=https%3A%2F%2Fgist.githubusercontent.com%2FOmarSweiti%2F37ca8cad090d0421f5f33ddc22e072fd%2Fraw%2Fvisitors.json)
+
 The API, worker and realtime processes of the Sadara player-management platform: NestJS 12, Prisma 7,
 PostgreSQL 18, S3-compatible object storage and Valkey. Part of
 [Players_Platform](https://github.com/OmarSweiti/Players_Platform), which holds the plan, the local stack
