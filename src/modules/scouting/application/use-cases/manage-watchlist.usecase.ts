@@ -5,14 +5,22 @@ import {
   type AuthorizedTenantContext,
 } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import {
+  requirePlayer,
+  ScoutingDirectory,
+} from '../ports/scouting-directory.port';
 import { Watchlists } from '../ports/watchlists.port';
 
-/** The acting member's own watchlist, in the context's tenant (0.4.12). */
+/**
+ * The acting member's own watchlist, in the context's tenant (0.4.12): of its
+ * players only — another tenant's is not found (0.6.9).
+ */
 @Injectable()
 export class ManageWatchlistUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly watchlistRepo: Watchlists,
+    private readonly directory: ScoutingDirectory,
   ) {}
 
   /**
@@ -32,16 +40,17 @@ export class ManageWatchlistUseCase {
     }
 
     const memberId = actingMemberOf(ctx);
-    return this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.watchlistRepo.addToWatchlist(
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      await requirePlayer(this.directory, tx, ctx, playerId);
+      return this.watchlistRepo.addToWatchlist(
         tx,
         ctx,
         memberId,
         playerId,
         priority,
         notes,
-      ),
-    );
+      );
+    });
   }
 
   /**
@@ -69,8 +78,9 @@ export class ManageWatchlistUseCase {
    */
   async isInWatchlist(ctx: AuthorizedTenantContext, playerId: string) {
     const memberId = actingMemberOf(ctx);
-    return this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.watchlistRepo.isInWatchlist(tx, ctx, memberId, playerId),
-    );
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      await requirePlayer(this.directory, tx, ctx, playerId);
+      return this.watchlistRepo.isInWatchlist(tx, ctx, memberId, playerId);
+    });
   }
 }

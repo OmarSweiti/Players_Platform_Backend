@@ -12,12 +12,17 @@ import { authorizeChange } from '../../../../common/policy/policy';
 import type { AuthorizedTenantContext } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
 import { scoutingReportPolicy } from '../policies/scouting-report.policy';
+import {
+  requirePlayer,
+  ScoutingDirectory,
+} from '../ports/scouting-directory.port';
 
 @Injectable()
 export class UpdateScoutingReportUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly scoutingReportRepo: ScoutingReports,
+    private readonly directory: ScoutingDirectory,
   ) {}
 
   async execute(
@@ -96,6 +101,10 @@ export class UpdateScoutingReportUseCase {
             ),
         },
       );
+      // Moved, only to a player of the tenant (0.6.9).
+      if (input.playerId !== undefined) {
+        await requirePlayer(this.directory, tx, ctx, input.playerId);
+      }
       return this.scoutingReportRepo.update(tx, ctx, id, input);
     });
   }

@@ -204,8 +204,8 @@ describe('the existing modules on the tenant transaction', () => {
       assignment: { tenantId: a.id, assignedById: scoutA.id },
     });
 
-    // A tenant in the body is refused; another tenant's player cannot be
-    // named, since the report's key to it carries the context's tenant.
+    // A tenant in the body is refused; another tenant's player is not found
+    // (0.6.9), and the report's key to it carries the context's tenant too.
     expect(
       (
         await post('/scouting/reports', {
@@ -217,7 +217,7 @@ describe('the existing modules on the tenant transaction', () => {
     const crossing = await post('/scouting/reports', {
       playerId: playerB.id,
     });
-    expect(crossing.status).toBe(409);
+    expect(crossing.status).toBe(404);
     expect(
       await asTenant(b.id, (tx) =>
         tx.scoutingReport.count({ where: { playerId: playerB.id } }),
@@ -294,9 +294,9 @@ describe('the existing modules on the tenant transaction', () => {
     const repositories = sources.filter(
       ([path]) => path.includes('/repositories/') && !path.endsWith(REFERENCE),
     );
-    // The users module's invitations (0.5.10) are the sixth; medical's
-    // players (0.6.9) the seventh.
-    expect(repositories.length).toBe(7);
+    // The users module's invitations (0.5.10) are the sixth; medical's and
+    // scouting's players and members (0.6.9) the seventh and eighth.
+    expect(repositories.length).toBe(8);
     for (const [path, text] of repositories) {
       const methods = text
         .split(/^ {2}async /m)
