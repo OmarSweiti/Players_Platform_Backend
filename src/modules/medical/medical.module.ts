@@ -4,6 +4,8 @@ import { MedicalRecordRepository } from './infrastructure/repositories/medical-r
 import { MedicalRecords } from './application/ports/medical-records.port';
 import { TreatmentSessionRepository } from './infrastructure/repositories/treatment-session.repository';
 import { TreatmentSessions } from './application/ports/treatment-sessions.port';
+import { MedicalPlayerRepository } from './infrastructure/repositories/medical-player.repository';
+import { MedicalPlayers } from './application/ports/medical-players.port';
 import { CreateMedicalRecordUseCase } from './application/use-cases/create-medical-record.usecase';
 import { UpdateMedicalRecordUseCase } from './application/use-cases/update-medical-record.usecase';
 import { CreateTreatmentSessionUseCase } from './application/use-cases/create-treatment-session.usecase';
@@ -23,6 +25,7 @@ import { behindFeature } from '../../common/feature-flags/feature-gate.guard';
     // Ports, and the repositories that implement them (0.4.12)
     { provide: MedicalRecords, useClass: MedicalRecordRepository },
     { provide: TreatmentSessions, useClass: TreatmentSessionRepository },
+    { provide: MedicalPlayers, useClass: MedicalPlayerRepository },
 
     // Use Cases
     CreateMedicalRecordUseCase,

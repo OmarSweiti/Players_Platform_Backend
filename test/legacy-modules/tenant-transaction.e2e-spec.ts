@@ -109,17 +109,14 @@ describe('the existing modules on the tenant transaction', () => {
       ids((await get(`/medical/records/player/${playerA.id}`)).body),
     ).toEqual([liveA.id]);
     expect(
-      ids((await get(`/medical/records/player/${playerB.id}`)).body),
-    ).toEqual([]);
-    expect(
       (await get(`/medical/records/player/${playerA.id}/history`)).body,
     ).toMatchObject({ data: { total: 1 } });
-    expect(
-      ids((await get(`/medical/sessions/player/${playerB.id}`)).body),
-    ).toEqual([]);
 
-    // By id: B's record and session, and A's archived record, are not found.
+    // By id: B's player, record and session, and A's archived record, are
+    // not found (B's player since 0.6.9: a foreign id is never served).
     for (const path of [
+      `/medical/records/player/${playerB.id}`,
+      `/medical/sessions/player/${playerB.id}`,
       `/medical/records/${ofB.id}`,
       `/medical/records/${archivedA.id}`,
       `/medical/sessions/${sessionB.id}`,
@@ -297,8 +294,9 @@ describe('the existing modules on the tenant transaction', () => {
     const repositories = sources.filter(
       ([path]) => path.includes('/repositories/') && !path.endsWith(REFERENCE),
     );
-    // The users module's invitations (0.5.10) are the sixth.
-    expect(repositories.length).toBe(6);
+    // The users module's invitations (0.5.10) are the sixth; medical's
+    // players (0.6.9) the seventh.
+    expect(repositories.length).toBe(7);
     for (const [path, text] of repositories) {
       const methods = text
         .split(/^ {2}async /m)

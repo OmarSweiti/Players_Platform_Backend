@@ -5,6 +5,7 @@ import {
   type AuthorizedTenantContext,
 } from '../../../../common/tenancy/tenant-context';
 import { TenantTransactions } from '../../../../common/tenancy/tenant-transaction';
+import { MedicalPlayers, requirePlayer } from '../ports/medical-players.port';
 import {
   type CreateMedicalRecordInput,
   MedicalRecords,
@@ -15,9 +16,13 @@ export class CreateMedicalRecordUseCase {
   constructor(
     private readonly tenants: TenantTransactions,
     private readonly medicalRecordRepo: MedicalRecords,
+    private readonly players: MedicalPlayers,
   ) {}
 
-  /** The record is the context's tenant's, written by the acting member. */
+  /**
+   * The record is the context's tenant's, written by the acting member, about
+   * a player of the tenant: another tenant's is not found (0.6.9).
+   */
   async execute(
     ctx: AuthorizedTenantContext,
     input: Omit<CreateMedicalRecordInput, 'createdById'>,
@@ -53,8 +58,9 @@ export class CreateMedicalRecordUseCase {
     }
 
     const createdById = actingMemberOf(ctx);
-    return this.tenants.withTenantTransaction(ctx, (tx) =>
-      this.medicalRecordRepo.create(tx, ctx, { ...input, createdById }),
-    );
+    return this.tenants.withTenantTransaction(ctx, async (tx) => {
+      await requirePlayer(this.players, tx, ctx, input.playerId);
+      return this.medicalRecordRepo.create(tx, ctx, { ...input, createdById });
+    });
   }
 }
