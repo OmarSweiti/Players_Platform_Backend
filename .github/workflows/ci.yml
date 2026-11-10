@@ -110,6 +110,7 @@ jobs:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         run: |
           docker exec -i -e SADARA_MIGRATOR_PASSWORD=ci-migrator -e SADARA_APP_PASSWORD=ci-app \
+            -e SADARA_REGISTRY_PASSWORD=ci-registry \
             "$POSTGRES_CONTAINER" psql -U ci -d ci -f - <scripts/database-roles.sql
       # Each run migrates a schema of its own, sadara_test_<random>, in the
       # service database, and drops it afterwards: the migration replay below
@@ -119,6 +120,8 @@ jobs:
         env:
           DATABASE_URL_TEST: postgresql://sadara_app:ci-app@localhost:5432/ci
           MIGRATION_DATABASE_URL_TEST: postgresql://sadara_migrator:ci-migrator@localhost:5432/ci
+          # The worker's tests log in as its registry role (0.7.6).
+          REGISTRY_DATABASE_URL_TEST: postgresql://sadara_registry:ci-registry@localhost:5432/ci
         run: npx --no-install vitest run --project integration
       - name: API tests through HTTP, on PostgreSQL 18 and Valkey
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' && steps.roles.outcome == 'success' }}

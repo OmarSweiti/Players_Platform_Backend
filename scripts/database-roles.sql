@@ -7,6 +7,12 @@
 --   sadara_app       The runtime role: the API, the worker and the tests connect as
 --                    it. Data only (DML) — no ownership, no DDL, never past
 --                    row-level security — and its work is bounded in time (DB-52).
+--   sadara_registry  The worker's discovery role (0.7.6): it finds which tenants
+--                    are active and nothing else. The migration that grants it
+--                    reads only tenant_directory's id and is_active; it logs in
+--                    only where SADARA_REGISTRY_PASSWORD is given (the local
+--                    stack, and the tests that run the worker), and exists
+--                    without a login elsewhere, so that the grant always applies.
 --
 -- Run by a superuser through psql, connected to the database it provisions:
 --
@@ -36,6 +42,15 @@ SELECT length(:'migrator_password') > 0 AND length(:'app_password') > 0 AS passw
 DO $$ BEGIN RAISE EXCEPTION 'database-roles: SADARA_MIGRATOR_PASSWORD and SADARA_APP_PASSWORD must not be empty'; END $$;
 \endif
 
+-- The registry role's password is optional: without it the role cannot log in.
+\getenv registry_password SADARA_REGISTRY_PASSWORD
+SELECT :{?registry_password} AS registry_set \gset
+\if :registry_set
+SELECT length(:'registry_password') > 0 AS registry_login \gset
+\else
+\set registry_login false
+\endif
+
 -- ── The roles: the cluster's ─────────────────────────────────────────────────
 SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sadara_owner') AS missing \gset
 \if :missing
@@ -49,12 +64,23 @@ SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sadara_app') AS missing
 \if :missing
 CREATE ROLE sadara_app;
 \endif
+SELECT NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'sadara_registry') AS missing \gset
+\if :missing
+CREATE ROLE sadara_registry;
+\endif
 
 ALTER ROLE sadara_owner NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS;
 ALTER ROLE sadara_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT
   PASSWORD :'migrator_password';
 ALTER ROLE sadara_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT
   PASSWORD :'app_password';
+\if :registry_login
+ALTER ROLE sadara_registry LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT
+  PASSWORD :'registry_password';
+\else
+ALTER ROLE sadara_registry NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS NOINHERIT
+  PASSWORD NULL;
+\endif
 
 -- The migrator may become the owner, and does at every login: what it creates is
 -- the owner's. It inherits none of the owner's rights without that switch.
@@ -67,12 +93,16 @@ ALTER ROLE sadara_app SET statement_timeout = '15s';
 ALTER ROLE sadara_app SET lock_timeout = '5s';
 ALTER ROLE sadara_app SET idle_in_transaction_session_timeout = '60s';
 ALTER ROLE sadara_app SET timezone = 'UTC';
+-- The registry role reads one small view: a second is more than it needs.
+ALTER ROLE sadara_registry SET statement_timeout = '5s';
+ALTER ROLE sadara_registry SET lock_timeout = '2s';
+ALTER ROLE sadara_registry SET idle_in_transaction_session_timeout = '10s';
 
 -- ── The connected database: its owner and its grants ─────────────────────────
 SELECT current_database() AS database \gset
 ALTER DATABASE :"database" OWNER TO sadara_owner;
 REVOKE ALL ON DATABASE :"database" FROM PUBLIC;
-GRANT CONNECT ON DATABASE :"database" TO sadara_migrator, sadara_app;
+GRANT CONNECT ON DATABASE :"database" TO sadara_migrator, sadara_app, sadara_registry;
 
 -- The public schema belongs to the database's owner (pg_database_owner); nobody
 -- else creates in it, and the runtime role only reaches into it.
@@ -86,4 +116,7 @@ ALTER DEFAULT PRIVILEGES FOR ROLE sadara_owner GRANT USAGE ON SCHEMAS TO sadara_
 ALTER DEFAULT PRIVILEGES FOR ROLE sadara_owner GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO sadara_app;
 ALTER DEFAULT PRIVILEGES FOR ROLE sadara_owner GRANT USAGE, SELECT ON SEQUENCES TO sadara_app;
 
-\echo database-roles: sadara_owner, sadara_migrator and sadara_app provisioned for :database
+-- The registry role gets no default privilege: its one grant is a migration's
+-- (…_registry_role), on tenant_directory's id and is_active alone.
+
+\echo database-roles: sadara_owner, sadara_migrator, sadara_app and sadara_registry provisioned for :database

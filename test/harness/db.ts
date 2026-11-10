@@ -37,6 +37,18 @@ export function testMigrationDatabaseUrl(): string {
   );
 }
 
+/**
+ * The same database as the registry role (0.7.6), which reads the tenant
+ * directory's ids: what the worker finds its tenants with.
+ */
+export function testRegistryDatabaseUrl(): string {
+  return urlFrom(
+    'REGISTRY_DATABASE_URL_TEST',
+    'sadara_registry',
+    'SADARA_REGISTRY_PASSWORD',
+  );
+}
+
 export interface IsolatedSchema {
   /** `sadara_test_<12 hex>`: unique per run, so two runs never share data. */
   schema: string;
@@ -63,7 +75,7 @@ async function onDatabase<T>(
 }
 
 /** `url` with `?schema=…` set. */
-function inSchema(url: string, schema: string): string {
+export function inSchema(url: string, schema: string): string {
   const scoped = new URL(url);
   scoped.searchParams.set('schema', schema);
   return scoped.toString();
