@@ -1,5 +1,8 @@
 import { z } from 'zod';
-import type { ConfidentialClass } from './confidential-class';
+import {
+  ACCESS_AUDITED_CLASSES,
+  type ConfidentialClass,
+} from './confidential-class';
 
 // Confidential projections (0.6.4; I-2, SR-ACL-008). A response is built on
 // the server from its schema, an allowlist: only the fields the schema names
@@ -10,6 +13,12 @@ import type { ConfidentialClass } from './confidential-class';
 // tests do not trust them: test/authz/confidential-fields.e2e-spec.ts checks
 // every response against an independent classification
 // (test/fixtures/field-classification.ts).
+//
+// A field of an access-audited class (0.7.4; I-5) leaves only through
+// `projectAndRecord`, whose one caller is the access audit
+// (src/infrastructure/audit/access-audit.ts): the access is recorded, in the
+// caller's transaction, before the value is returned. `project` refuses to
+// release one.
 
 const markers = z.registry<{ readonly confidential: ConfidentialClass }>();
 
@@ -41,6 +50,22 @@ export class UnprojectableResponse extends Error {
   }
 }
 
+/**
+ * A response that would release a field of an access-audited class without
+ * its access event: a programming error, refused before anything leaves.
+ */
+export class UnauditedRelease extends Error {
+  constructor(
+    readonly path: string,
+    readonly confidentialClass: ConfidentialClass,
+  ) {
+    super(
+      `The response at "${path}" would release ${confidentialClass} without an access event: release it through the access audit.`,
+    );
+    this.name = new.target.name;
+  }
+}
+
 /** What `walk` answers for a field that does not leave. */
 const WITHHELD = Symbol('withheld');
 
@@ -60,8 +85,47 @@ export function project<V>(
   value: V,
   disclosed: ReadonlySet<ConfidentialClass>,
 ): V {
-  const projected = walk(schema, value, disclosed, '');
-  return (projected === WITHHELD ? undefined : projected) as V;
+  const { projected, carried } = projectCarrying(schema, value, disclosed);
+  const audited = [...carried].find(([, cls]) =>
+    ACCESS_AUDITED_CLASSES.includes(cls),
+  );
+  if (audited) throw new UnauditedRelease(...audited);
+  return projected;
+}
+
+/**
+ * The response, as `project` builds it, released only once `recordAccess`
+ * has recorded the access-audited classes it carries (0.7.4; I-5): their
+ * names, in the order of CONFIDENTIAL_CLASSES. A response that carries none
+ * records nothing. A recording that fails rejects, and the value is never
+ * returned: the data is withheld. The access audit is its one caller, which
+ * records in the caller's transaction.
+ */
+export async function projectAndRecord<V>(
+  schema: z.ZodType,
+  value: V,
+  disclosed: ReadonlySet<ConfidentialClass>,
+  recordAccess: (classes: readonly ConfidentialClass[]) => Promise<void>,
+): Promise<V> {
+  const { projected, carried } = projectCarrying(schema, value, disclosed);
+  const present = new Set([...carried].map(([, cls]) => cls));
+  const classes = ACCESS_AUDITED_CLASSES.filter((cls) => present.has(cls));
+  if (classes.length > 0) await recordAccess(classes);
+  return projected;
+}
+
+/** The projection, and every confidential field it carries: where, and its class. */
+function projectCarrying<V>(
+  schema: z.ZodType,
+  value: V,
+  disclosed: ReadonlySet<ConfidentialClass>,
+): { projected: V; carried: Map<string, ConfidentialClass> } {
+  const carried = new Map<string, ConfidentialClass>();
+  const projected = walk(schema, value, disclosed, '', carried);
+  return {
+    projected: (projected === WITHHELD ? undefined : projected) as V,
+    carried,
+  };
 }
 
 function walk(
@@ -69,9 +133,15 @@ function walk(
   value: unknown,
   disclosed: ReadonlySet<ConfidentialClass>,
   path: string,
+  carried: Map<string, ConfidentialClass>,
 ): unknown {
   const marker = markers.get(schema);
   if (marker && !disclosed.has(marker.confidential)) return WITHHELD;
+  // A field of a disclosed class leaves, null or not: its being there is
+  // what it says.
+  if (marker && value !== undefined) {
+    carried.set(path || '(root)', marker.confidential);
+  }
   // Through every wrapper before the value is looked at: a marker inside
   // `.nullable()` withholds a null too.
   if (
@@ -80,13 +150,13 @@ function walk(
     schema instanceof z.ZodDefault ||
     schema instanceof z.ZodReadonly
   ) {
-    return walk(schema.unwrap(), value, disclosed, path);
+    return walk(schema.unwrap(), value, disclosed, path, carried);
   }
   if (value === null || value === undefined) return value;
   if (schema instanceof z.ZodArray) {
     if (!Array.isArray(value)) return WITHHELD;
     return value.map((item: unknown) =>
-      walk(schema.element, item, disclosed, `${path}[]`),
+      walk(schema.element, item, disclosed, `${path}[]`, carried),
     );
   }
   if (schema instanceof z.ZodObject) {
@@ -101,6 +171,7 @@ function walk(
         source[key],
         disclosed,
         path ? `${path}.${key}` : key,
+        carried,
       );
       if (projected !== WITHHELD) built[key] = projected;
     }
