@@ -86,6 +86,7 @@ describe('UUIDv7 for high-ingest tables', () => {
       'AuditLog',
       'OutboxEvent',
       'ConsumerInbox',
+      'IdempotencyRecord',
     ]);
 
     // Audit rows written through Prisma, one after another, in two tenants:

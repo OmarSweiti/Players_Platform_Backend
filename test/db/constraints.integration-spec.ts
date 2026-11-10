@@ -76,6 +76,16 @@ const OTHER_STEPS_CHECKS = [
   'outbox_events_payload_refs_check',
   'outbox_events_payload_version_check',
   'outbox_events_type_check',
+  // 0.7.7: test/db/idempotency.integration-spec.ts
+  'idempotency_records_canonical_path_check',
+  'idempotency_records_expiry_check',
+  'idempotency_records_fencing_generation_check',
+  'idempotency_records_key_hash_check',
+  'idempotency_records_lease_check',
+  'idempotency_records_method_check',
+  'idempotency_records_outcome_check',
+  'idempotency_records_outcome_code_check',
+  'idempotency_records_request_hash_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
