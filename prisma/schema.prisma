@@ -410,6 +410,8 @@ model Tenant {
   messages             Message[]
   notifications        Notification[]
   auditLogs            AuditLog[]
+  outboxEvents         OutboxEvent[]
+  consumerInboxes      ConsumerInbox[]
   documents            Document[]
   playerMedia          PlayerMedia[]
   medicalRecords       MedicalRecord[]
@@ -1757,4 +1759,96 @@ model SecurityEvent {
   @@index([occurredAt])
   @@index([tenantHint, occurredAt])
   @@map("security_events")
+}
+
+//////////////////////////
+// OUTBOX AND INBOX
+//////////////////////////
+
+/// Where an outbox event is in its delivery (0.7.5): written with its change
+/// (CREATED), claimed by a relay for a bounded lease (LEASED), handed to the
+/// queue (PUBLISHED), or given up after its last attempt (DEAD). The relay and
+/// its claims are 0.7.6's.
+enum OutboxStatus {
+  CREATED
+  LEASED
+  PUBLISHED
+  DEAD
+
+  @@map("outbox_status")
+}
+
+/// The intent to do something after a change (0.7.5; I-10, SYS-ASY-002,
+/// SYS-ASY-005): written in the business transaction by `outbox.enqueue`, so
+/// that it commits with the change or not at all, and delivered at least once
+/// from there. Tenant-owned, under forced RLS like every tenant table. Its
+/// payload holds identifiers only: a consumer loads what it needs, under its
+/// tenant's policies. Kept, never removed by the runtime role: retention may
+/// not delete an event still needed for replay. CHECKs (hand-written SQL) hold
+/// the type's form, the counts, the lease and dispatch to their status, a dead
+/// event to its last error, and the payload's shape and size.
+model OutboxEvent {
+  /// UUIDv7 (0.4.11): an append-heavy table. Prisma makes it. The event's
+  /// identity for every consumer and the queue (the job id, 0.7.6).
+  id             String       @id @default(uuid(7)) @db.Uuid
+  tenantId       String       @map("tenant_id") @db.Uuid
+  /// What happened, lower_snake and dotted: `invitation.created`.
+  type           String       @db.VarChar(100)
+  /// The record it is about: its entity and id.
+  aggregateType  String       @map("aggregate_type") @db.VarChar(100)
+  aggregateId    String       @map("aggregate_id") @db.Uuid
+  /// The version of the payload's shape, from the event's catalog entry.
+  payloadVersion Int          @map("payload_version") @db.SmallInt
+  /// Identifiers only (`{ invitationId: <uuid> }`): never a value, a link or a token.
+  payloadRefs    Json         @map("payload_refs")
+  /// The intent's own key, unique in its tenant: enqueuing it again is a no-op.
+  dedupKey       String       @map("dedup_key") @db.VarChar(200)
+  status         OutboxStatus @default(CREATED)
+  attempts       Int          @default(0)
+  /// When it may next be claimed: now, or after a back-off (0.7.6).
+  availableAt    DateTime     @default(now()) @map("available_at") @db.Timestamptz(3)
+  /// The relay holding it, and until when (LEASED only).
+  leaseOwner     String?      @map("lease_owner") @db.VarChar(100)
+  leaseUntil     DateTime?    @map("lease_until") @db.Timestamptz(3)
+  /// When it was handed to the queue (PUBLISHED only).
+  dispatchedAt   DateTime?    @map("dispatched_at") @db.Timestamptz(3)
+  /// Why its last attempt failed, as a code; a DEAD event always has one.
+  lastErrorCode  String?      @map("last_error_code") @db.VarChar(100)
+
+  createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  receipts       ConsumerInbox[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, dedupKey])
+  @@index([tenantId, status, availableAt])
+  @@map("outbox_events")
+}
+
+/// A consumer's receipt of an outbox event (0.7.5; I-10): written in the same
+/// transaction as the consumer's effect, before it, so that the effect commits
+/// once however often the event is delivered. One per consumer and event; the
+/// composite key to its event binds the receipt to the event's own tenant.
+/// Tenant-owned, under forced RLS; kept, never removed by the runtime role.
+/// A CHECK (hand-written SQL) holds the consumer's name to its form.
+model ConsumerInbox {
+  id          String      @id @default(uuid(7)) @db.Uuid
+  tenantId    String      @map("tenant_id") @db.Uuid
+  /// The consumer's name, lower case: `mail.invitation-notice`.
+  consumer    String      @db.VarChar(100)
+  eventId     String      @map("event_id") @db.Uuid
+  completedAt DateTime    @default(now()) @map("completed_at") @db.Timestamptz(3)
+  /// What the effect produced, if it names one: a record's id.
+  resultRef   String?     @map("result_ref") @db.VarChar(200)
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  event       OutboxEvent @relation(fields: [eventId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([id, tenantId])
+  // The plan's UNIQUE(consumer, eventId), led by the tenant as every tenant
+  // index is: the same rule, since an event belongs to one tenant.
+  @@unique([tenantId, consumer, eventId])
+  @@index([tenantId, eventId])
+  @@map("consumer_inbox")
 }

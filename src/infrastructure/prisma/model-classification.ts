@@ -111,6 +111,11 @@ export const MODEL_CLASSIFICATION: Readonly<
   Notification: TENANT_OWNED,
   // Appended on every change, never updated: its index grows at one end.
   AuditLog: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'appended' },
+  // Written with each change that has an effect after it, and kept: its status
+  // moves through delivery, and nothing removes an event still needed (0.7.5).
+  OutboxEvent: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'kept' },
+  // A consumer's receipt, kept for as long as its event may be redelivered.
+  ConsumerInbox: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'kept' },
 };
 
 /** A model as the database knows it: its table, and the column that names its tenant. */
