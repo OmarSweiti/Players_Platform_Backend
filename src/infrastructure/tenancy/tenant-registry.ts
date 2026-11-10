@@ -15,6 +15,7 @@ import { databaseConnectionOf } from '../prisma/database-url';
 @Injectable()
 export class TenantRegistry implements OnModuleDestroy {
   private readonly pool: Pool;
+  private closed = false;
 
   /** `url`: the registry role's connection (REGISTRY_DATABASE_URL). */
   constructor(url: string) {
@@ -36,7 +37,10 @@ export class TenantRegistry implements OnModuleDestroy {
     return rows.map((row) => row.id);
   }
 
+  /** Closes the connection, once: a second call does nothing. */
   async onModuleDestroy(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
     await this.pool.end();
   }
 }

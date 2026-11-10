@@ -32,8 +32,8 @@ const CONCURRENCY = 4;
 /**
  * Starts and stops the worker's parts in order (0.7.6): the queue's worker,
  * then the relay; on shutdown, the relay first, then the jobs running are
- * drained, then the connections close — before the database's, which the
- * application closes after (src/worker.ts).
+ * drained, then the queue's connection closes. The registry's and the
+ * database's close after, with the application (src/worker.ts).
  */
 @Injectable()
 export class WorkerLifecycle {
@@ -41,7 +41,6 @@ export class WorkerLifecycle {
     private readonly loop: RelayLoop,
     private readonly worker: OutboxWorker,
     private readonly publisher: OutboxPublisher,
-    private readonly registry: TenantRegistry,
   ) {}
 
   start(): void {
@@ -53,7 +52,6 @@ export class WorkerLifecycle {
     await this.loop.stop();
     await this.worker.close();
     await this.publisher.close();
-    await this.registry.onModuleDestroy();
   }
 }
 

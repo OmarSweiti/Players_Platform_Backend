@@ -227,6 +227,9 @@ describe('the worker', () => {
       expect(ids).not.toContain(resting.id);
       expect(ids).toEqual([...ids].sort());
     } finally {
+      // Closed once; a second close does nothing (the worker's shutdown and
+      // the application's both may ask).
+      await registry.onModuleDestroy();
       await registry.onModuleDestroy();
     }
 
