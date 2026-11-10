@@ -65,6 +65,17 @@ const OTHER_STEPS_CHECKS = [
   'security_events_reason_code_check',
   'security_events_refusal_check',
   'security_events_source_check',
+  // 0.7.5: test/db/outbox.integration-spec.ts
+  'consumer_inbox_consumer_check',
+  'outbox_events_aggregate_type_check',
+  'outbox_events_attempts_check',
+  'outbox_events_dead_check',
+  'outbox_events_dedup_key_check',
+  'outbox_events_dispatch_check',
+  'outbox_events_lease_check',
+  'outbox_events_payload_refs_check',
+  'outbox_events_payload_version_check',
+  'outbox_events_type_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
@@ -918,10 +929,14 @@ describe('integrity constraints in SQL', () => {
           'training_sessions.time_zone',
         ].sort(),
       );
-      // And security events' metadata, held to its shape and size by 0.7.3's
-      // own CHECK (test/db/security-events.integration-spec.ts).
+      // And security events' metadata and the outbox's payload, held to their
+      // shape and size by their own steps' CHECKs (0.7.3, 0.7.5).
       expect(await columnsOf('jsonb')).toEqual(
-        [...checked(/^jsonb_typeof/), 'security_events.metadata'].sort(),
+        [
+          ...checked(/^jsonb_typeof/),
+          'outbox_events.payload_refs',
+          'security_events.metadata',
+        ].sort(),
       );
 
       // Every amount is held to its currency's minor units by a constraint
