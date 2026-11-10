@@ -63,6 +63,16 @@ const database = z
     message:
       'must connect as the runtime role, never as the owner, the migrator or a superuser',
   });
+// The worker's discovery connection (0.7.6): the registry role, which reads
+// tenant_directory's id and is_active and nothing else.
+const registryDatabase = z
+  .url({ protocol: /^postgres(ql)?$/ })
+  .refine((url) => roleOf(url) === 'sadara_registry', {
+    message: 'must connect as the registry role, sadara_registry',
+  });
+const nodeEnv = z.enum(['development', 'test', 'staging', 'production']);
+const redisHost = z.string().min(1).default('localhost');
+const redisPort = port.default(6379);
 
 // The identity provider's issuer (0.5.4): HTTPS, or plain HTTP on this machine
 // only (the local stack's Keycloak), without a query or fragment.
@@ -85,15 +95,15 @@ export const DEFAULT_API_PREFIX = 'api';
 
 export const Env = z
   .object({
-    NODE_ENV: z.enum(['development', 'test', 'staging', 'production']),
+    NODE_ENV: nodeEnv,
     PORT: port.default(3000),
     API_PREFIX: z
       .string()
       .regex(/^[a-z0-9-]+$/, 'lower-case letters, digits and hyphens')
       .default(DEFAULT_API_PREFIX),
     DATABASE_URL: database,
-    REDIS_HOST: z.string().min(1).default('localhost'),
-    REDIS_PORT: port.default(6379),
+    REDIS_HOST: redisHost,
+    REDIS_PORT: redisPort,
     // The proxies whose X-Forwarded-For names the client (0.3.8), comma-
     // separated. None by default: the client is whoever connected.
     TRUSTED_PROXIES: z
@@ -277,3 +287,26 @@ export const configOptions: ConfigModuleOptions = {
   isGlobal: true,
   validate: parseEnv,
 };
+
+/**
+ * What the worker reads (0.7.6), and nothing else: the runtime role's database
+ * for the tenant transactions it works in, the registry role's for finding the
+ * active tenants, and Valkey for its queue. It holds none of the API's
+ * identity-provider, session or mail secrets.
+ */
+export const WorkerEnv = z.object({
+  NODE_ENV: nodeEnv,
+  DATABASE_URL: database,
+  REGISTRY_DATABASE_URL: registryDatabase,
+  REDIS_HOST: redisHost,
+  REDIS_PORT: redisPort,
+  // A file the worker touches after every pass of its relay: its container's
+  // health check reads its age. Unset, nothing is written.
+  WORKER_HEARTBEAT_FILE: optional(z.string().min(1)),
+});
+export type WorkerEnv = z.infer<typeof WorkerEnv>;
+
+/** The worker's environment, or an error naming every variable, never a value. */
+export function parseWorkerEnv(raw: Record<string, unknown>): WorkerEnv {
+  return parseWith(WorkerEnv, raw);
+}
