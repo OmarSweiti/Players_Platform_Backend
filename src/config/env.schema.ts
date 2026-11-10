@@ -303,6 +303,11 @@ export const WorkerEnv = z.object({
   // A file the worker touches after every pass of its relay: its container's
   // health check reads its age. Unset, nothing is written.
   WORKER_HEARTBEAT_FILE: optional(z.string().min(1)),
+  // The least severe line it writes; unset, NODE_ENV's (debug in development,
+  // which logs every query of a pass that runs every second).
+  LOG_LEVEL: optional(
+    z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
+  ),
 });
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 

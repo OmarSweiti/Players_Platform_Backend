@@ -302,6 +302,13 @@ describe('the environment schema', () => {
         'REGISTRY_DATABASE_URL must connect as the registry role, sadara_registry',
       );
     }
+    // Its log level may be set, to one pino knows.
+    expect(parseWorkerEnv({ ...worker, LOG_LEVEL: 'info' }).LOG_LEVEL).toBe(
+      'info',
+    );
+    expect(() => parseWorkerEnv({ ...worker, LOG_LEVEL: 'loud' })).toThrow(
+      'LOG_LEVEL must be one of',
+    );
     // Its work connects as the runtime role, as the API's does.
     expect(() =>
       parseWorkerEnv({

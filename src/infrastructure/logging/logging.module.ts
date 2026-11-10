@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import type { Request, Response } from 'express';
 import { LoggerModule } from 'nestjs-pino';
-import type { Env } from '../../config/env.schema';
+import type { Env, WorkerEnv } from '../../config/env.schema';
 import {
   accessLogOptions,
   defaultLogSink,
@@ -60,11 +60,14 @@ export class LoggingModule {}
         },
       ],
       inject: [ConfigService, LOG_SINK],
-      useFactory: (config: ConfigService<Env, true>, sink: LogSink) => {
+      useFactory: (config: ConfigService<WorkerEnv, true>, sink: LogSink) => {
         const options = loggerOptions(
           'worker',
           config.get('NODE_ENV', { infer: true }),
-          sink.level,
+          // A test's sink sets the level; otherwise LOG_LEVEL may.
+          sink.stream
+            ? sink.level
+            : (config.get('LOG_LEVEL', { infer: true }) ?? sink.level),
         );
         return { pinoHttp: sink.stream ? [options, sink.stream] : options };
       },
