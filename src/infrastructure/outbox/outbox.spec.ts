@@ -67,6 +67,7 @@ describe('the outbox', () => {
         payloadVersion: 1,
         payloadRefs: { invitationId },
         dedupKey: `invitation.created:${invitationId}`,
+        requestId: ctx.requestId,
       },
     ]);
   });

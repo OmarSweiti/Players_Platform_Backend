@@ -19,7 +19,15 @@ if { [ -z "${DATABASE_URL_TEST:-}" ] || [ -z "${MIGRATION_DATABASE_URL_TEST:-}" 
   port=$(setting POSTGRES_PORT)
   : "${DATABASE_URL_TEST:=postgresql://sadara_app:$(encoded "$app_password")@127.0.0.1:${port:-5432}/sadara_test}"
   : "${MIGRATION_DATABASE_URL_TEST:=postgresql://sadara_migrator:$(encoded "$migrator_password")@127.0.0.1:${port:-5432}/sadara_test}"
-  export DATABASE_URL_TEST MIGRATION_DATABASE_URL_TEST
+  # The worker's registry role (0.7.6), which only the worker's tests log in as.
+  registry_password=$(setting SADARA_REGISTRY_PASSWORD)
+  if [ -z "$registry_password" ] && [ -z "${REGISTRY_DATABASE_URL_TEST:-}" ]; then
+    echo "../infra/.env has no SADARA_REGISTRY_PASSWORD (the worker's registry role, 0.7.6)." >&2
+    echo "Run \`just up\` in the umbrella: it adds it, and applies the roles again." >&2
+    exit 1
+  fi
+  : "${REGISTRY_DATABASE_URL_TEST:=postgresql://sadara_registry:$(encoded "$registry_password")@127.0.0.1:${port:-5432}/sadara_test}"
+  export DATABASE_URL_TEST MIGRATION_DATABASE_URL_TEST REGISTRY_DATABASE_URL_TEST
 fi
 if [ -z "${DATABASE_URL_TEST:-}" ] || [ -z "${MIGRATION_DATABASE_URL_TEST:-}" ]; then
   echo "DATABASE_URL_TEST and MIGRATION_DATABASE_URL_TEST are not both set, and ../infra/.env (the umbrella's local stack) was not found." >&2

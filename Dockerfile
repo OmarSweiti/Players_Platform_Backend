@@ -1,4 +1,6 @@
-# The API as production runs it (0.2.6): built in one stage, run in a second
+# The API as production runs it (0.2.6), and the worker (0.7.6) from the same
+# image with another command (`node dist/worker.js`, its own health check):
+# built in one stage, run in a second
 # that holds only the compiled code and the production dependencies, as the
 # base image's unprivileged user. Nothing secret is built in: every setting
 # comes from the environment when the container starts (src/config/env.schema.ts),

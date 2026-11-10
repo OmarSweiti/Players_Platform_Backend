@@ -5,6 +5,7 @@ import {
   parseEnv,
   parseEventImportEnv,
   parseProvisioningEnv,
+  parseWorkerEnv,
 } from './env.schema';
 
 // A complete, valid environment — synthetic values only.
@@ -275,6 +276,46 @@ describe('the environment schema', () => {
       'OIDC_EVENTS_CLIENT_SECRET must be at least 16 characters',
     );
     expect(message).not.toContain('short');
+  });
+
+  it('the_worker_reads_its_databases_and_valkey_and_no_api_secret', () => {
+    const worker = {
+      NODE_ENV: 'production',
+      DATABASE_URL: valid.DATABASE_URL,
+      REGISTRY_DATABASE_URL:
+        'postgresql://sadara_registry:not-a-real-password@db.agency.test:5432/sadara',
+    };
+    // No identity provider, CSRF, security-event or mail setting is needed.
+    expect(parseWorkerEnv(worker)).toEqual({
+      ...worker,
+      REDIS_HOST: 'localhost',
+      REDIS_PORT: 6379,
+    });
+    // Discovery connects as the registry role and no other.
+    for (const role of ['sadara_app', 'sadara_owner', 'postgres']) {
+      expect(() =>
+        parseWorkerEnv({
+          ...worker,
+          REGISTRY_DATABASE_URL: `postgresql://${role}:x@db.agency.test:5432/sadara`,
+        }),
+      ).toThrow(
+        'REGISTRY_DATABASE_URL must connect as the registry role, sadara_registry',
+      );
+    }
+    // Its log level may be set, to one pino knows.
+    expect(parseWorkerEnv({ ...worker, LOG_LEVEL: 'info' }).LOG_LEVEL).toBe(
+      'info',
+    );
+    expect(() => parseWorkerEnv({ ...worker, LOG_LEVEL: 'loud' })).toThrow(
+      'LOG_LEVEL must be one of',
+    );
+    // Its work connects as the runtime role, as the API's does.
+    expect(() =>
+      parseWorkerEnv({
+        ...worker,
+        DATABASE_URL: 'postgresql://sadara_owner:x@db.agency.test:5432/sadara',
+      }),
+    ).toThrow('DATABASE_URL must connect as the runtime role');
   });
 
   it('refuses a database connection as the owner, the migrator or the superuser', () => {

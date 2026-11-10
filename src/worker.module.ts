@@ -1,0 +1,145 @@
+import { hostname } from 'node:os';
+import { type DynamicModule, Injectable, Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { Queue } from 'bullmq';
+import { PinoLogger } from 'nestjs-pino';
+import type { WorkerEnv } from './config/env.schema';
+import { WorkerLoggingModule } from './infrastructure/logging/logging.module';
+import { ConsumerInboxes } from './infrastructure/outbox/consumer-inboxes';
+import {
+  OUTBOX_CONSUMERS,
+  type OutboxConsumer,
+} from './infrastructure/outbox/outbox-consumers';
+import { OutboxRelay, RELAY } from './infrastructure/outbox/outbox-relay';
+import { PrismaModule } from './infrastructure/prisma/prisma.module';
+import { PrismaService } from './infrastructure/prisma/prisma.service';
+import {
+  DELIVERY,
+  OUTBOX_QUEUE,
+  OutboxPublisher,
+  queueConnection,
+} from './infrastructure/queue/outbox-queue';
+import {
+  OutboxJobHandler,
+  OutboxWorker,
+} from './infrastructure/queue/outbox-worker';
+import { RelayLoop } from './infrastructure/queue/relay-loop';
+import { TenantRegistry } from './infrastructure/tenancy/tenant-registry';
+
+/** How many jobs one worker process runs at once. */
+const CONCURRENCY = 4;
+
+/**
+ * Starts and stops the worker's parts in order (0.7.6): the queue's worker,
+ * then the relay; on shutdown, the relay first, then the jobs running are
+ * drained, then the queue's connection closes. The registry's and the
+ * database's close after, with the application (src/worker.ts).
+ */
+@Injectable()
+export class WorkerLifecycle {
+  constructor(
+    private readonly loop: RelayLoop,
+    private readonly worker: OutboxWorker,
+    private readonly publisher: OutboxPublisher,
+  ) {}
+
+  start(): void {
+    this.worker.start();
+    this.loop.start();
+  }
+
+  async stop(): Promise<void> {
+    await this.loop.stop();
+    await this.worker.close();
+    await this.publisher.close();
+  }
+}
+
+/**
+ * The worker's composition root (0.7.6; docs/reference/architecture.md): the
+ * runtime role's database for the tenant transactions it works in, the
+ * registry role's for finding the active tenants, Valkey for its queue, the
+ * outbox relay, and the queue's worker with the registered consumers — no
+ * routes, nothing of the API's sessions, identity provider or mail. Its
+ * settings are validated before it is built (src/worker.ts).
+ */
+@Module({})
+export class WorkerModule {
+  static forSettings(settings: WorkerEnv): DynamicModule {
+    const connection = queueConnection(
+      settings.REDIS_HOST,
+      settings.REDIS_PORT,
+    );
+    return {
+      module: WorkerModule,
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          ignoreEnvFile: true,
+          validate: () => settings,
+        }),
+        WorkerLoggingModule,
+        PrismaModule,
+      ],
+      providers: [
+        {
+          provide: TenantRegistry,
+          useFactory: () => new TenantRegistry(settings.REGISTRY_DATABASE_URL),
+        },
+        {
+          provide: OutboxPublisher,
+          useFactory: () =>
+            new OutboxPublisher(
+              new Queue(OUTBOX_QUEUE, { connection }),
+              DELIVERY,
+            ),
+        },
+        // Consumers register here as they arrive: the first is 0.7.8's.
+        { provide: OUTBOX_CONSUMERS, useValue: [] },
+        {
+          provide: OutboxRelay,
+          inject: [TenantRegistry, PrismaService, OutboxPublisher],
+          useFactory: (
+            registry: TenantRegistry,
+            prisma: PrismaService,
+            publisher: OutboxPublisher,
+          ) =>
+            new OutboxRelay(registry, prisma, publisher, {
+              ...RELAY,
+              owner: `${hostname()}:${process.pid}`,
+            }),
+        },
+        {
+          provide: OutboxJobHandler,
+          inject: [
+            PrismaService,
+            ConsumerInboxes,
+            OUTBOX_CONSUMERS,
+            PinoLogger,
+          ],
+          useFactory: (
+            prisma: PrismaService,
+            inboxes: ConsumerInboxes,
+            consumers: OutboxConsumer[],
+            logger: PinoLogger,
+          ) => new OutboxJobHandler(prisma, inboxes, consumers, logger),
+        },
+        {
+          provide: OutboxWorker,
+          inject: [OutboxJobHandler, PrismaService],
+          useFactory: (handler: OutboxJobHandler, prisma: PrismaService) =>
+            new OutboxWorker(connection, OUTBOX_QUEUE, handler, prisma, {
+              concurrency: CONCURRENCY,
+            }),
+        },
+        {
+          provide: RelayLoop,
+          inject: [OutboxRelay],
+          useFactory: (relay: OutboxRelay) =>
+            new RelayLoop(relay, undefined, settings.WORKER_HEARTBEAT_FILE),
+        },
+        WorkerLifecycle,
+      ],
+    };
+  }
+}

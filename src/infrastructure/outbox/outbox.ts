@@ -76,6 +76,8 @@ export class Outbox {
           payloadVersion: definition.version,
           payloadRefs: refs,
           dedupKey: event.dedupKey,
+          // The request it is enqueued in: its job runs in that correlation.
+          requestId: ctx.requestId,
           ...(event.availableAt ? { availableAt: event.availableAt } : {}),
         },
       ],
