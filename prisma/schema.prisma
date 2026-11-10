@@ -412,6 +412,7 @@ model Tenant {
   auditLogs            AuditLog[]
   outboxEvents         OutboxEvent[]
   consumerInboxes      ConsumerInbox[]
+  idempotencyRecords   IdempotencyRecord[]
   documents            Document[]
   playerMedia          PlayerMedia[]
   medicalRecords       MedicalRecord[]
@@ -512,6 +513,7 @@ model User {
   sessions              UserSession[]
   invitationsSent       Invitation[] @relation("InvitationInviter")
   acceptedInvitations   Invitation[] @relation("InvitationAccepted")
+  idempotencyRecords    IdempotencyRecord[]
 
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1854,4 +1856,67 @@ model ConsumerInbox {
   @@unique([tenantId, consumer, eventId])
   @@index([tenantId, eventId])
   @@map("consumer_inbox")
+}
+
+//////////////////////////
+// IDEMPOTENCY
+//////////////////////////
+
+/// Where the first execution of a retried command is (0.7.7): claimed, and
+/// running under a lease (IN_PROGRESS); committed with its effect
+/// (SUCCEEDED); or refused by a rule of the command's own (REJECTED). A
+/// finished one answers every retry of its key.
+enum IdempotencyState {
+  IN_PROGRESS
+  SUCCEEDED
+  REJECTED
+
+  @@map("idempotency_state")
+}
+
+/// A member's idempotency key for one command (0.7.7; I-10, SR-CORE-010):
+/// the namespace is the tenant, the member, the method and the canonical
+/// path; the record holds the key's hash, the request's hash, and the
+/// outcome a retry is answered with. Never a body: a success keeps the id of
+/// what it made or changed, a refusal its error code. The SUCCEEDED state
+/// commits with the command's effect, under the claim's fencing generation,
+/// so an execution whose lease was taken over cannot commit. Tenant-owned,
+/// under forced RLS. Expired records may be removed. CHECKs (hand-written
+/// SQL) hold the method, the path's form, the hashes' length, the lease and
+/// the outcome to their state, and the expiry.
+model IdempotencyRecord {
+  /// UUIDv7 (0.4.11): one per retried command, an append-heavy table.
+  id                String           @id @default(uuid(7)) @db.Uuid
+  tenantId          String           @map("tenant_id") @db.Uuid
+  /// The member who sent the key: a key is theirs alone.
+  actorUserId       String           @map("actor_user_id") @db.Uuid
+  method            String           @db.VarChar(7)
+  /// The route with its parameters filled in: `/api/v1/players/<id>`.
+  canonicalPath     String           @map("canonical_path") @db.VarChar(512)
+  /// SHA-256 of the client's key: the key itself is never kept.
+  keyHash           Bytes            @map("key_hash")
+  /// SHA-256 of the validated request and its preconditions (`If-Match`).
+  requestHash       Bytes            @map("request_hash")
+  state             IdempotencyState @default(IN_PROGRESS)
+  /// Which claim may commit: taking over an expired lease increments it.
+  fencingGeneration Int              @default(1) @map("fencing_generation")
+  /// Until when the claim's execution holds the key (IN_PROGRESS only).
+  leaseUntil        DateTime?        @map("lease_until") @db.Timestamptz(3)
+  /// What a success made or changed, if anything (SUCCEEDED only).
+  resultRef         String?          @map("result_ref") @db.Uuid
+  /// Why the command was refused: an error code (REJECTED only).
+  outcomeCode       String?          @map("outcome_code") @db.VarChar(40)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// When it finished, succeeded or refused.
+  completedAt       DateTime?        @map("completed_at") @db.Timestamptz(3)
+  /// Until when a retry is answered from it: after, the key is free again.
+  expiresAt         DateTime         @map("expires_at") @db.Timestamptz(3)
+
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  actor             User             @relation(fields: [actorUserId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([id, tenantId])
+  /// The key's namespace, led by the tenant as every tenant index is.
+  @@unique([tenantId, actorUserId, method, canonicalPath, keyHash], map: "idempotency_records_namespace_key")
+  @@map("idempotency_records")
 }

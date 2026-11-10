@@ -116,6 +116,10 @@ export const MODEL_CLASSIFICATION: Readonly<
   OutboxEvent: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'kept' },
   // A consumer's receipt, kept for as long as its event may be redelivered.
   ConsumerInbox: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'kept' },
+  // One per retried command, claimed and then finished in place (0.7.7). An
+  // expired record answers nothing, and its key may be claimed afresh: the
+  // runtime role removes it then, so it is not kept.
+  IdempotencyRecord: { ...TENANT_OWNED, ids: 'time-ordered' },
 };
 
 /** A model as the database knows it: its table, and the column that names its tenant. */

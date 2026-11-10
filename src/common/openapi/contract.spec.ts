@@ -25,6 +25,10 @@ import { z } from 'zod';
 import { configureRoutes } from '../../app.setup';
 import { IfMatch } from '../concurrency/if-match.decorator';
 import { Public } from '../decorators/public.decorator';
+import {
+  Idempotent,
+  type IdempotentRequest,
+} from '../idempotency/idempotent-request';
 import { behindFeature } from '../feature-flags/feature-gate.guard';
 import { IdParams, day } from '../validation/schemas';
 import { buildContract, CSRF_HEADER } from './contract';
@@ -58,6 +62,19 @@ class ThingsController {
     @Param({ schema: IdParams }) _params: IdParams,
     @IfMatch() _ifMatch: string | undefined,
     @Body({ schema: ThingPatch }) _patch: unknown,
+  ) {
+    return null;
+  }
+}
+
+@Controller('things/:id/approval')
+class ApprovalController {
+  @Post()
+  @Returns(Thing)
+  approve(
+    @Param({ schema: IdParams }) _params: IdParams,
+    @IfMatch() _ifMatch: string | undefined,
+    @Idempotent() _request: IdempotentRequest,
   ) {
     return null;
   }
@@ -147,6 +164,46 @@ describe('the API contract', () => {
     expect(codesOf(rename.responses['428'])).toEqual(['PRECONDITION_REQUIRED']);
     // What the route raises itself, beside what the pipeline adds.
     expect(codesOf(rename.responses['409'])).toEqual(['INVALID_TRANSITION']);
+  });
+
+  it('a_retried_command_declares_its_key_and_its_conflicts', async () => {
+    const approve = operation(
+      await contractOf(ApprovalController),
+      'post',
+      '/api/v1/things/{id}/approval',
+    );
+    const headers = (approve.parameters as ParameterObject[])
+      .filter((parameter) => parameter.in === 'header')
+      .map(({ name, required }) => ({ name, required }));
+    expect(headers).toEqual(
+      expect.arrayContaining([
+        { name: 'Idempotency-Key', required: true },
+        { name: 'If-Match', required: true },
+      ]),
+    );
+    expect(codesOf(approve.responses['409'])).toEqual([
+      'IDEMPOTENCY_IN_PROGRESS',
+      'IDEMPOTENCY_KEY_REUSED',
+    ]);
+    // The key is validated, though the route takes no body: a bad one is 400.
+    expect(codesOf(approve.responses['400'])).toEqual(['VALIDATION_FAILED']);
+    // A duplicate sent while the first runs is told when to try again.
+    const conflict = approve.responses['409'] as ResponseObject;
+    expect(conflict.headers?.['Retry-After']).toEqual({
+      $ref: '#/components/headers/RetryAfter',
+    });
+    // An edit that is not a retried command declares neither.
+    const rename = operation(
+      await contractOf(ThingsController),
+      'patch',
+      '/api/v1/things/{id}',
+    );
+    expect(
+      (rename.parameters as ParameterObject[]).map(({ name }) => name),
+    ).not.toContain('Idempotency-Key');
+    expect(
+      (rename.responses['409'] as ResponseObject).headers?.['Retry-After'],
+    ).toBeUndefined();
   });
 
   it('request_and_response_schemas_come_from_the_zod_schemas', async () => {
