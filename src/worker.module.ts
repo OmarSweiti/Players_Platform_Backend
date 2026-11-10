@@ -4,7 +4,7 @@ import { ConfigModule } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import { PinoLogger } from 'nestjs-pino';
 import type { WorkerEnv } from './config/env.schema';
-import { LoggingModule } from './infrastructure/logging/logging.module';
+import { WorkerLoggingModule } from './infrastructure/logging/logging.module';
 import { ConsumerInboxes } from './infrastructure/outbox/consumer-inboxes';
 import {
   OUTBOX_CONSUMERS,
@@ -80,7 +80,7 @@ export class WorkerModule {
           ignoreEnvFile: true,
           validate: () => settings,
         }),
-        LoggingModule,
+        WorkerLoggingModule,
         PrismaModule,
       ],
       providers: [

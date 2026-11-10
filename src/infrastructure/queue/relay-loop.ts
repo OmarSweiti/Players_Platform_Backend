@@ -1,5 +1,6 @@
 import { writeFile } from 'node:fs/promises';
 import { Logger } from '@nestjs/common';
+import { describeError } from '../../common/logging/describe-error';
 import type { OutboxRelay } from '../outbox/outbox-relay';
 
 /** How often the relay looks for due events, when it last found none. */
@@ -51,7 +52,7 @@ export class RelayLoop {
       await this.relay.relayOnce();
     } catch (error) {
       this.logger.warn(
-        `an outbox relay pass failed: ${(error as Error).name}; the next one tries again`,
+        `an outbox relay pass failed: ${describeError(error)}; the next one tries again`,
       );
     } finally {
       if (this.heartbeatFile) {

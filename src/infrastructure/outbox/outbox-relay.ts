@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
+import { describeError } from '../../common/logging/describe-error';
 import type { PrismaClient } from '@prisma/client';
 import { TenantTransactions } from '../../common/tenancy/tenant-transaction';
 import { type Clock, systemClock } from '../../common/time/clock';
@@ -121,7 +122,7 @@ export class OutboxRelay {
         } catch (error) {
           // The lease runs out on its own, and the next pass takes it again.
           this.logger.warn(
-            `outbox event not published: ${(error as Error).name}; its lease will run out and it is claimed again`,
+            `outbox event not published: ${describeError(error)}; its lease will run out and it is claimed again`,
           );
         }
       }

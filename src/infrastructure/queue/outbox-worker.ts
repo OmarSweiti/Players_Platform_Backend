@@ -8,6 +8,7 @@ import {
 } from 'bullmq';
 import type { PinoLogger } from 'nestjs-pino';
 import { DomainError } from '../../common/errors/domain-error';
+import { describeError } from '../../common/logging/describe-error';
 import { TenantTransactions } from '../../common/tenancy/tenant-transaction';
 import { runCorrelatedJob } from '../logging/correlation';
 import type { ConsumerInboxes } from '../outbox/consumer-inboxes';
@@ -172,14 +173,14 @@ export class OutboxWorker {
       if (!job) return;
       const recorded = this.recordFailure(job, error).catch((failure) =>
         this.logger.error(
-          `an outbox job's failure was not recorded: ${(failure as Error).name}`,
+          `an outbox job's failure was not recorded: ${describeError(failure)}`,
         ),
       );
       this.recording.add(recorded);
       void recorded.finally(() => this.recording.delete(recorded));
     });
     this.worker.on('error', (error) =>
-      this.logger.warn(`the outbox worker's queue: ${error.name}`),
+      this.logger.warn(`the outbox worker's queue: ${describeError(error)}`),
     );
   }
 

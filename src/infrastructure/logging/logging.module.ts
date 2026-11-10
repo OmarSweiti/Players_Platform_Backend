@@ -8,6 +8,7 @@ import {
   defaultLogSink,
   LOG_SINK,
   type LogSink,
+  loggerOptions,
 } from './logger-options';
 
 /**
@@ -40,3 +41,34 @@ import {
   ],
 })
 export class LoggingModule {}
+
+/**
+ * The worker's logs (0.7.6): the same lines, written as the worker — it serves
+ * no request, so there is no access log. Its jobs' lines carry their request
+ * id through runCorrelatedJob.
+ */
+@Module({
+  imports: [
+    LoggerModule.forRootAsync({
+      imports: [ConfigModule],
+      providers: [
+        {
+          provide: LOG_SINK,
+          inject: [ConfigService],
+          useFactory: (config: ConfigService<Env, true>) =>
+            defaultLogSink(config.get('NODE_ENV', { infer: true })),
+        },
+      ],
+      inject: [ConfigService, LOG_SINK],
+      useFactory: (config: ConfigService<Env, true>, sink: LogSink) => {
+        const options = loggerOptions(
+          'worker',
+          config.get('NODE_ENV', { infer: true }),
+          sink.level,
+        );
+        return { pinoHttp: sink.stream ? [options, sink.stream] : options };
+      },
+    }),
+  ],
+})
+export class WorkerLoggingModule {}
