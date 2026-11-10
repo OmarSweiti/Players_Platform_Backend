@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 import { z } from 'zod';
 import { IF_MATCH_KEY } from '../concurrency/if-match.decorator';
+import { IDEMPOTENT_KEY } from '../idempotency/idempotent-request';
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { RECENT_AUTH_KEY } from '../decorators/requires-recent-auth.decorator';
 import {
@@ -89,6 +90,7 @@ interface RouteFacts {
   isPublic: boolean;
   rateLimited: boolean;
   ifMatch: boolean;
+  idempotent: boolean;
   recentAuth: boolean;
   raises: readonly ErrorCode[];
 }
@@ -105,7 +107,8 @@ interface RouteFacts {
  * - each problem the HTTP pipeline can answer it with (problemCodesOf), and
  *   those it raises itself (`@Raises`), as problem details narrowed to the
  *   status's codes;
- * - `X-Request-Id` on every response, `Retry-After` on 429.
+ * - `X-Request-Id` on every response, `Retry-After` on 429, and on 409 when
+ *   an idempotent command's first execution is still running.
  *
  * Generation fails on an operation without a declared success (`@Returns`, or
  * `@Redirects` for a route the browser navigates to),
@@ -222,6 +225,11 @@ function problemCodesOf(
   if (facts.ifMatch) {
     codes.add('REVISION_MISMATCH').add('PRECONDITION_REQUIRED');
   }
+  // A command a client may retry takes a key, which is validated (0.7.7).
+  if (facts.idempotent) {
+    codes.add('VALIDATION_FAILED');
+    codes.add('IDEMPOTENCY_IN_PROGRESS').add('IDEMPOTENCY_KEY_REUSED');
+  }
   // The limits fail closed: without Valkey, a limited route answers 503.
   if (facts.rateLimited) {
     codes.add('RATE_LIMITED').add('DEPENDENCY_UNAVAILABLE');
@@ -307,7 +315,8 @@ function problemResponse(status: number, codes: ErrorCode[]): ResponseObject {
       },
     },
   };
-  if (status === 429 && response.headers) {
+  const retried = status === 429 || codes.includes('IDEMPOTENCY_IN_PROGRESS');
+  if (retried && response.headers) {
     response.headers['Retry-After'] = {
       $ref: '#/components/headers/RetryAfter',
     };
@@ -354,6 +363,7 @@ function routesOf(app: INestApplication): Map<string, RouteFacts> {
             true,
           rateLimited: limit !== 'none',
           ifMatch: reflector.get<boolean>(IF_MATCH_KEY, handler) === true,
+          idempotent: reflector.get<boolean>(IDEMPOTENT_KEY, handler) === true,
           recentAuth:
             reflector.getAllAndOverride<boolean>(RECENT_AUTH_KEY, targets) ===
             true,
