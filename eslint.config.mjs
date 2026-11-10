@@ -13,6 +13,7 @@ const MINTERS = [
   'src/common/guards/session.guard.ts', // 0.5.6
   'src/cli/provision-tenant.ts', // 0.5.9: an audited platform operation
   'src/database/seed.ts', // 0.5.11: the development seed, refused outside development and test
+  'src/infrastructure/queue/job-context.ts', // 0.7.6: the job loader
 ];
 const MINT = {
   group: ['**/common/tenancy/tenant-context'],
