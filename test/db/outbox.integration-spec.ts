@@ -146,6 +146,7 @@ describe('the transactional outbox and the consumer inbox', () => {
         leaseUntil: null,
         dispatchedAt: null,
         lastErrorCode: null,
+        requestId: ctx.requestId,
         createdAt: expect.any(Date) as Date,
       });
       expect(event.id).toMatch(UUID_V7);
@@ -395,6 +396,13 @@ describe('the transactional outbox and the consumer inbox', () => {
         { status: 'LEASED', lease_owner: 'relay-1', lease_until: lease },
         { status: 'PUBLISHED', dispatched_at: new Date(), attempts: 1 },
         { status: 'DEAD', last_error_code: 'smtp_refused', attempts: 5 },
+        // 0.7.6: an event whose handling fails for good after it was dispatched.
+        {
+          status: 'DEAD',
+          last_error_code: 'handler_failed',
+          dispatched_at: new Date(),
+          attempts: 8,
+        },
       ]) {
         expect([values, await insert(tenant, values)]).toEqual([
           values,

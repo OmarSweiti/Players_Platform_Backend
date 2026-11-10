@@ -1814,6 +1814,9 @@ model OutboxEvent {
   dispatchedAt   DateTime?    @map("dispatched_at") @db.Timestamptz(3)
   /// Why its last attempt failed, as a code; a DEAD event always has one.
   lastErrorCode  String?      @map("last_error_code") @db.VarChar(100)
+  /// The request it was enqueued in (0.7.6): its job runs inside that
+  /// correlation, so the logs of a change and of its effects share one id.
+  requestId      String?      @map("request_id") @db.VarChar(128)
 
   createdAt      DateTime     @default(now()) @map("created_at") @db.Timestamptz(3)
 
