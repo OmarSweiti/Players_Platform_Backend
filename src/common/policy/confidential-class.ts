@@ -15,3 +15,16 @@ export const CONFIDENTIAL_CLASSES = [
 ] as const;
 
 export type ConfidentialClass = (typeof CONFIDENTIAL_CLASSES)[number];
+
+/**
+ * The classes whose release is access-audited (0.7.4; I-5): a response that
+ * carries a field of one is released only after an access event records who
+ * read which record's which classes (src/infrastructure/audit/access-
+ * audit.ts). `MINOR_POLICY` is not among them: the plan names these four.
+ */
+export const ACCESS_AUDITED_CLASSES: readonly ConfidentialClass[] = [
+  'IDENTITY',
+  'MEDICAL',
+  'LEGAL_INTERNAL',
+  'FINANCE',
+];

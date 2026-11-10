@@ -62,6 +62,13 @@ export const AUDITED_ACTIONS = {
     fields: { role: 'OPERATIONAL' },
     beforeAndAfter: true,
   },
+  // Access events (0.7.4; I-5): a record's access-audited classes, read.
+  // Only the classes' names, never the content; the access audit records
+  // them (access-audit.ts), each readable entity with an action of its own.
+  'medical_record.read': {
+    entity: 'MedicalRecord',
+    fields: { classes: 'OPERATIONAL' },
+  },
   'tenant.provisioned': {
     entity: 'Tenant',
     fields: {

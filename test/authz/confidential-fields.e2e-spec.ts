@@ -16,8 +16,10 @@ import {
   disclosedClasses,
 } from '../../src/common/policy/policy';
 import { confidential, project } from '../../src/common/policy/projection';
+import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
 import type { AuthorizedTenantContext } from '../../src/common/tenancy/tenant-context';
 import { id, IdParams, instant } from '../../src/common/validation/schemas';
+import { AccessAudit } from '../../src/infrastructure/audit/access-audit';
 import {
   IdentityProviderPort,
   ProviderAnswerRefusedError,
@@ -56,7 +58,8 @@ import { signedInAs } from '../harness/session';
 // No route the app serves carries a confidential field yet: the first are the
 // medical module's (0.6.8). So a route of the test's carries one — a clinical
 // note's diagnosis — through the real mechanism: its schema's marker, the
-// grant the stored role matrix gives, the note's policy, and the projection.
+// grant the stored role matrix gives, the note's policy, and the projection,
+// released through the access audit (0.7.4) as a medical record's read is.
 
 // ---- The test's route: a clinical note with a medical field. ----
 
@@ -105,11 +108,20 @@ class ClinicalNoteProbe {
     const granted = await this.modules
       .get(PermissionService, { strict: false })
       .grantedClasses(ctx);
-    return project(
-      ClinicalNote,
-      note,
-      disclosedClasses(ctx, notePolicy, note, granted),
-    );
+    // A medical field leaves only after its access event (0.7.4).
+    return this.modules
+      .get(TenantTransactions, { strict: false })
+      .withTenantTransaction(ctx, (tx) =>
+        this.modules
+          .get(AccessAudit, { strict: false })
+          .release(
+            tx,
+            ctx,
+            { action: 'medical_record.read', id: note.id },
+            { schema: ClinicalNote, value: note },
+            disclosedClasses(ctx, notePolicy, note, granted),
+          ),
+      );
   }
 }
 
@@ -568,6 +580,36 @@ describe('confidential fields, against the independent classification', () => {
     expect(
       crossTenant.find(({ caller }) => caller.role === 'MEDICAL')?.status,
     ).toBe(404);
+  });
+
+  it('a_disclosed_medical_field_leaves_its_access_event', async () => {
+    // Every role read every note above, in both tenants. Only the doctor's
+    // own read released the diagnosis, so only it left an access event
+    // (0.7.4): the clinician, their role and session, the request, and the
+    // class — never the diagnosis itself.
+    for (const tenant of [0, 1] as const) {
+      const { doctor, physio } = notes[tenant];
+      const eventsOf = (note: Note) =>
+        asTenant(tenants[tenant].id, (tx) =>
+          tx.auditLog.findMany({
+            where: { entityId: note.id, action: 'medical_record.read' },
+          }),
+        );
+      const [event, ...more] = await eventsOf(doctor);
+      expect(more).toEqual([]);
+      expect(event).toMatchObject({
+        entityType: 'MedicalRecord',
+        actorType: 'USER',
+        userId: doctor.clinicianId,
+        actorRole: 'MEDICAL',
+        actorSessionId: expect.any(String) as string,
+        requestId: expect.any(String) as string,
+        outcome: 'SUCCEEDED',
+        newValues: { classes: ['MEDICAL'] },
+      });
+      expect(JSON.stringify(event)).not.toContain(doctor.diagnosis);
+      expect(await eventsOf(physio)).toEqual([]);
+    }
   });
 
   it('an_unclassified_new_field_fails_the_suite', () => {

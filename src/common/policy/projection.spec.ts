@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { id } from '../validation/schemas';
 import type { ConfidentialClass } from './confidential-class';
-import { confidential, project, UnprojectableResponse } from './projection';
+import {
+  confidential,
+  project,
+  projectAndRecord,
+  UnprojectableResponse,
+} from './projection';
 
 // The projection (0.6.4) on its own, with a response schema of the test's: a
 // treatment note, its clinician, and its exercises. Every value is synthetic.
@@ -57,10 +62,22 @@ describe('confidential projections', () => {
     expect(project(Note, { id: NOTE_ID }, none)).toEqual({ id: NOTE_ID });
   });
 
-  it('a_confidential_field_leaves_only_when_its_class_is_disclosed', () => {
+  it('a_confidential_field_leaves_only_when_its_class_is_disclosed', async () => {
+    // Both classes are access-audited (0.7.4): released through
+    // projectAndRecord, which records the classes it carries.
+    const recorded: Array<readonly ConfidentialClass[]> = [];
+    const record = (classes: readonly ConfidentialClass[]) => {
+      recorded.push(classes);
+      return Promise.resolve();
+    };
     // Medical disclosed: the medical fields, null among them — never the
     // identity document.
-    const medical = project(Note, loaded, new Set(['MEDICAL'] as const));
+    const medical = await projectAndRecord(
+      Note,
+      loaded,
+      new Set(['MEDICAL'] as const),
+      record,
+    );
     expect(medical).toMatchObject({
       diagnosis: 'Synthetic strain',
       findings: null,
@@ -68,10 +85,11 @@ describe('confidential projections', () => {
     expect(medical).not.toHaveProperty('passport');
     // Identity disclosed: the document, whole and allowlisted, and no
     // medical field.
-    const identity = project(
+    const identity = await projectAndRecord(
       Note,
       { ...loaded, passport: { ...loaded.passport, issuer: 'x' } },
       new Set(['IDENTITY'] as const),
+      record,
     );
     expect(identity).toMatchObject({
       passport: { number: 'P-0000', expires: '2030-01-01' },
@@ -79,6 +97,41 @@ describe('confidential projections', () => {
     expect(identity).not.toHaveProperty('diagnosis');
     expect(identity).not.toHaveProperty('findings');
     expect(identity).not.toHaveProperty('passport.issuer');
+    expect(recorded).toEqual([['MEDICAL'], ['IDENTITY']]);
+  });
+
+  it('the_access_is_recorded_before_the_data_is_released', async () => {
+    // A recording that fails: the value never comes back.
+    class InsertFailed extends Error {}
+    const failing = () =>
+      Promise.reject(new InsertFailed('the audit insert failed'));
+    await expect(
+      projectAndRecord(Note, loaded, new Set(['MEDICAL'] as const), failing),
+    ).rejects.toBeInstanceOf(InsertFailed);
+    // The record comes first: the value is not returned until it settles.
+    let settle!: () => void;
+    let released = false;
+    const pending = projectAndRecord(
+      Note,
+      loaded,
+      new Set(['MEDICAL', 'IDENTITY'] as const),
+      (classes) => {
+        expect(classes).toEqual(['IDENTITY', 'MEDICAL']);
+        return new Promise<void>((resolve) => (settle = resolve));
+      },
+    ).then((value) => {
+      released = true;
+      return value;
+    });
+    await Promise.resolve();
+    expect(released).toBe(false);
+    settle();
+    expect(await pending).toHaveProperty('diagnosis', 'Synthetic strain');
+    // Nothing of an audited class carried: nothing recorded.
+    const never = () => expect.unreachable('nothing should be recorded');
+    expect(
+      await projectAndRecord(Note, loaded, none, never),
+    ).not.toHaveProperty('diagnosis');
   });
 
   it('a_value_without_its_schemas_shape_does_not_leave', () => {
