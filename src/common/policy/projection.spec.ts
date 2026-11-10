@@ -6,6 +6,7 @@ import {
   confidential,
   project,
   projectAndRecord,
+  UnauditedRelease,
   UnprojectableResponse,
 } from './projection';
 
@@ -98,6 +99,42 @@ describe('confidential projections', () => {
     expect(identity).not.toHaveProperty('findings');
     expect(identity).not.toHaveProperty('passport.issuer');
     expect(recorded).toEqual([['MEDICAL'], ['IDENTITY']]);
+  });
+
+  it('project_never_releases_an_access_audited_class', () => {
+    // Disclosed or not, a medical, identity, legal or finance field leaves
+    // only through the access audit: project refuses, naming where.
+    expect(() => project(Note, loaded, new Set(['MEDICAL'] as const))).toThrow(
+      new UnauditedRelease('diagnosis', 'MEDICAL'),
+    );
+    expect(() => project(Note, loaded, new Set(['IDENTITY'] as const))).toThrow(
+      UnauditedRelease,
+    );
+    // A null medical field disclosed is a medical field released.
+    expect(() =>
+      project(
+        Note,
+        { id: NOTE_ID, findings: null },
+        new Set(['MEDICAL'] as const),
+      ),
+    ).toThrow(new UnauditedRelease('findings', 'MEDICAL'));
+    // Withheld, or not there to release: nothing to refuse.
+    expect(project(Note, loaded, none)).not.toHaveProperty('diagnosis');
+    expect(
+      project(Note, { id: NOTE_ID }, new Set(['MEDICAL'] as const)),
+    ).toEqual({ id: NOTE_ID });
+    // A class that is not access-audited leaves as before.
+    const Minor = z.strictObject({
+      id,
+      consent: confidential('MINOR_POLICY', z.string()),
+    });
+    expect(
+      project(
+        Minor,
+        { id: NOTE_ID, consent: 'guardian' },
+        new Set(['MINOR_POLICY'] as const),
+      ),
+    ).toEqual({ id: NOTE_ID, consent: 'guardian' });
   });
 
   it('the_access_is_recorded_before_the_data_is_released', async () => {

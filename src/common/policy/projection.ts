@@ -14,10 +14,11 @@ import {
 // every response against an independent classification
 // (test/fixtures/field-classification.ts).
 //
-// A field of an access-audited class (0.7.4; I-5) leaves through
+// A field of an access-audited class (0.7.4; I-5) leaves only through
 // `projectAndRecord`, whose one caller is the access audit
 // (src/infrastructure/audit/access-audit.ts): the access is recorded, in the
-// caller's transaction, before the value is returned.
+// caller's transaction, before the value is returned. `project` refuses to
+// release one.
 
 const markers = z.registry<{ readonly confidential: ConfidentialClass }>();
 
@@ -49,6 +50,22 @@ export class UnprojectableResponse extends Error {
   }
 }
 
+/**
+ * A response that would release a field of an access-audited class without
+ * its access event: a programming error, refused before anything leaves.
+ */
+export class UnauditedRelease extends Error {
+  constructor(
+    readonly path: string,
+    readonly confidentialClass: ConfidentialClass,
+  ) {
+    super(
+      `The response at "${path}" would release ${confidentialClass} without an access event: release it through the access audit.`,
+    );
+    this.name = new.target.name;
+  }
+}
+
 /** What `walk` answers for a field that does not leave. */
 const WITHHELD = Symbol('withheld');
 
@@ -68,7 +85,12 @@ export function project<V>(
   value: V,
   disclosed: ReadonlySet<ConfidentialClass>,
 ): V {
-  return projectCarrying(schema, value, disclosed).projected;
+  const { projected, carried } = projectCarrying(schema, value, disclosed);
+  const audited = [...carried].find(([, cls]) =>
+    ACCESS_AUDITED_CLASSES.includes(cls),
+  );
+  if (audited) throw new UnauditedRelease(...audited);
+  return projected;
 }
 
 /**
