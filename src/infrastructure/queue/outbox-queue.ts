@@ -8,7 +8,8 @@ export const OUTBOX_QUEUE = 'outbox';
  * How often a delivery is tried, and how it waits between tries: an
  * exponential back-off from `backoffMs`, doubling, up to `attempts` in all.
  * After the last, the event is DEAD with its last error. 8 tries from 5 s
- * waits about 21 minutes in all before giving up.
+ * wait 7 times, 5 s doubling to 320 s: about 10½ minutes in all before
+ * giving up.
  */
 export interface DeliveryPolicy {
   readonly attempts: number;
