@@ -41,9 +41,12 @@ interface Ids {
  * - `appended`: evidence, written once and never changed or removed (0.7.1;
  *   SR-AUD-005). The runtime role inserts and reads; triggers refuse UPDATE,
  *   DELETE and TRUNCATE for every role, the owner included.
+ * - `contained`: a legacy table its owning step migrates and retires — no new
+ *   writes, its rows kept (0.8.2). The runtime role reads it and writes
+ *   nothing; a migration may still write it, as the owner.
  */
 interface Rows {
-  readonly rows?: 'kept' | 'appended';
+  readonly rows?: 'kept' | 'appended' | 'contained';
 }
 
 export type ModelClass =
@@ -86,7 +89,9 @@ export const MODEL_CLASSIFICATION: Readonly<
   // Accepted or revoked, never removed: the list shows what became of each.
   Invitation: { ...TENANT_OWNED, rows: 'kept' },
   Season: TENANT_OWNED,
-  Document: TENANT_OWNED,
+  // Polymorphic, with no referential integrity: contained until 1.3.1
+  // migrates its rows to file objects and retires it (0.8.2).
+  Document: { ...TENANT_OWNED, rows: 'contained' },
   Player: TENANT_OWNED,
   PlayerMedia: TENANT_OWNED,
   MedicalRecord: TENANT_OWNED,

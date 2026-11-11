@@ -70,6 +70,12 @@ export function rlsFor({
           `REVOKE DELETE ON ${table} FROM ${RUNTIME_ROLE};`,
         ]
       : []),
+    ...(rows === 'contained'
+      ? [
+          `-- Contained: no new writes, its rows kept, until its owning step retires it.`,
+          `REVOKE INSERT, UPDATE, DELETE ON ${table} FROM ${RUNTIME_ROLE};`,
+        ]
+      : []),
     // Evidence (0.7.1): reject_evidence_mutation() is the audit_append_only
     // migration's, for every table of evidence.
     ...(rows === 'appended'

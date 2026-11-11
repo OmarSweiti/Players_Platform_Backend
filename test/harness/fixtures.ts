@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import type {
   Player,
+  Prisma,
   PrismaClient,
   Tenant,
   User,
@@ -42,6 +43,30 @@ let migrationClient: ReturnType<typeof prismaFor> | undefined;
 export function migrationPrisma(): PrismaClient {
   migrationClient ??= prismaFor(inject('migrationDatabaseUrl'));
   return migrationClient.prisma;
+}
+
+/** The legacy tables the runtime role may no longer write: `contained` (0.8.2). */
+export type ContainedTable = 'documents';
+
+/**
+ * Writes to a contained table (0.8.2), which the runtime role may only read:
+ * as the owner, the way a data migration writes one — the table's forced
+ * row-level security lifted inside the transaction and restored before it
+ * commits. For a test of what a legacy row may hold, and of what reads it.
+ */
+export function asContainedTableOwner<T>(
+  table: ContainedTable,
+  work: (tx: Prisma.TransactionClient) => Promise<T>,
+  migrator: PrismaClient = migrationPrisma(),
+): Promise<T> {
+  return migrator.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe(
+      `ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY`,
+    );
+    const result = await work(tx);
+    await tx.$executeRawUnsafe(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+    return result;
+  });
 }
 
 /**

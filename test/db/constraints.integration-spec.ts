@@ -12,7 +12,9 @@ import {
   type IntegrityCheck,
 } from '../../scripts/integrity-checks';
 import {
+  asContainedTableOwner,
   asTenant,
+  type ContainedTable,
   createMember,
   createPlayer,
   createTenant,
@@ -278,6 +280,8 @@ type Outcome<T> = T[] | { code?: string; constraint?: string };
 
 describe('integrity constraints in SQL', () => {
   let app: Client;
+  /** The migrator, acting as the owner: it alone writes a contained table (0.8.2). */
+  let owner: Client;
   let a: Tenant;
   let b: Tenant;
   /** One row of tenant A in each table a rule is on: table → id. */
@@ -305,9 +309,29 @@ describe('integrity constraints in SQL', () => {
     }
   }
 
+  /** One statement as the owner on a contained table, its forced RLS lifted, rolled back. */
+  async function attemptAsOwner<T extends Record<string, unknown>>(
+    table: ContainedTable,
+    sql: string,
+    params: unknown[],
+  ): Promise<Outcome<T>> {
+    await owner.query('BEGIN');
+    try {
+      await owner.query(`ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY`);
+      const { rows } = await owner.query<T>(sql, params);
+      await owner.query('ROLLBACK');
+      return rows;
+    } catch (error) {
+      await owner.query('ROLLBACK');
+      const { code, constraint } = error as DatabaseError;
+      return { code, constraint };
+    }
+  }
+
   /**
    * Writes `values` to tenant A's row of `table`, and rolls it back. Audit is
-   * appended, never updated, so its counter-examples are new rows.
+   * appended, never updated, so its counter-examples are new rows; a
+   * contained table (0.8.2) is written as the owner, as a migration would.
    */
   function write(table: string, values: Values) {
     const columns = Object.keys(values);
@@ -324,6 +348,13 @@ describe('integrity constraints in SQL', () => {
       );
     }
     const set = columns.map((c, i) => `${c} = ${expressions[i]}`).join(', ');
+    if (table === 'documents') {
+      return attemptAsOwner(
+        table,
+        `UPDATE ${table} SET ${set} WHERE id = $1 RETURNING id`,
+        [rowOf[table]],
+      );
+    }
     return attempt(a, `UPDATE ${table} SET ${set} WHERE id = $1 RETURNING id`, [
       rowOf[table],
     ]);
@@ -331,6 +362,7 @@ describe('integrity constraints in SQL', () => {
 
   beforeAll(async () => {
     app = await connect(inject('databaseUrl'));
+    owner = await connect(inject('migrationDatabaseUrl'));
     [a, b] = [await createTenant(), await createTenant()];
     const [member, player] = [
       await createMember(a, 'ADMIN'),
@@ -415,17 +447,6 @@ describe('integrity constraints in SQL', () => {
               tenantId,
               contractId: contract.id,
               approvedById: member.id,
-            },
-          })
-        ).id,
-        documents: (
-          await tx.document.create({
-            data: {
-              tenantId,
-              entityType: 'PLAYER',
-              entityId: player.id,
-              fileUrl: 'objects/test-document',
-              fileName: 'test-document.pdf',
             },
           })
         ).id,
@@ -544,10 +565,25 @@ describe('integrity constraints in SQL', () => {
       };
       return created;
     });
+    // The contained documents table's legacy row, as the owner writes it.
+    rowOf.documents = (
+      await asContainedTableOwner('documents', (tx) =>
+        tx.document.create({
+          data: {
+            tenantId: a.id,
+            entityType: 'PLAYER',
+            entityId: player.id,
+            fileUrl: 'objects/test-document',
+            fileName: 'test-document.pdf',
+          },
+        }),
+      )
+    ).id;
   });
 
   afterAll(async () => {
     await app?.end();
+    await owner?.end();
   });
 
   it('impossible_values_are_refused_by_the_database', async () => {
