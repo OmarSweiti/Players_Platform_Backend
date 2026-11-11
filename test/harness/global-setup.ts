@@ -1,5 +1,6 @@
 import type { TestProject } from 'vitest/node';
 import { createIsolatedSchema, inSchema, testRegistryDatabaseUrl } from './db';
+import { type ObjectStoreSettings, objectStoreForTests } from './object-store';
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -8,6 +9,8 @@ declare module 'vitest' {
     databaseSchema: string;
     /** The registry role's URL for the run's schema (0.7.6). */
     registryDatabaseUrl: string;
+    /** The object store's test bucket and keys (0.8.1), or null when none is configured. */
+    objectStore: ObjectStoreSettings | null;
   }
 }
 
@@ -31,6 +34,9 @@ export default async function setup(
       ? inSchema(testRegistryDatabaseUrl(), run.schema)
       : '',
   );
+  // Only the storage port's tests reach the object store (0.8.1); they refuse
+  // to run without it. Its test bucket exists, versioned, before any does.
+  project.provide('objectStore', await objectStoreForTests());
   return async () => {
     if (process.env.KEEP_TEST_SCHEMA !== '1') await run.drop();
   };
