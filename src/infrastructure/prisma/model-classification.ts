@@ -123,6 +123,10 @@ export const MODEL_CLASSIFICATION: Readonly<
   // An email an event's consumer sends, kept as the record that it was sent,
   // failed, or was no longer wanted (0.7.8).
   EmailDelivery: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'kept' },
+  // A file and its upload (0.8.2): each closed by a state of its own; a file
+  // is purged by marking it, never removed (1.3.4).
+  FileObject: { ...TENANT_OWNED, rows: 'kept' },
+  UploadSession: { ...TENANT_OWNED, rows: 'kept' },
 };
 
 /** A model as the database knows it: its table, and the column that names its tenant. */

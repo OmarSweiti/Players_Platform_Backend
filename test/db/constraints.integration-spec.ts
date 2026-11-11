@@ -94,6 +94,26 @@ const OTHER_STEPS_CHECKS = [
   'email_deliveries_recipient_hash_check',
   'email_deliveries_sent_check',
   'email_deliveries_template_check',
+  // 0.8.2: test/files/files.integration-spec.ts
+  'file_objects_infected_check',
+  'file_objects_mime_type_check',
+  'file_objects_object_check',
+  'file_objects_object_key_check',
+  'file_objects_original_name_check',
+  'file_objects_pinned_check',
+  'file_objects_promoted_check',
+  'file_objects_quarantine_key_check',
+  'file_objects_ready_check',
+  'file_objects_retention_class_check',
+  'file_objects_sha256_check',
+  'file_objects_size_bytes_check',
+  'file_objects_version_ids_check',
+  'upload_sessions_closed_once_check',
+  'upload_sessions_declared_size_check',
+  'upload_sessions_declared_type_check',
+  'upload_sessions_expiry_check',
+  'upload_sessions_owner_kind_check',
+  'upload_sessions_revision_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
