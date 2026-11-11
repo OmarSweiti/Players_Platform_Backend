@@ -18,6 +18,10 @@ const CONTRACT_ENV = {
   OIDC_ADMIN_CLIENT_SECRET: 'contract-placeholder',
   CSRF_SECRET: 'contract-placeholder-contract-placeholder',
   SECURITY_EVENT_KEY: 'contract-placeholder-contract-placeholder',
+  S3_ENDPOINT: 'https://objects.sadara.test',
+  S3_BUCKET: 'sadara',
+  S3_ACCESS_KEY_ID: 'contract-placeholder',
+  S3_SECRET_ACCESS_KEY: 'contract-placeholder',
   FEATURE_MEDICAL: 'false',
   FEATURE_SCOUTING: 'false',
 };

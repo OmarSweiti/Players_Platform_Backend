@@ -21,6 +21,10 @@ const valid = {
   OIDC_ADMIN_CLIENT_SECRET: 'not-a-real-admin-secret',
   CSRF_SECRET: 'not-a-real-csrf-key-not-a-real-csrf-key',
   SECURITY_EVENT_KEY: 'not-a-real-event-key-not-a-real-event-key',
+  S3_ENDPOINT: 'https://objects.agency.test',
+  S3_BUCKET: 'sadara',
+  S3_ACCESS_KEY_ID: 'not-a-real-key-id',
+  S3_SECRET_ACCESS_KEY: 'not-a-real-secret-access-key',
 } as const;
 
 const failureOf = (raw: Record<string, unknown>): string => {
@@ -382,6 +386,51 @@ describe('the environment schema', () => {
     }
     expect(message).toContain('SMTP_PASSWORD must be at least 16 characters');
     expect(message).not.toContain('short');
+  });
+
+  it('takes a private object store over HTTPS, or HTTP on this machine, with its key', () => {
+    // Path-style is off unless set; the region defaults to S3's first.
+    expect(parseEnv(valid)).toMatchObject({
+      S3_ENDPOINT: 'https://objects.agency.test',
+      S3_REGION: 'us-east-1',
+      S3_BUCKET: 'sadara',
+      S3_FORCE_PATH_STYLE: false,
+    });
+    expect(
+      parseEnv({
+        ...valid,
+        S3_ENDPOINT: 'http://127.0.0.1:7070',
+        S3_FORCE_PATH_STYLE: 'true',
+      }),
+    ).toMatchObject({
+      S3_ENDPOINT: 'http://127.0.0.1:7070',
+      S3_FORCE_PATH_STYLE: true,
+    });
+    for (const [name, value, problem] of [
+      [
+        'S3_ENDPOINT',
+        'http://objects.agency.test',
+        'must be an HTTPS URL, or HTTP on localhost, with no query',
+      ],
+      [
+        'S3_ENDPOINT',
+        'https://objects.agency.test/sadara',
+        'must have no path: the bucket is S3_BUCKET',
+      ],
+      ['S3_BUCKET', 'Sadara_Files', 'must be an S3 bucket name'],
+      ['S3_SECRET_ACCESS_KEY', 'short', 'must be at least 16 characters'],
+      ['S3_SECRET_ACCESS_KEY', '', 'is missing'],
+      ['S3_ACCESS_KEY_ID', '', 'is missing'],
+      ['S3_FORCE_PATH_STYLE', 'yes', 'must be one of true, false'],
+    ] as const) {
+      const message = failureOf({ ...valid, [name]: value });
+      expect([name, value, message]).toEqual([
+        name,
+        value,
+        expect.stringContaining(`${name} ${problem}`),
+      ]);
+      if (value.length > 5) expect(message).not.toContain(value);
+    }
   });
 
   it('refuses a database connection as the owner, the migrator or the superuser', () => {

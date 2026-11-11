@@ -16,7 +16,6 @@ const testEnv = {
   REDIS_HOST: '127.0.0.1',
   REDIS_PORT: '6379',
   CORS_ORIGIN: 'https://app.agency.test',
-  MAIL_FROM: 'no-reply@agency.test',
   OIDC_ISSUER: 'https://idp.agency.test/realms/sadara',
   OIDC_CLIENT_ID: 'sadara-api',
   OIDC_CLIENT_SECRET: 'test-placeholder-not-a-secret',
@@ -24,6 +23,14 @@ const testEnv = {
   OIDC_ADMIN_CLIENT_SECRET: 'test-placeholder-not-a-secret',
   CSRF_SECRET: 'test-placeholder-not-a-secret-csrf-key',
   SECURITY_EVENT_KEY: 'test-placeholder-not-a-secret-event-key',
+  // The application's object store: no test of the application reaches it
+  // yet; the storage port's own tests take the local store's settings
+  // (scripts/test-database.sh).
+  S3_ENDPOINT: 'http://127.0.0.1:7070',
+  S3_BUCKET: 'sadara-test',
+  S3_ACCESS_KEY_ID: 'test-placeholder',
+  S3_SECRET_ACCESS_KEY: 'test-placeholder-not-a-secret',
+  S3_FORCE_PATH_STYLE: 'true',
   // Tenants are found from the host, {slug}.localhost (0.5.2): signed-in
   // requests come to their tenant's host (test/harness/session.ts).
   APEX_DOMAIN: 'localhost',

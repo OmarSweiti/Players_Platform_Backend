@@ -57,6 +57,8 @@ docker run -d --name "$run-api" --network "$run" \
   -e OIDC_ADMIN_CLIENT_ID=sadara-admin -e OIDC_ADMIN_CLIENT_SECRET=not-a-secret-not-a-secret \
   -e CSRF_SECRET=not-a-secret-not-a-secret-not-a-secret \
   -e SECURITY_EVENT_KEY=not-a-secret-not-a-secret-not-a-secret \
+  -e S3_ENDPOINT=https://objects.agency.test -e S3_BUCKET=sadara \
+  -e S3_ACCESS_KEY_ID=not-a-secret -e S3_SECRET_ACCESS_KEY=not-a-secret-not-a-secret \
   "$image" >/dev/null
 export SMOKE_CONTAINER="$run-api"
 

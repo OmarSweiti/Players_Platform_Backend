@@ -88,6 +88,13 @@ const issuer = z.url({ protocol: /^https?$/ }).refine(
   },
   { message: 'must be an HTTPS URL, or HTTP on localhost, with no query' },
 );
+// The object store's endpoint (0.8.1): the same rule, and no path — the
+// bucket is its own setting.
+const storeEndpoint = issuer.refine((url) => new URL(url).pathname === '/', {
+  message: 'must have no path: the bucket is S3_BUCKET',
+});
+// A bucket's name as S3 allows it: lower case, digits, dots and hyphens.
+const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 const clientId = z.string().regex(/^[a-z0-9-]+$/, 'a client id');
 
 /** Where the API's routes live; the committed contract names this one. */
@@ -151,6 +158,20 @@ export const Env = z
     // so that rotating either never touches the other; rotating it starts a
     // new series of hashes, which no longer match the old ones.
     SECURITY_EVENT_KEY: z.string().min(32),
+    // Private, versioned object storage (0.8.1; ADR-0009, ADR-0020): an
+    // S3-compatible endpoint — locally the stack's Versity gateway — its
+    // bucket, and an access key with no default. Path-style addressing
+    // (/bucket/key), which a gateway on one host needs; a provider that
+    // wants virtual hosts sets it false.
+    S3_ENDPOINT: storeEndpoint,
+    S3_REGION: z
+      .string()
+      .regex(/^[a-z0-9-]{2,32}$/, 'a region name')
+      .default('us-east-1'),
+    S3_BUCKET: z.string().regex(BUCKET, 'an S3 bucket name'),
+    S3_ACCESS_KEY_ID: z.string().min(3),
+    S3_SECRET_ACCESS_KEY: z.string().min(16),
+    S3_FORCE_PATH_STYLE: flag.default(false),
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),
     FEATURE_SCOUTING: flag.default(false),
