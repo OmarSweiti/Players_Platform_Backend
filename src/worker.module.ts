@@ -5,6 +5,8 @@ import { Queue } from 'bullmq';
 import { PinoLogger } from 'nestjs-pino';
 import type { WorkerEnv } from './config/env.schema';
 import { WorkerLoggingModule } from './infrastructure/logging/logging.module';
+import { MailModule } from './infrastructure/mail/mail.module';
+import { MailTransport } from './infrastructure/mail/mail-transport';
 import { ConsumerInboxes } from './infrastructure/outbox/consumer-inboxes';
 import {
   OUTBOX_CONSUMERS,
@@ -25,6 +27,8 @@ import {
 } from './infrastructure/queue/outbox-worker';
 import { RelayLoop } from './infrastructure/queue/relay-loop';
 import { TenantRegistry } from './infrastructure/tenancy/tenant-registry';
+import { InvitationNoticeConsumer } from './modules/users/application/invitation-notice.consumer';
+import { InvitationNoticeModule } from './modules/users/invitation-notice.module';
 
 /** How many jobs one worker process runs at once. */
 const CONCURRENCY = 4;
@@ -41,6 +45,7 @@ export class WorkerLifecycle {
     private readonly loop: RelayLoop,
     private readonly worker: OutboxWorker,
     private readonly publisher: OutboxPublisher,
+    private readonly mail: MailTransport,
   ) {}
 
   start(): void {
@@ -52,6 +57,7 @@ export class WorkerLifecycle {
     await this.loop.stop();
     await this.worker.close();
     await this.publisher.close();
+    await this.mail.close();
   }
 }
 
@@ -59,9 +65,10 @@ export class WorkerLifecycle {
  * The worker's composition root (0.7.6; docs/reference/architecture.md): the
  * runtime role's database for the tenant transactions it works in, the
  * registry role's for finding the active tenants, Valkey for its queue, the
- * outbox relay, and the queue's worker with the registered consumers — no
- * routes, nothing of the API's sessions, identity provider or mail. Its
- * settings are validated before it is built (src/worker.ts).
+ * outbox relay, the queue's worker with the registered consumers, and the
+ * SMTP server they send email through (0.7.8) — no routes, nothing of the
+ * API's sessions or identity provider. Its settings are validated before it
+ * is built (src/worker.ts).
  */
 @Module({})
 export class WorkerModule {
@@ -80,6 +87,8 @@ export class WorkerModule {
         }),
         WorkerLoggingModule,
         PrismaModule,
+        MailModule.forSettings(settings),
+        InvitationNoticeModule,
       ],
       providers: [
         {
@@ -94,8 +103,14 @@ export class WorkerModule {
               DELIVERY,
             ),
         },
-        // Consumers register here as they arrive: the first is 0.7.8's.
-        { provide: OUTBOX_CONSUMERS, useValue: [] },
+        // Every consumer the worker runs, each for its own event types.
+        {
+          provide: OUTBOX_CONSUMERS,
+          inject: [InvitationNoticeConsumer],
+          useFactory: (notice: InvitationNoticeConsumer): OutboxConsumer[] => [
+            notice,
+          ],
+        },
         {
           provide: OutboxRelay,
           inject: [TenantRegistry, PrismaService, OutboxPublisher],

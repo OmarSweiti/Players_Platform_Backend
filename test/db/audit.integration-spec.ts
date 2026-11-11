@@ -8,6 +8,7 @@ import { ValidationFailedError } from '../../src/common/errors/domain-error';
 import type { AuthorizedTenantContext } from '../../src/common/tenancy/tenant-context';
 import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
 import { fixedClock } from '../../src/common/time/clock';
+import { Outbox } from '../../src/infrastructure/outbox/outbox';
 import { databaseConnectionOf } from '../../src/infrastructure/prisma/database-url';
 import {
   AuditEventRefused,
@@ -51,6 +52,7 @@ const DAY_MS = 24 * 3_600_000;
 const provider = {
   findAccount: () => Promise.resolve(null),
   createAccount: () => Promise.resolve({ subject: randomUUID() }),
+  sendSetupEmail: () => Promise.resolve(),
 } as unknown as IdentityProviderPort;
 
 /** Every audit row about `entityId`, as the tenant reads it. */
@@ -95,6 +97,7 @@ describe('audit inside the business transaction', () => {
       provider,
       fixedClock(new Date()),
       audit,
+      new Outbox(),
     );
 
   beforeAll(async () => {
@@ -211,6 +214,7 @@ describe('audit inside the business transaction', () => {
           provider,
           fixedClock(new Date()),
           audit,
+          new Outbox(),
         ).execute(ctx, { email, role: 'COACH' }),
       ).rejects.toThrow(/injected fault/);
       expect(

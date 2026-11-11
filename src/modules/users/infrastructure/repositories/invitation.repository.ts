@@ -82,6 +82,21 @@ export class InvitationRepository implements InvitationRecords {
     return defaultLocale;
   }
 
+  agencyOf(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+  ): Promise<{
+    name: string;
+    slug: string;
+    domain: string | null;
+    timezone: string;
+  }> {
+    return tx.tenant.findUniqueOrThrow({
+      where: { id: ctx.tenantId },
+      select: { name: true, slug: true, domain: true, timezone: true },
+    });
+  }
+
   async isMemberAddress(
     tx: TenantTx,
     ctx: AuthorizedTenantContext,

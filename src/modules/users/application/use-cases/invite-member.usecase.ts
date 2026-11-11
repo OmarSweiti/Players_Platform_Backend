@@ -14,6 +14,7 @@ import {
 } from '../../../../common/tenancy/tenant-transaction';
 import { CLOCK, type Clock } from '../../../../common/time/clock';
 import { AuditService } from '../../../../infrastructure/audit/audit.service';
+import { Outbox } from '../../../../infrastructure/outbox/outbox';
 import { needsSecondFactor } from '../../../identity/application/assurance.policy';
 import {
   AccountExistsError,
@@ -45,10 +46,17 @@ export interface Invite {
  * that have them verify their address, choose a password and, for a
  * privileged role, set up a second factor (0.5.8): never with a password.
  *
- * The invitation is open for seven days, and has no token yet: its email's
- * delivery makes one when it sends it (0.7.8; IssueInvitationToken). An
- * expired invitation to the same address, still open, is revoked by the new
- * one. Each change is audited, without the address.
+ * The provider then sends its own setup email to an account with something
+ * left to set up — verifying the address, choosing a password — before the
+ * invitation is written (0.7.8): a refusal there writes nothing, and a retry
+ * finds the account and asks again.
+ *
+ * The invitation is open for seven days, and has no token yet: its notice
+ * is enqueued with it, in its transaction (`invitation.created`, the
+ * invitation's id only), and the worker makes the token when it sends the
+ * notice (0.7.8; InvitationNoticeConsumer). An expired invitation to the
+ * same address, still open, is revoked by the new one. Each change is
+ * audited, without the address.
  */
 @Injectable()
 export class InviteMemberUseCase {
@@ -58,6 +66,7 @@ export class InviteMemberUseCase {
     private readonly provider: IdentityProviderPort,
     @Inject(CLOCK) private readonly clock: Clock,
     private readonly audit: AuditService,
+    private readonly outbox: Outbox,
   ) {}
 
   async execute(
@@ -125,6 +134,13 @@ export class InviteMemberUseCase {
           expiresAt: invitation.expiresAt,
         },
       });
+      // Its notice, sent by the worker once this commits.
+      await this.outbox.enqueue(tx, ctx, {
+        type: 'invitation.created',
+        aggregateId: invitation.id,
+        refs: { invitationId: invitation.id },
+        dedupKey: `invitation.created:${invitation.id}`,
+      });
       return { ...invitation, status: statusOf(invitation, now) };
     });
   }
@@ -156,23 +172,42 @@ export class InviteMemberUseCase {
     return open;
   }
 
-  /** The invitee's account at the provider: found, or made, never with a password. */
+  /**
+   * The invitee's account at the provider: found, or made, never with a
+   * password; then the provider's setup email, which it sends only while
+   * something is left to set up.
+   */
   private async accountFor(
     email: string,
     locale: Locale,
     role: UserRole,
   ): Promise<void> {
-    if (await this.provider.findAccount(email)) return;
+    const subject =
+      (await this.provider.findAccount(email))?.subject ??
+      (await this.newAccount(email, locale, role));
+    await this.provider.sendSetupEmail(subject);
+  }
+
+  /** A new account, to verify its address and choose a password, and a second factor for a privileged role. */
+  private async newAccount(
+    email: string,
+    locale: Locale,
+    role: UserRole,
+  ): Promise<string> {
     const actions: RequiredAction[] = [
       'VERIFY_EMAIL',
       'SET_PASSWORD',
       ...(needsSecondFactor(role) ? (['CONFIGURE_OTP'] as const) : []),
     ];
     try {
-      await this.provider.createAccount(email, locale, actions);
+      return (await this.provider.createAccount(email, locale, actions))
+        .subject;
     } catch (error) {
       // Made meanwhile, by another invitation: it exists, as wanted.
       if (!(error instanceof AccountExistsError)) throw error;
+      const made = await this.provider.findAccount(email);
+      if (made === null) throw error;
+      return made.subject;
     }
   }
 }

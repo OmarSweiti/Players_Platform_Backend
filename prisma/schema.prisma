@@ -413,6 +413,7 @@ model Tenant {
   outboxEvents         OutboxEvent[]
   consumerInboxes      ConsumerInbox[]
   idempotencyRecords   IdempotencyRecord[]
+  emailDeliveries      EmailDelivery[]
   documents            Document[]
   playerMedia          PlayerMedia[]
   medicalRecords       MedicalRecord[]
@@ -1824,6 +1825,7 @@ model OutboxEvent {
 
   tenant         Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   receipts       ConsumerInbox[]
+  emails         EmailDelivery[]
 
   @@unique([id, tenantId])
   @@unique([tenantId, dedupKey])
@@ -1919,4 +1921,65 @@ model IdempotencyRecord {
   /// The key's namespace, led by the tenant as every tenant index is.
   @@unique([tenantId, actorUserId, method, canonicalPath, keyHash], map: "idempotency_records_namespace_key")
   @@map("idempotency_records")
+}
+
+//////////////////////////
+// EMAIL
+//////////////////////////
+
+/// Where an email is in its delivery (0.7.8): its intent recorded (QUEUED); an
+/// attempt begun whose outcome is not yet recorded (SENDING) — a worker that
+/// stopped there sends it again; accepted by the mail server (SENT); given up
+/// after its last attempt (FAILED); or nothing left to send, because what it
+/// was about no longer wants it (CANCELLED).
+enum EmailDeliveryStatus {
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+  CANCELLED
+
+  @@map("email_delivery_status")
+}
+
+/// One email an outbox event's consumer sends to one recipient (0.7.8):
+/// recorded in the consumer's transaction, unique per event and recipient, so
+/// that a redelivered event sends nothing more once its email is recorded as
+/// sent. It promises the intent is durable and local processing happens once;
+/// it does not promise delivery exactly once — a worker that stops after the
+/// server accepted a message, before recording it, sends it again. Tenant-
+/// owned, under forced RLS; kept, never removed by the runtime role. No
+/// address and no body: the recipient is a hash, and a message's content is
+/// built again at each attempt. CHECKs (hand-written SQL) hold the template's
+/// name, the hash's length, the locale, the counts and the outcome to its state.
+model EmailDelivery {
+  /// UUIDv7 (0.4.11): one per email, an append-heavy table.
+  id            String              @id @default(uuid(7)) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  /// The outbox event the email is for.
+  eventId       String              @map("event_id") @db.Uuid
+  /// What is sent, lower-case words joined by hyphens: `invitation-notice`.
+  template      String              @db.VarChar(60)
+  /// SHA-256 of the recipient's normalised address: who, without the address.
+  recipientHash Bytes               @map("recipient_hash")
+  /// The language it is written in.
+  locale        String              @db.VarChar(2)
+  status        EmailDeliveryStatus @default(QUEUED)
+  /// How many attempts began.
+  attempts      Int                 @default(0)
+  /// Why the last attempt failed, as a code; a FAILED email always has one.
+  lastErrorCode String?             @map("last_error_code") @db.VarChar(100)
+  /// The Message-ID of the message the server accepted (SENT only).
+  messageId     String?             @map("message_id") @db.VarChar(255)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastAttemptAt DateTime?           @map("last_attempt_at") @db.Timestamptz(3)
+  sentAt        DateTime?           @map("sent_at") @db.Timestamptz(3)
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  event         OutboxEvent         @relation(fields: [eventId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([id, tenantId])
+  /// Once per event and recipient, led by the tenant as every tenant index is.
+  @@unique([tenantId, eventId, recipientHash], map: "email_deliveries_event_recipient_key")
+  @@map("email_deliveries")
 }

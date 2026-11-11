@@ -11,7 +11,6 @@ const CONTRACT_ENV = {
   REDIS_PORT: '1',
   TRUSTED_PROXIES: '',
   CORS_ORIGIN: 'https://app.sadara.test',
-  MAIL_FROM: 'no-reply@sadara.test',
   OIDC_ISSUER: 'https://idp.sadara.test/realms/sadara',
   OIDC_CLIENT_ID: 'sadara-api',
   OIDC_CLIENT_SECRET: 'contract-placeholder',

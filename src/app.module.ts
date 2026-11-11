@@ -6,8 +6,6 @@ import { BodyParsingModule } from './common/http/body-parsing.module';
 import { LoggingModule } from './infrastructure/logging/logging.module';
 import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
-import { EventsModule } from './infrastructure/events/events.module';
-import { MailModule } from './infrastructure/mail/mail.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { UsersModule } from './modules/users/users.module';
 import { PlayersModule } from './modules/players/players.module';
@@ -42,8 +40,6 @@ import { RouteAccessCheck } from './common/authz/route-access-check';
     PrismaModule,
     // Idempotency keys for the commands a client retries (0.7.7).
     IdempotencyModule,
-    EventsModule,
-    MailModule,
     StorageModule,
     IdentityModule,
     UsersModule,
