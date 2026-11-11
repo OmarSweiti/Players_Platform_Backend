@@ -12,9 +12,10 @@ import { describeError } from '../../common/logging/describe-error';
 import { TenantTransactions } from '../../common/tenancy/tenant-transaction';
 import { runCorrelatedJob } from '../logging/correlation';
 import type { ConsumerInboxes } from '../outbox/consumer-inboxes';
-import type {
-  DeliveredEvent,
-  OutboxConsumer,
+import {
+  EffectFailedForGood,
+  type DeliveredEvent,
+  type OutboxConsumer,
 } from '../outbox/outbox-consumers';
 import type { OutboxEventType } from '../outbox/outbox-events';
 import { jobContext } from './job-context';
@@ -28,14 +29,32 @@ export class JobRefused extends UnrecoverableError {
   }
 }
 
-/** A failure as the outbox records it: a code, never a message, which may hold a value. */
+/** An effect a consumer says cannot succeed: never retried, recorded with its code (0.7.8). */
+export class JobFailedForGood extends UnrecoverableError {
+  constructor(readonly code: string) {
+    super(`outbox job failed for good: ${code}`);
+    this.name = 'JobFailedForGood';
+  }
+}
+
+/** A code an error carries itself, a system's or a server's: `ECONNREFUSED`, `smtp_451`. */
+const OWN_CODE = /^[A-Za-z0-9_.:-]{1,40}$/;
+
+/**
+ * A failure as the outbox records it: a code, never a message, which may
+ * hold a value — a domain error's code, a code the error carries itself
+ * (0.7.8), else its class.
+ */
 export function errorCodeOf(error: unknown): string {
+  const own = (error as { code?: unknown } | null)?.code;
   const raw =
     error instanceof DomainError
       ? error.code
-      : error instanceof Error
-        ? error.name
-        : 'unknown';
+      : typeof own === 'string' && OWN_CODE.test(own)
+        ? own
+        : error instanceof Error
+          ? error.name
+          : 'unknown';
   const code = raw
     .toLowerCase()
     .replace(/[^a-z0-9_.:-]+/g, '_')
@@ -114,6 +133,15 @@ export class OutboxJobHandler {
           () => consumer.consume(tx, ctx, delivered),
         ),
       );
+      // The outside call, after the receipt committed (0.7.8).
+      try {
+        await consumer.dispatch?.(ctx, delivered);
+      } catch (error) {
+        if (error instanceof EffectFailedForGood) {
+          throw new JobFailedForGood(error.code);
+        }
+        throw error;
+      }
     }
     return consumers.length;
   }
