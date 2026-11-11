@@ -53,6 +53,21 @@ export abstract class InvitationRecords {
     ctx: AuthorizedTenantContext,
   ): Promise<Locale>;
 
+  /**
+   * The tenant as its invitation's email names it (0.7.8): its name, where
+   * its links point — its own domain, or its slug under the apex domain —
+   * and the zone its times are written in.
+   */
+  abstract agencyOf(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+  ): Promise<{
+    name: string;
+    slug: string;
+    domain: string | null;
+    timezone: string;
+  }>;
+
   /** Whether a membership holds the address, an archived one included (0.4.9). */
   abstract isMemberAddress(
     tx: TenantTx,
