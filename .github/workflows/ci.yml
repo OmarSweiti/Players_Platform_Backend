@@ -61,6 +61,29 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
+      # The object store, for the storage port's tests (0.8.1): the local
+      # stack's Versity gateway, its image and digest (umbrella
+      # infra/compose.yaml, ADR-0020); move them together. Its test bucket is
+      # made, versioned, by the tests' setup (test/harness/object-store.ts).
+      objectstore:
+        image: versity/versitygw:v1.8.0@sha256:30292fc2eeacc67a36993b01f7a7a5e3361a19cced0e80c1d71cfa2a4b0a2499 # v1.8.0
+        env:
+          ROOT_ACCESS_KEY_ID: ci-objects # a disposable service container, not a secret
+          ROOT_SECRET_ACCESS_KEY: ci-objects-not-a-secret
+          VGW_PORT: ":7070"
+          VGW_HEALTH: /health
+          VGW_BACKEND: posix
+          VGW_BACKEND_ARG: /data/buckets
+          VGW_VERSIONING_DIR: /data/versions
+        volumes:
+          - objectstore-buckets:/data/buckets
+          - objectstore-versions:/data/versions
+        ports: ["7070:7070"]
+        options: >-
+          --health-cmd "wget -q -O /dev/null http://127.0.0.1:7070/health"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       # prisma.config.ts reads it: the CLI migrates as the migrator (0.4.2)
       MIGRATION_DATABASE_URL: postgresql://sadara_migrator:ci-migrator@localhost:5432/ci
@@ -122,6 +145,11 @@ jobs:
           MIGRATION_DATABASE_URL_TEST: postgresql://sadara_migrator:ci-migrator@localhost:5432/ci
           # The worker's tests log in as its registry role (0.7.6).
           REGISTRY_DATABASE_URL_TEST: postgresql://sadara_registry:ci-registry@localhost:5432/ci
+          # The storage port's tests use the object store above (0.8.1).
+          S3_ENDPOINT_TEST: http://localhost:7070
+          S3_BUCKET_TEST: sadara-test
+          S3_ACCESS_KEY_ID_TEST: ci-objects
+          S3_SECRET_ACCESS_KEY_TEST: ci-objects-not-a-secret
         run: npx --no-install vitest run --project integration
       - name: API tests through HTTP, on PostgreSQL 18 and Valkey
         if: ${{ !cancelled() && steps.prisma.outcome == 'success' && steps.roles.outcome == 'success' }}
