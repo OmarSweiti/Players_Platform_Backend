@@ -293,21 +293,61 @@ export const configOptions: ConfigModuleOptions = {
  * active tenants, and Valkey for its queue. It holds none of the API's
  * identity-provider, session or mail secrets.
  */
-export const WorkerEnv = z.object({
-  NODE_ENV: nodeEnv,
-  DATABASE_URL: database,
-  REGISTRY_DATABASE_URL: registryDatabase,
-  REDIS_HOST: redisHost,
-  REDIS_PORT: redisPort,
-  // A file the worker touches after every pass of its relay: its container's
-  // health check reads its age. Unset, nothing is written.
-  WORKER_HEARTBEAT_FILE: optional(z.string().min(1)),
-  // The least severe line it writes; unset, NODE_ENV's (debug in development,
-  // which logs every query of a pass that runs every second).
-  LOG_LEVEL: optional(
-    z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
-  ),
-});
+export const WorkerEnv = z
+  .object({
+    NODE_ENV: nodeEnv,
+    DATABASE_URL: database,
+    REGISTRY_DATABASE_URL: registryDatabase,
+    REDIS_HOST: redisHost,
+    REDIS_PORT: redisPort,
+    // A file the worker touches after every pass of its relay: its container's
+    // health check reads its age. Unset, nothing is written.
+    WORKER_HEARTBEAT_FILE: optional(z.string().min(1)),
+    // The least severe line it writes; unset, NODE_ENV's (debug in development,
+    // which logs every query of a pass that runs every second).
+    LOG_LEVEL: optional(
+      z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']),
+    ),
+    // Outgoing email (0.7.8): the SMTP server, Mailpit locally (the production
+    // provider is 1.6.3's). SMTP_TLS: `implicit` from the first byte (465),
+    // `starttls` required after connecting (587), or `none` — on this machine's
+    // Mailpit only, never in staging or production. The account, if the server
+    // asks for one, with both its parts.
+    SMTP_HOST: z.string().regex(HOST_NAME, 'a lower-case host name'),
+    SMTP_PORT: port,
+    SMTP_TLS: z.enum(['implicit', 'starttls', 'none']),
+    SMTP_USERNAME: optional(z.string().min(1)),
+    SMTP_PASSWORD: optional(z.string().min(16)),
+    // The sender address of outgoing email.
+    MAIL_FROM: z.email(),
+    // Where an email's links point: a tenant's own domain, else
+    // {slug}.APEX_DOMAIN, as the API resolves a host to its tenant (0.5.2).
+    APEX_DOMAIN: z.string().regex(HOST_NAME, 'a lower-case host name'),
+  })
+  .superRefine((env, issues) => {
+    if (
+      env.SMTP_TLS === 'none' &&
+      ['staging', 'production'].includes(env.NODE_ENV)
+    ) {
+      issues.addIssue({
+        code: 'custom',
+        path: ['SMTP_TLS'],
+        message: 'must encrypt outside development and test',
+      });
+    }
+    if (
+      (env.SMTP_USERNAME === undefined) !==
+      (env.SMTP_PASSWORD === undefined)
+    ) {
+      issues.addIssue({
+        code: 'custom',
+        path: [
+          env.SMTP_USERNAME === undefined ? 'SMTP_USERNAME' : 'SMTP_PASSWORD',
+        ],
+        message: 'must be set together with the other',
+      });
+    }
+  });
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 
 /** The worker's environment, or an error naming every variable, never a value. */

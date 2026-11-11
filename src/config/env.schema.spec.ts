@@ -283,10 +283,16 @@ describe('the environment schema', () => {
       DATABASE_URL: valid.DATABASE_URL,
       REGISTRY_DATABASE_URL:
         'postgresql://sadara_registry:not-a-real-password@db.agency.test:5432/sadara',
+      SMTP_HOST: 'smtp.agency.test',
+      SMTP_PORT: '465',
+      SMTP_TLS: 'implicit',
+      MAIL_FROM: 'no-reply@agency.test',
+      APEX_DOMAIN: 'agency.test',
     };
-    // No identity provider, CSRF, security-event or mail setting is needed.
+    // No identity provider, CSRF or security-event setting is needed.
     expect(parseWorkerEnv(worker)).toEqual({
       ...worker,
+      SMTP_PORT: 465,
       REDIS_HOST: 'localhost',
       REDIS_PORT: 6379,
     });
@@ -315,6 +321,67 @@ describe('the environment schema', () => {
         DATABASE_URL: 'postgresql://sadara_owner:x@db.agency.test:5432/sadara',
       }),
     ).toThrow('DATABASE_URL must connect as the runtime role');
+  });
+
+  it('the_worker_sends_mail_encrypted_outside_development_with_its_whole_account', () => {
+    const worker = {
+      NODE_ENV: 'development',
+      DATABASE_URL: valid.DATABASE_URL,
+      REGISTRY_DATABASE_URL:
+        'postgresql://sadara_registry:not-a-real-password@db.agency.test:5432/sadara',
+      SMTP_HOST: 'mailpit',
+      SMTP_PORT: '1025',
+      SMTP_TLS: 'none',
+      MAIL_FROM: 'no-reply@sadara.localhost',
+      APEX_DOMAIN: 'localhost',
+    };
+    // Mailpit, unencrypted, on this machine.
+    expect(parseWorkerEnv(worker).SMTP_TLS).toBe('none');
+    // Never elsewhere.
+    for (const NODE_ENV of ['staging', 'production']) {
+      expect(() => parseWorkerEnv({ ...worker, NODE_ENV })).toThrow(
+        'SMTP_TLS must encrypt outside development and test',
+      );
+    }
+    expect(() => parseWorkerEnv({ ...worker, SMTP_TLS: 'ssl' })).toThrow(
+      'SMTP_TLS must be one of implicit, starttls, none',
+    );
+    // An account has both its parts, and a password of some length.
+    const secret = 'not-a-real-smtp-password';
+    expect(
+      parseWorkerEnv({
+        ...worker,
+        SMTP_USERNAME: 'mailer',
+        SMTP_PASSWORD: secret,
+      }),
+    ).toMatchObject({ SMTP_USERNAME: 'mailer', SMTP_PASSWORD: secret });
+    expect(() =>
+      parseWorkerEnv({ ...worker, SMTP_USERNAME: 'mailer' }),
+    ).toThrow('SMTP_PASSWORD is missing');
+    // Each mail setting is required, and none is printed.
+    for (const name of [
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_TLS',
+      'MAIL_FROM',
+      'APEX_DOMAIN',
+    ]) {
+      expect(() => parseWorkerEnv({ ...worker, [name]: '' })).toThrow(
+        `${name} is missing`,
+      );
+    }
+    let message = '';
+    try {
+      parseWorkerEnv({
+        ...worker,
+        SMTP_USERNAME: 'mailer',
+        SMTP_PASSWORD: 'short',
+      });
+    } catch (error) {
+      message = (error as Error).message;
+    }
+    expect(message).toContain('SMTP_PASSWORD must be at least 16 characters');
+    expect(message).not.toContain('short');
   });
 
   it('refuses a database connection as the owner, the migrator or the superuser', () => {
