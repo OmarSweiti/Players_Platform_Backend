@@ -12,7 +12,11 @@ import {
 } from '../../src/modules/identity/application/ports/identity-provider.port';
 import { KeycloakIdentityProvider } from '../../src/modules/identity/infrastructure/keycloak/keycloak-identity-provider';
 import { attemptKeyOf } from '../../src/modules/identity/infrastructure/valkey/valkey-sign-in-attempts';
+import { DependencyUnavailableError } from '../../src/common/errors/domain-error';
+import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction';
+import { systemClock } from '../../src/common/time/clock';
 import { IssueInvitationToken } from '../../src/modules/users/application/use-cases/issue-invitation-token.usecase';
+import { InvitationRepository } from '../../src/modules/users/infrastructure/repositories/invitation.repository';
 import { bootApp, type BootedApp } from '../harness/app';
 import {
   asTenant,
@@ -80,6 +84,10 @@ interface Account {
  */
 class ProviderWithAccounts extends KeycloakIdentityProvider {
   readonly accounts = new Map<string, Account>();
+  /** The subjects the provider sent its setup email to, in order. */
+  readonly setupEmails: string[] = [];
+  /** Whether the provider is down when asked for one. */
+  setupEmailFails = false;
 
   override findAccount(email: string): Promise<{ subject: string } | null> {
     const account = this.accounts.get(email);
@@ -95,6 +103,20 @@ class ProviderWithAccounts extends KeycloakIdentityProvider {
     const subject = randomUUID();
     this.accounts.set(email, { subject, locale, actions: [...actions] });
     return Promise.resolve({ subject });
+  }
+
+  /** As the adapter does: sent only while something is left to set up. */
+  override sendSetupEmail(subject: string): Promise<void> {
+    if (this.setupEmailFails) {
+      return Promise.reject(
+        new DependencyUnavailableError('the provider is down'),
+      );
+    }
+    const account = [...this.accounts.values()].find(
+      (candidate) => candidate.subject === subject,
+    );
+    if (account && account.actions.length > 0) this.setupEmails.push(subject);
+    return Promise.resolve();
   }
 }
 
@@ -171,11 +193,20 @@ describe('invitations', () => {
     return booted.http.post(`${API}/users/invitations`).set(headers).send(body);
   }
 
-  /** A pending invitation's token, as its email's delivery issues it (0.7.8). */
+  /** What makes an invitation's token: the worker's, at its notice's send time (0.7.8). */
+  const tokens = () =>
+    new IssueInvitationToken(
+      new TenantTransactions(runPrisma()),
+      new InvitationRepository(),
+      systemClock,
+    );
+
+  /** A pending invitation's token, as its notice's delivery issues it (0.7.8). */
   async function issue(invitationId: string, tenant = agency): Promise<string> {
-    const issued = await booted.app
-      .get(IssueInvitationToken)
-      .execute(testContext(tenant.id, 'invitation-delivery'), invitationId);
+    const issued = await tokens().execute(
+      testContext(tenant.id, 'invitation-delivery'),
+      invitationId,
+    );
     if (!issued) throw new Error('the invitation is not pending');
     return issued.token;
   }
@@ -410,9 +441,7 @@ describe('invitations', () => {
     expect((await new Browser().follow(token)).status).toBe(404);
     // And no new token makes it work again.
     expect(
-      await booted.app
-        .get(IssueInvitationToken)
-        .execute(testContext(agency.id), invitationOf(created).id),
+      await tokens().execute(testContext(agency.id), invitationOf(created).id),
     ).toBeNull();
 
     // Expired while its sign-in was under way: refused at the callback.
@@ -752,5 +781,103 @@ describe('invitations', () => {
     expect(
       (await booted.http.get(`${API}/users/invitations`).set(headers)).status,
     ).toBe(200);
+  });
+
+  // 0.7.8: the invitation's notice is enqueued with it, and a new invitee's
+  // account is sent the provider's setup email.
+
+  /** The outbox events about `invitationId`, as its tenant reads them. */
+  const noticesOf = (invitationId: string, tenant = agency) =>
+    asTenant(tenant.id, (tx) =>
+      tx.outboxEvent.findMany({
+        where: { aggregateId: invitationId },
+        select: {
+          type: true,
+          aggregateType: true,
+          payloadRefs: true,
+          dedupKey: true,
+          status: true,
+        },
+      }),
+    );
+
+  it('an_invitation_enqueues_its_notice_with_its_id_only', async () => {
+    const email = address();
+    const created = await invite(await signedInAs(owner), {
+      email,
+      role: 'COACH',
+      locale: 'ar',
+    });
+    expect(created.status).toBe(201);
+    const { id } = invitationOf(created);
+    // One event, in the invitation's transaction: its id, never a link,
+    // a token or the address.
+    const events = await noticesOf(id);
+    expect(events).toEqual([
+      {
+        type: 'invitation.created',
+        aggregateType: 'Invitation',
+        payloadRefs: { invitationId: id },
+        dedupKey: `invitation.created:${id}`,
+        status: 'CREATED',
+      },
+    ]);
+    expect(JSON.stringify(events)).not.toContain(email);
+
+    // A refused invitation enqueues nothing.
+    const before = await asTenant(agency.id, (tx) => tx.outboxEvent.count());
+    const refused = await invite(await signedInAs(admin), {
+      email: address(),
+      role: 'OWNER',
+    });
+    expect(refused.status).toBe(403);
+    expect(await asTenant(agency.id, (tx) => tx.outboxEvent.count())).toBe(
+      before,
+    );
+  });
+
+  it('a_new_invitee_is_sent_the_providers_setup_email', async () => {
+    const headers = await signedInAs(owner);
+    // A new account: the provider sends its setup email, once.
+    const email = address();
+    expect((await invite(headers, { email, role: 'SCOUT' })).status).toBe(201);
+    const { subject } = provider.accounts.get(email)!;
+    expect(provider.setupEmails.filter((s) => s === subject)).toHaveLength(1);
+
+    // An account already set up — someone who signs in elsewhere: none.
+    const settled = address('settled');
+    const settledSubject = randomUUID();
+    provider.accounts.set(settled, {
+      subject: settledSubject,
+      locale: 'en',
+      actions: [],
+    });
+    expect(
+      (await invite(headers, { email: settled, role: 'COACH' })).status,
+    ).toBe(201);
+    expect(provider.setupEmails).not.toContain(settledSubject);
+
+    // The provider down when asked: nothing is written, no invitation and
+    // no notice; the retry finds the account and asks again.
+    const later = address('later');
+    provider.setupEmailFails = true;
+    try {
+      const failed = await invite(headers, { email: later, role: 'SCOUT' });
+      expect(failed.status).toBe(503);
+    } finally {
+      provider.setupEmailFails = false;
+    }
+    const laterSubject = provider.accounts.get(later)!.subject;
+    expect(
+      await asTenant(agency.id, (tx) =>
+        tx.invitation.count({ where: { normalizedEmail: later } }),
+      ),
+    ).toBe(0);
+    const retried = await invite(headers, { email: later, role: 'SCOUT' });
+    expect(retried.status).toBe(201);
+    expect(provider.setupEmails.filter((s) => s === laterSubject)).toHaveLength(
+      1,
+    );
+    expect(await noticesOf(invitationOf(retried).id)).toHaveLength(1);
   });
 });
