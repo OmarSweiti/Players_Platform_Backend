@@ -14,7 +14,6 @@ const valid = {
   DATABASE_URL:
     'postgresql://sadara_app:not-a-real-password@db.agency.test:5432/sadara',
   CORS_ORIGIN: 'https://app.agency.test',
-  MAIL_FROM: 'no-reply@agency.test',
   OIDC_ISSUER: 'https://idp.agency.test/realms/sadara',
   OIDC_CLIENT_ID: 'sadara-api',
   OIDC_CLIENT_SECRET: 'not-a-real-client-secret',
@@ -344,7 +343,6 @@ describe('the environment schema', () => {
       NODE_ENV: canary,
       DATABASE_URL: `postgresql://user:${canary}@`,
       CORS_ORIGIN: canary,
-      MAIL_FROM: canary,
       PORT: canary,
       TRUSTED_PROXIES: canary,
       OIDC_ISSUER: `https://idp.agency.test/?${canary}`,
@@ -355,7 +353,6 @@ describe('the environment schema', () => {
       'NODE_ENV',
       'DATABASE_URL',
       'CORS_ORIGIN',
-      'MAIL_FROM',
       'PORT',
       'TRUSTED_PROXIES',
       'OIDC_ISSUER',

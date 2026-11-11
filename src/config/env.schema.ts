@@ -151,7 +151,6 @@ export const Env = z
     // so that rotating either never touches the other; rotating it starts a
     // new series of hashes, which no longer match the old ones.
     SECURITY_EVENT_KEY: z.string().min(32),
-    MAIL_FROM: z.email(),
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),
     FEATURE_SCOUTING: flag.default(false),

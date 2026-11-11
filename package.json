@@ -24,11 +24,9 @@
     "test:watch": "vitest --project unit"
   },
   "dependencies": {
-    "@nestjs/bullmq": "^12.0.0",
     "@nestjs/common": "^12.3.2",
     "@nestjs/config": "^12.0.1",
     "@nestjs/core": "^12.3.2",
-    "@nestjs/event-emitter": "^12.0.1",
     "@nestjs/platform-express": "^12.3.2",
     "@nestjs/swagger": "^12.0.4",
     "@prisma/adapter-pg": "^7.10.1",
