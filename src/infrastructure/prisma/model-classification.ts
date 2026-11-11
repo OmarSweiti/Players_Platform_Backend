@@ -120,6 +120,9 @@ export const MODEL_CLASSIFICATION: Readonly<
   // expired record answers nothing, and its key may be claimed afresh: the
   // runtime role removes it then, so it is not kept.
   IdempotencyRecord: { ...TENANT_OWNED, ids: 'time-ordered' },
+  // An email an event's consumer sends, kept as the record that it was sent,
+  // failed, or was no longer wanted (0.7.8).
+  EmailDelivery: { ...TENANT_OWNED, ids: 'time-ordered', rows: 'kept' },
 };
 
 /** A model as the database knows it: its table, and the column that names its tenant. */

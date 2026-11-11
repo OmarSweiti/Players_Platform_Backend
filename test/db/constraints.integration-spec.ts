@@ -86,6 +86,14 @@ const OTHER_STEPS_CHECKS = [
   'idempotency_records_outcome_check',
   'idempotency_records_outcome_code_check',
   'idempotency_records_request_hash_check',
+  // 0.7.8: test/mail/email.integration-spec.ts
+  'email_deliveries_attempts_check',
+  'email_deliveries_failed_check',
+  'email_deliveries_locale_check',
+  'email_deliveries_message_id_check',
+  'email_deliveries_recipient_hash_check',
+  'email_deliveries_sent_check',
+  'email_deliveries_template_check',
 ];
 
 /** Each amount, its currency, and the trigger that holds it to the currency's minor units. */
