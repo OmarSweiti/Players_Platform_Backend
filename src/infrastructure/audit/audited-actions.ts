@@ -69,6 +69,27 @@ export const AUDITED_ACTIONS = {
     entity: 'MedicalRecord',
     fields: { classes: 'OPERATIONAL' },
   },
+  // An upload (0.8.3): started — its file made, its link handed out — and
+  // completed, its exact version pinned. The file's name is the uploader's
+  // words, so a reference, never the value.
+  'file.upload_started': {
+    entity: 'FileObject',
+    fields: {
+      ownerKind: 'OPERATIONAL',
+      ownerId: 'OPERATIONAL',
+      fileName: 'PERSONAL',
+      type: 'OPERATIONAL',
+      sizeBytes: 'OPERATIONAL',
+      expiresAt: 'OPERATIONAL',
+    },
+  },
+  'file.uploaded': {
+    entity: 'FileObject',
+    fields: {
+      status: 'OPERATIONAL',
+      quarantineVersionId: 'OPERATIONAL',
+    },
+  },
   'tenant.provisioned': {
     entity: 'Tenant',
     fields: {

@@ -4,6 +4,7 @@ import {
   PutBucketVersioningCommand,
   S3Client,
 } from '@aws-sdk/client-s3';
+import type { S3Settings } from '../../src/infrastructure/storage/s3-storage';
 
 /** The object store the storage port's tests run against (0.8.1). */
 export interface ObjectStoreSettings {
@@ -68,4 +69,16 @@ export async function objectStoreForTests(): Promise<ObjectStoreSettings | null>
     client.destroy();
   }
   return settings;
+}
+
+/** The storage adapter's settings for the test bucket: the API's, as a test boots it. */
+export function s3SettingsOf(settings: ObjectStoreSettings): S3Settings {
+  return {
+    endpoint: settings.endpoint,
+    region: 'us-east-1',
+    bucket: settings.bucket,
+    accessKeyId: settings.accessKeyId,
+    secretAccessKey: settings.secretAccessKey,
+    forcePathStyle: true,
+  };
 }

@@ -33,6 +33,8 @@ export interface Objects {
   readonly invitation: string;
   /** One of the scout's sign-in sessions. */
   readonly signIn: string;
+  /** An open upload by the scout, for the player, its PDF arrived (0.8.3). */
+  readonly upload: string;
 }
 
 /** Who makes a control request: a member of the seeded tenant. */
@@ -130,6 +132,28 @@ export const ROUTE_INVENTORY: Readonly<Record<string, Entry>> = {
   },
 
   // ---- Invitations (0.5.10). ----
+  // ---- Uploads (0.8.3). ----
+  'POST /api/v1/uploads': {
+    kind: 'object',
+    probes: [
+      // An upload for another tenant's player.
+      (of) =>
+        sending('/uploads', {
+          ownerKind: 'player-document',
+          ownerId: of.player,
+          fileName: 'contract.pdf',
+          type: 'application/pdf',
+          sizeBytes: 1024,
+        }),
+    ],
+    control: 'scout',
+  },
+  'POST /api/v1/uploads/:id/complete': {
+    kind: 'object',
+    probes: [(of) => at(`/uploads/${of.upload}/complete`)],
+    control: 'scout',
+  },
+
   'POST /api/v1/users/invitations': {
     kind: 'none',
     why: "an address and a role: names no object; the invitation is the caller's tenant's",

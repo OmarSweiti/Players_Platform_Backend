@@ -40,11 +40,16 @@ export class ObjectNotFound extends Error {
  * Links last seconds or minutes: a caller gives each its lifetime.
  */
 export abstract class StoragePort {
-  /** A presigned PUT of one object, of the type the client declared: an upload into quarantine. */
+  /**
+   * A presigned PUT of one object, of the type and the exact size the client
+   * declared (0.8.3): an upload into quarantine. The store refuses a body of
+   * another type or another length.
+   */
   abstract presignPut(
     key: ObjectKey,
     options: {
       readonly contentType: string;
+      readonly contentLength: number;
       readonly expiresInSeconds: number;
     },
   ): Promise<PresignedRequest>;

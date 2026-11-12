@@ -114,6 +114,23 @@ const invitation = (at: '' | '[].'): Fields => ({
   [`${at}revokedAt`]: 'OPERATIONAL',
 });
 
+/** An upload, as its uploader reads it (0.8.3): never where it is stored. */
+const upload = (more: Fields): Fields => ({
+  id: 'OPERATIONAL',
+  fileId: 'OPERATIONAL',
+  status: 'OPERATIONAL',
+  ownerKind: 'OPERATIONAL',
+  ownerId: 'OPERATIONAL',
+  // The name its uploader gave it: display metadata, their own words.
+  fileName: 'OPERATIONAL',
+  type: 'OPERATIONAL',
+  sizeBytes: 'OPERATIONAL',
+  createdAt: 'OPERATIONAL',
+  expiresAt: 'OPERATIONAL',
+  completedAt: 'OPERATIONAL',
+  ...more,
+});
+
 /**
  * Each route's `data`, by `METHOD /path` as the app serves it. A route that
  * answers nothing — a redirect, `{ data: null }` — or only problems has no
@@ -150,6 +167,16 @@ export const RESPONSES: Readonly<Record<string, Fields>> = {
     '[].acr': 'OPERATIONAL',
     '[].current': 'OPERATIONAL',
   },
+
+  // The link that sends the file: a capability for minutes, to the uploader
+  // alone, into quarantine only.
+  'POST /api/v1/uploads': upload({
+    'put.method': 'OPERATIONAL',
+    'put.url': 'OPERATIONAL',
+    'put.headers.Content-Type': 'OPERATIONAL',
+    'put.expiresAt': 'OPERATIONAL',
+  }),
+  'POST /api/v1/uploads/:id/complete': upload({ put: 'OPERATIONAL' }),
 
   'POST /api/v1/users/invitations': invitation(''),
   'GET /api/v1/users/invitations': invitation('[].'),
