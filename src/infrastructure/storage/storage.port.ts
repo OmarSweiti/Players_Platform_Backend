@@ -1,3 +1,4 @@
+import type { Readable } from 'node:stream';
 import type { ObjectKey } from './object-keys';
 
 /**
@@ -73,6 +74,12 @@ export abstract class StoragePort {
     start: number,
     end: number,
   ): Promise<Buffer>;
+
+  /**
+   * Every byte of one exact version, as a stream (0.8.4): what the scan reads.
+   * The stream errs if the store stops sending.
+   */
+  abstract openVersion(version: ObjectVersion): Promise<Readable>;
 
   /** Copies one exact version to `to`, inside the store; the copy's own version. */
   abstract copy(from: ObjectVersion, to: ObjectKey): Promise<ObjectVersion>;

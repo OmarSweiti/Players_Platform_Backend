@@ -1,3 +1,4 @@
+import { Readable } from 'node:stream';
 import type { OnModuleDestroy } from '@nestjs/common';
 import {
   CopyObjectCommand,
@@ -242,6 +243,21 @@ export class S3Storage extends StoragePort implements OnModuleDestroy {
       ),
     );
     return Buffer.from((await out.Body?.transformToByteArray()) ?? []);
+  }
+
+  async openVersion(version: ObjectVersion): Promise<Readable> {
+    assertVersion(version);
+    const out = await this.call(() =>
+      this.client.send(
+        new GetObjectCommand({
+          Bucket: this.settings.bucket,
+          Key: version.key,
+          VersionId: version.versionId,
+        }),
+      ),
+    );
+    // In Node, the SDK's body is a Readable; anything else is an empty object.
+    return out.Body instanceof Readable ? out.Body : Readable.from([]);
   }
 
   async copy(from: ObjectVersion, to: ObjectKey): Promise<ObjectVersion> {

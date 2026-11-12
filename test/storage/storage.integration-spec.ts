@@ -248,6 +248,14 @@ describe('the storage port', () => {
     expect(await storage.readRange(v1, 100, 149)).toEqual(
       first.subarray(100, 150),
     );
+    // A whole version, streamed (0.8.4): the scan's read, pinned as well.
+    const streamed: Buffer[] = [];
+    for await (const chunk of await storage.openVersion(v1)) {
+      streamed.push(chunk as Buffer);
+    }
+    expect(Buffer.concat(streamed)).toEqual(first);
+    await storage.deleteVersion(v1);
+    await expect(storage.openVersion(v1)).rejects.toThrow(ObjectNotFound);
   });
 
   it('a_server_side_copy_takes_one_exact_version', async () => {
