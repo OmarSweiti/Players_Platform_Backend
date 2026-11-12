@@ -11,6 +11,8 @@ declare module 'vitest' {
     registryDatabaseUrl: string;
     /** The object store's test bucket and keys (0.8.1), or null when none is configured. */
     objectStore: ObjectStoreSettings | null;
+    /** ClamAV's daemon (0.8.4), or null when none is configured. */
+    scanner: { host: string; port: number } | null;
   }
 }
 
@@ -37,6 +39,12 @@ export default async function setup(
   // Only the storage port's tests reach the object store (0.8.1); they refuse
   // to run without it. Its test bucket exists, versioned, before any does.
   project.provide('objectStore', await objectStoreForTests());
+  // Only the scan's tests reach ClamAV (0.8.4); they refuse to run without it.
+  const { CLAMAV_HOST_TEST: host, CLAMAV_PORT_TEST: port } = process.env;
+  project.provide(
+    'scanner',
+    host ? { host, port: Number(port ?? 3310) } : null,
+  );
   return async () => {
     if (process.env.KEEP_TEST_SCHEMA !== '1') await run.drop();
   };
