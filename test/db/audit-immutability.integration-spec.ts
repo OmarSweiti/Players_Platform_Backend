@@ -546,11 +546,19 @@ describe('audit evidence is append-only', () => {
 
       // Every row, every column it had, as it was.
       expect(await original()).toEqual(before);
+      // An event id carries its row's creation time. The migration reads the
+      // clock twice — for the shift, then inside uuidv7() — so the id's time
+      // is the creation time plus the moment between the two reads: nothing
+      // most often, a few milliseconds now and then, over a hundred on a
+      // loaded machine, and never earlier. A second bounds that; the rows are
+      // days apart, and an id stamped with the migration's own time would be
+      // days late.
       const { rows } = await replayOwner.query<Record<string, unknown>>(
         `SELECT user_id IS NOT NULL AS member_named, actor_type, actor_role, actor_session_id,
                 actor_job, request_id, reason, outcome, schema_version,
                 uuid_extract_version(event_id) AS event_version,
-                uuid_extract_timestamp(event_id) = date_trunc('milliseconds', created_at)
+                uuid_extract_timestamp(event_id) - created_at >= interval '0'
+                  AND uuid_extract_timestamp(event_id) - created_at < interval '1 second'
                   AS event_at_creation
            FROM audit_logs ORDER BY created_at`,
       );
