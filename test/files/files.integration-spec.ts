@@ -152,6 +152,7 @@ describe('file objects and upload sessions', () => {
           object_version_id: 'v1',
           sha256: sha256('a'),
           scan_verdict: 'CLEAN',
+          scanned_at: new Date(),
         },
       ],
       [
@@ -161,6 +162,7 @@ describe('file objects and upload sessions', () => {
           object_version_id: 'v1',
           sha256: sha256('a'),
           scan_verdict: 'CLEAN',
+          scanned_at: new Date(),
         },
       ],
     ] as const) {
@@ -239,14 +241,23 @@ describe('file objects and upload sessions', () => {
 
   it('a_file_object_holds_only_what_its_checks_allow', async () => {
     const [a] = members;
+    const at = new Date();
+    // A verdict has its time (0.8.4).
     const clean = {
       object_key: keyOf(tenants[0], 'objects'),
       object_version_id: 'v-object',
       sha256: sha256('bytes'),
       scan_verdict: 'CLEAN',
+      scanned_at: at,
       quarantine_version_id: 'v-quarantine',
     };
-    const at = new Date();
+    const infected = {
+      status: 'REJECTED',
+      quarantine_version_id: 'v-1',
+      scan_verdict: 'INFECTED',
+      scanned_at: at,
+      scan_finding: 'Eicar-Test-Signature',
+    };
     for (const [constraint, values] of [
       ['file_objects_object_check', { ...clean, object_version_id: null }],
       [
@@ -264,7 +275,10 @@ describe('file objects and upload sessions', () => {
       // Pinned from UPLOADED on.
       ['file_objects_pinned_check', { status: 'UPLOADED' }],
       // Promoted only when clean, and hashed.
-      ['file_objects_promoted_check', { ...clean, scan_verdict: 'PENDING' }],
+      [
+        'file_objects_promoted_check',
+        { ...clean, scan_verdict: 'PENDING', scanned_at: null },
+      ],
       ['file_objects_promoted_check', { ...clean, sha256: null }],
       // READY only clean, promoted, and finalized; finalized only READY.
       ['file_objects_ready_check', { ...clean, status: 'READY' }],
@@ -274,19 +288,34 @@ describe('file objects and upload sessions', () => {
           quarantine_version_id: 'v',
           status: 'READY',
           scan_verdict: 'CLEAN',
+          scanned_at: at,
           finalized_at: at,
         },
       ],
       ['file_objects_ready_check', { finalized_at: at }],
       // INFECTED only REJECTED.
+      ['file_objects_infected_check', { ...infected, status: 'SCANNING' }],
+      // The scan's record (0.8.4): a verdict has its time, PENDING none.
+      ['file_objects_scanned_check', { ...clean, scanned_at: null }],
+      ['file_objects_scanned_check', { scanned_at: at }],
+      // A finding is an infected file's, in printable characters.
+      ['file_objects_scan_finding_check', { ...infected, scan_finding: null }],
       [
-        'file_objects_infected_check',
+        'file_objects_scan_finding_check',
         {
-          quarantine_version_id: 'v',
-          status: 'SCANNING',
-          scan_verdict: 'INFECTED',
+          status: 'FAILED',
+          scan_verdict: 'ERROR',
+          scanned_at: at,
+          scan_finding: 'Eicar-Test-Signature',
         },
       ],
+      [
+        'file_objects_scan_finding_check',
+        { ...infected, scan_finding: 'Eicar\nSignature' },
+      ],
+      // Tried a bounded number of times.
+      ['file_objects_scan_attempts_check', { scan_attempts: 33 }],
+      ['file_objects_scan_attempts_check', { scan_attempts: -1 }],
     ] as const) {
       expect([
         constraint,
@@ -306,12 +335,13 @@ describe('file objects and upload sessions', () => {
         finalized_at: at,
         retention_class: 'CONTRACT_EVIDENCE',
       },
+      infected,
       {
-        status: 'REJECTED',
-        quarantine_version_id: 'v-1',
-        scan_verdict: 'INFECTED',
+        status: 'FAILED',
+        scan_verdict: 'ERROR',
+        scanned_at: at,
+        scan_attempts: 8,
       },
-      { status: 'FAILED', scan_verdict: 'ERROR' },
       { status: 'ABORTED' },
     ]) {
       expect([values, await outcome(a, fileRow(a, values))]).toEqual([
@@ -348,7 +378,7 @@ describe('file objects and upload sessions', () => {
       as(a, [
         insertFile(pinned),
         [
-          `UPDATE file_objects SET status = 'READY', scan_verdict = 'CLEAN', finalized_at = now(),
+          `UPDATE file_objects SET status = 'READY', scan_verdict = 'CLEAN', scanned_at = now(), finalized_at = now(),
                   object_key = $2, object_version_id = $3, sha256 = $4 WHERE id = $1`,
           [
             id,

@@ -98,6 +98,10 @@ const OTHER_STEPS_CHECKS = [
   'email_deliveries_template_check',
   // 0.8.2: test/files/files.integration-spec.ts
   'file_objects_infected_check',
+  // 0.8.4: the scan's record.
+  'file_objects_scan_attempts_check',
+  'file_objects_scanned_check',
+  'file_objects_scan_finding_check',
   'file_objects_mime_type_check',
   'file_objects_object_check',
   'file_objects_object_key_check',

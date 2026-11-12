@@ -29,6 +29,10 @@ import { RelayLoop } from './infrastructure/queue/relay-loop';
 import { TenantRegistry } from './infrastructure/tenancy/tenant-registry';
 import { InvitationNoticeConsumer } from './modules/users/application/invitation-notice.consumer';
 import { InvitationNoticeModule } from './modules/users/invitation-notice.module';
+import { ScanningModule } from './infrastructure/scanning/scanning.module';
+import { StorageModule } from './infrastructure/storage/storage.module';
+import { ScanFileConsumer } from './modules/files/application/scan-file.handler';
+import { FileScanModule } from './modules/files/file-scan.module';
 
 /** How many jobs one worker process runs at once. */
 const CONCURRENCY = 4;
@@ -65,8 +69,9 @@ export class WorkerLifecycle {
  * The worker's composition root (0.7.6; docs/reference/architecture.md): the
  * runtime role's database for the tenant transactions it works in, the
  * registry role's for finding the active tenants, Valkey for its queue, the
- * outbox relay, the queue's worker with the registered consumers, and the
- * SMTP server they send email through (0.7.8) — no routes, nothing of the
+ * outbox relay, the queue's worker with the registered consumers, the SMTP
+ * server they send email through (0.7.8), and the object store and the
+ * malware scanner a file's scan uses (0.8.4) — no routes, nothing of the
  * API's sessions or identity provider. Its settings are validated before it
  * is built (src/worker.ts).
  */
@@ -89,6 +94,10 @@ export class WorkerModule {
         PrismaModule,
         MailModule.forSettings(settings),
         InvitationNoticeModule,
+        // The scan and the promotion (0.8.4): the store, the scanner, the consumer.
+        StorageModule,
+        ScanningModule,
+        FileScanModule,
       ],
       providers: [
         {
@@ -106,10 +115,11 @@ export class WorkerModule {
         // Every consumer the worker runs, each for its own event types.
         {
           provide: OUTBOX_CONSUMERS,
-          inject: [InvitationNoticeConsumer],
-          useFactory: (notice: InvitationNoticeConsumer): OutboxConsumer[] => [
-            notice,
-          ],
+          inject: [InvitationNoticeConsumer, ScanFileConsumer],
+          useFactory: (
+            notice: InvitationNoticeConsumer,
+            scan: ScanFileConsumer,
+          ): OutboxConsumer[] => [notice, scan],
         },
         {
           provide: OutboxRelay,

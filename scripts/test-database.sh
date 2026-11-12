@@ -40,6 +40,14 @@ if [ -z "${S3_ENDPOINT_TEST:-}" ] && [ -f ../infra/.env ]; then
   : "${S3_SECRET_ACCESS_KEY_TEST:=$(setting OBJECT_STORE_SECRET_KEY)}"
   export S3_ENDPOINT_TEST S3_BUCKET_TEST S3_ACCESS_KEY_ID_TEST S3_SECRET_ACCESS_KEY_TEST
 fi
+# The scan's tests (0.8.4): the local stack's ClamAV, unless set.
+if [ -z "${CLAMAV_HOST_TEST:-}" ] && [ -f ../infra/.env ]; then
+  setting() { sed -n "s/^$1=//p" ../infra/.env | tail -n 1 | sed -e 's/^"\(.*\)"$/\1/' -e "s/^'\(.*\)'\$/\1/"; }
+  CLAMAV_HOST_TEST=127.0.0.1
+  scanner_port=$(setting CLAMAV_PORT)
+  : "${CLAMAV_PORT_TEST:=${scanner_port:-3310}}"
+  export CLAMAV_HOST_TEST CLAMAV_PORT_TEST
+fi
 if [ -z "${DATABASE_URL_TEST:-}" ] || [ -z "${MIGRATION_DATABASE_URL_TEST:-}" ]; then
   echo "DATABASE_URL_TEST and MIGRATION_DATABASE_URL_TEST are not both set, and ../infra/.env (the umbrella's local stack) was not found." >&2
   echo "Run \`just up\` in the umbrella, or export both yourself: the test database as sadara_app, and as sadara_migrator." >&2
