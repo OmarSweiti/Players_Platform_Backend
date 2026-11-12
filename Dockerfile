@@ -40,9 +40,8 @@ WORKDIR /app
 COPY --from=build /app/package.json ./
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-# The one directory the process writes: the local file store the quarantined
-# storage service opens at startup, until the object store replaces it.
-RUN mkdir uploads && chown node:node uploads
+# The process writes nothing of its own here: files go to the object store
+# (0.8.1), and the local file store this image once made room for is gone.
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=3s --start-period=20s \
