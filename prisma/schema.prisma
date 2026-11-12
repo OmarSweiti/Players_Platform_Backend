@@ -414,6 +414,8 @@ model Tenant {
   consumerInboxes      ConsumerInbox[]
   idempotencyRecords   IdempotencyRecord[]
   emailDeliveries      EmailDelivery[]
+  fileObjects          FileObject[]
+  uploadSessions       UploadSession[]
   documents            Document[]
   playerMedia          PlayerMedia[]
   medicalRecords       MedicalRecord[]
@@ -515,6 +517,8 @@ model User {
   invitationsSent       Invitation[] @relation("InvitationInviter")
   acceptedInvitations   Invitation[] @relation("InvitationAccepted")
   idempotencyRecords    IdempotencyRecord[]
+  createdFiles          FileObject[]
+  uploadSessions        UploadSession[]
 
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1982,4 +1986,141 @@ model EmailDelivery {
   /// Once per event and recipient, led by the tenant as every tenant index is.
   @@unique([tenantId, eventId, recipientHash], map: "email_deliveries_event_recipient_key")
   @@map("email_deliveries")
+}
+
+//////////////////////////
+// FILES
+//////////////////////////
+
+/// Where a file is in its life (0.8.2; domain-workflows.md, "Files"): made
+/// (CREATED), its upload under way (UPLOADING), its exact bytes pinned
+/// (UPLOADED), being scanned (SCANNING), derived (PROCESSING — unused until
+/// 1.3.3), and READY; or FAILED, REJECTED (its content, or a scan), ABORTED.
+enum FileStatus {
+  CREATED
+  UPLOADING
+  UPLOADED
+  SCANNING
+  PROCESSING
+  READY
+  FAILED
+  REJECTED
+  ABORTED
+
+  @@map("file_status")
+}
+
+/// What the malware scan said of a file's exact bytes (0.8.4).
+enum ScanVerdict {
+  PENDING
+  CLEAN
+  INFECTED
+  ERROR
+
+  @@map("scan_verdict")
+}
+
+/// How confidential a file is: operational, or one of the confidential classes
+/// (security-privacy.md; src/common/policy/confidential-class.ts). A binding
+/// never declassifies (domain-workflows.md).
+enum FileClassification {
+  OPERATIONAL
+  IDENTITY
+  MEDICAL
+  LEGAL_INTERNAL
+  FINANCE
+  MINOR_POLICY
+
+  @@map("file_classification")
+}
+
+/// A file a tenant holds (0.8.2; ADR-0009, SR-DOC-001): never a URL. Its
+/// upload lands in quarantine, by a key the storage port's builder made
+/// (0.8.1); completion pins the exact quarantined version (0.8.3), the scan
+/// reads that version, and a clean file is promoted to an immutable object,
+/// its version and SHA-256 recorded (0.8.4). Downloads need READY and CLEAN,
+/// and the owner's authorization (0.8.5). What it is for is a typed binding of
+/// its owner's domain, never a column here. Tenant-owned, under forced RLS;
+/// kept — a purge marks it (1.3.4), cloud objects are never deleted by a
+/// cascade. CHECKs (hand-written SQL) hold the keys to their builder's form
+/// and their tenant, the versions' and the hash's form, the size, the type,
+/// the name, the retention class, and the state's invariants; a trigger keeps
+/// a file's identity once pinned.
+model FileObject {
+  id                  String             @id @default(uuid()) @db.Uuid
+  tenantId            String             @map("tenant_id") @db.Uuid
+  /// Where its upload lands: tenants/{tenantId}/quarantine/{uuid} (0.8.1).
+  quarantineKey       String             @map("quarantine_key") @db.VarChar(160)
+  /// The exact quarantined version completion pinned (0.8.3): what is scanned and promoted. Opaque.
+  quarantineVersionId String?            @map("quarantine_version_id") @db.VarChar(1024)
+  /// The immutable copy, once clean (0.8.4): tenants/{tenantId}/objects/{uuid}, and its version.
+  objectKey           String?            @map("object_key") @db.VarChar(160)
+  objectVersionId     String?            @map("object_version_id") @db.VarChar(1024)
+  /// SHA-256 of the exact bytes promoted.
+  sha256              Bytes?
+  /// Its length in bytes, as an integer of 64 bits: past 2 GiB as exactly as
+  /// below. The largest a tenant may upload is the upload's policy (0.8.3).
+  sizeBytes           BigInt             @map("size_bytes")
+  /// Its type, as declared and checked: `type/subtype`, lower case.
+  mimeType            String             @map("mime_type") @db.VarChar(127)
+  /// The name it was uploaded under: display only, never a key or a path.
+  originalName        String             @map("original_name") @db.VarChar(255)
+  status              FileStatus         @default(CREATED)
+  scanVerdict         ScanVerdict        @default(PENDING) @map("scan_verdict")
+  classification      FileClassification
+  /// Its retention class: 1.3.4 keys it to a policy; UNCLASSIFIED meanwhile,
+  /// which is OPEN-06's default — archive, never purge.
+  retentionClass      String             @default("UNCLASSIFIED") @map("retention_class") @db.VarChar(60)
+  createdById         String             @map("created_by_id") @db.Uuid
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// When it became READY.
+  finalizedAt         DateTime?          @map("finalized_at") @db.Timestamptz(3)
+  /// When its objects were purged under an approved policy (1.3.4).
+  purgedAt            DateTime?          @map("purged_at") @db.Timestamptz(3)
+
+  tenant              Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy           User               @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  uploadSessions      UploadSession[]
+
+  @@unique([id, tenantId])
+  @@unique([tenantId, quarantineKey])
+  @@unique([tenantId, objectKey])
+  @@index([tenantId, status])
+  @@index([tenantId, createdById])
+  @@map("file_objects")
+}
+
+/// An upload of one file (0.8.2): its declared size and type, the owner it is
+/// for, and until when it may complete. The owner is a declared intent —
+/// `(ownerKind, ownerId)`, checked by that owner's policy at upload and again
+/// at binding — and never joined: the owner's typed binding is the only
+/// reference (DB-69, SR-DB-008). It tracks the upload around the file's own
+/// lifecycle and defines no competing state machine. Tenant-owned, under
+/// forced RLS; kept. CHECKs hold the size, the type, the owner's kind, one
+/// closing, the expiry and the revision.
+model UploadSession {
+  id           String     @id @default(uuid()) @db.Uuid
+  tenantId     String     @map("tenant_id") @db.Uuid
+  fileObjectId String     @map("file_object_id") @db.Uuid
+  createdById  String     @map("created_by_id") @db.Uuid
+  declaredSize BigInt     @map("declared_size")
+  declaredType String     @map("declared_type") @db.VarChar(127)
+  /// The kind of owner it is for, lower-case words joined by hyphens: `player-document`.
+  ownerKind    String     @map("owner_kind") @db.VarChar(60)
+  ownerId      String     @map("owner_id") @db.Uuid
+  expiresAt    DateTime   @map("expires_at") @db.Timestamptz(3)
+  finalizedAt  DateTime?  @map("finalized_at") @db.Timestamptz(3)
+  abortedAt    DateTime?  @map("aborted_at") @db.Timestamptz(3)
+  revision     Int        @default(1)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  fileObject   FileObject @relation(fields: [fileObjectId, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+  createdBy    User       @relation(fields: [createdById, tenantId], references: [id, tenantId], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([id, tenantId])
+  /// One upload per file.
+  @@unique([tenantId, fileObjectId])
+  @@index([tenantId, createdById])
+  @@map("upload_sessions")
 }

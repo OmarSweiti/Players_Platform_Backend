@@ -17,7 +17,7 @@ import {
 } from '../harness/db';
 import { normalizeEmail } from '../../src/modules/users/domain/email';
 import { INTEGRITY_CHECKS } from '../../scripts/integrity-checks';
-import { asTenant } from '../harness/fixtures';
+import { asContainedTableOwner, asTenant } from '../harness/fixtures';
 
 // The preflight inspects a whole schema, so it gets schemas of its own: one
 // seeded with a counter-example for every rule, one clean. Every value is
@@ -371,26 +371,36 @@ async function seedCounterExamples(
         },
       });
 
-      // References no foreign key protects, naming nothing.
-      const missingEntity = await tx.document.create({
-        data: {
+      // References no foreign key protects, naming nothing — legacy rows of
+      // the contained documents table, which only the owner writes (0.8.2).
+      const migrator = prismaFor(schema.migrationUrl);
+      const legacy = (data: Prisma.DocumentUncheckedCreateInput) =>
+        asContainedTableOwner(
+          'documents',
+          (owner) => owner.document.create({ data }),
+          migrator.prisma,
+        );
+      let missingEntity: { id: string };
+      let missingUploader: { id: string };
+      try {
+        missingEntity = await legacy({
           tenantId: a.id,
           entityType: 'PLAYER',
           entityId: randomUUID(),
           fileUrl: 'objects/x',
           fileName: PERSONAL.fileName,
-        },
-      });
-      const missingUploader = await tx.document.create({
-        data: {
+        });
+        missingUploader = await legacy({
           tenantId: a.id,
           entityType: 'PLAYER',
           entityId: player.id,
           uploadedById: randomUUID(),
           fileUrl: 'objects/y',
           fileName: PERSONAL.fileName,
-        },
-      });
+        });
+      } finally {
+        await migrator.close();
+      }
 
       await tx.notification.create({
         data: {

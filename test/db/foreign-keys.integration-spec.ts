@@ -11,6 +11,9 @@ import {
   createTenant,
 } from '../harness/fixtures';
 
+/** The tables the runtime role only reads (`contained`, 0.8.2): written as the owner. */
+const CONTAINED = new Set(['documents']);
+
 // Composite and same-parent foreign keys (0.4.4). Every refusal is a raw
 // statement as the runtime role, so it is PostgreSQL that refuses, not Prisma
 // or a use case. Each is paired with the same statement naming a parent that
@@ -66,6 +69,8 @@ interface ForeignKey {
 
 describe('composite and same-parent foreign keys', () => {
   let app: Client;
+  /** The migrator, acting as the owner: it alone writes a contained table (0.8.2). */
+  let owner: Client;
   let a: Tenant;
   let b: Tenant;
   let memberA: User;
@@ -78,15 +83,28 @@ describe('composite and same-parent foreign keys', () => {
   /** Work as tenant A, through the tenant transaction. */
   const asA = <T>(work: (tx: TenantTx) => Promise<T>) => asTenant(a.id, work);
 
-  /** INSERT INTO <table>, as the runtime role, with a fresh id. */
-  const insert = (table: string, row: Record<string, unknown>) => {
+  /**
+   * INSERT INTO <table>, as the runtime role, with a fresh id — or, into a
+   * contained table, as the owner, its forced RLS lifted for the statement, as
+   * a migration writes one.
+   */
+  const insert = async (table: string, row: Record<string, unknown>) => {
     const values: Record<string, unknown> = { id: randomUUID(), ...row };
     const columns = Object.keys(values);
     const params = columns.map((_, i) => `$${i + 1}`);
-    return app.query(
-      `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${params.join(', ')})`,
-      Object.values(values),
-    );
+    const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${params.join(', ')})`;
+    if (!CONTAINED.has(table)) return app.query(sql, Object.values(values));
+    await owner.query('BEGIN');
+    try {
+      await owner.query(`ALTER TABLE ${table} NO FORCE ROW LEVEL SECURITY`);
+      const result = await owner.query(sql, Object.values(values));
+      await owner.query(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+      await owner.query('COMMIT');
+      return result;
+    } catch (error) {
+      await owner.query('ROLLBACK');
+      throw error;
+    }
   };
 
   const seasonOf = (tenant: Tenant) =>
@@ -103,6 +121,7 @@ describe('composite and same-parent foreign keys', () => {
 
   beforeAll(async () => {
     app = await connect(inject('databaseUrl'));
+    owner = await connect(inject('migrationDatabaseUrl'));
     [a, b] = [await createTenant(), await createTenant()];
     // This connection is tenant A's for the whole file: a test's own
     // connection, never one of the application's pool.
@@ -134,6 +153,7 @@ describe('composite and same-parent foreign keys', () => {
 
   afterAll(async () => {
     await app?.end();
+    await owner?.end();
   });
 
   it('foreign_keys_refuse_cross_tenant_edges', async () => {
