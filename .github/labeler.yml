@@ -24,6 +24,8 @@
   - changed-files: [{ any-glob-to-any-file: ["src/modules/chat/**"] }]
 "area: notifications":
   - changed-files: [{ any-glob-to-any-file: ["src/modules/notifications/**"] }]
+"area: files":
+  - changed-files: [{ any-glob-to-any-file: ["src/modules/files/**"] }]
 "area: common":
   - changed-files: [{ any-glob-to-any-file: ["src/common/**"] }]
 "area: infra":
