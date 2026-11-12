@@ -23,6 +23,13 @@ export const OUTBOX_EVENTS = {
     version: 1,
     refs: ['invitationId'],
   },
+  // A file's upload completed, its exact version pinned (0.8.3): the scan
+  // (0.8.4) loads the file and reads that version, never the newest.
+  'file.uploaded': {
+    aggregate: 'FileObject',
+    version: 1,
+    refs: ['fileObjectId'],
+  },
 } as const satisfies Readonly<Record<string, OutboxEventDefinition>>;
 
 export type OutboxEventType = keyof typeof OUTBOX_EVENTS;

@@ -135,6 +135,24 @@ export const PROBLEMS = {
       ar: 'هذا النوع من المحتوى غير مقبول.',
     },
   },
+  // An upload completed before its file arrived (0.8.3): send it, then complete.
+  UPLOAD_INCOMPLETE: {
+    status: 409,
+    title: 'Upload incomplete',
+    message: {
+      en: "The file hasn't arrived yet. Finish sending it, then try again.",
+      ar: 'لم يصل الملف بعد. أكمل إرساله ثم حاول مرة أخرى.',
+    },
+  },
+  // The file that arrived is not the one declared: its size or its bytes (0.8.3).
+  UPLOAD_CONTENT_MISMATCH: {
+    status: 422,
+    title: 'Upload content mismatch',
+    message: {
+      en: "The file that arrived doesn't match the one described. Upload the right file.",
+      ar: 'الملف الذي وصل لا يطابق الملف الموصوف. ارفع الملف الصحيح.',
+    },
+  },
   PRECONDITION_REQUIRED: {
     status: 428,
     title: 'Precondition required',

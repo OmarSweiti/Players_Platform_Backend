@@ -8,6 +8,7 @@ import { PrismaModule } from './infrastructure/prisma/prisma.module';
 import { IdempotencyModule } from './common/idempotency/idempotency.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { UsersModule } from './modules/users/users.module';
+import { FilesModule } from './modules/files/files.module';
 import { PlayersModule } from './modules/players/players.module';
 import { ContractsModule } from './modules/contracts/contracts.module';
 import { TrainingModule } from './modules/training/training.module';
@@ -43,6 +44,8 @@ import { RouteAccessCheck } from './common/authz/route-access-check';
     StorageModule,
     IdentityModule,
     UsersModule,
+    // Uploads into quarantine (0.8.3); the scan and downloads follow.
+    FilesModule,
     PlayersModule,
     ContractsModule,
     TrainingModule,
