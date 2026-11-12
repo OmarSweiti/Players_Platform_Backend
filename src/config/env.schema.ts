@@ -96,6 +96,27 @@ const storeEndpoint = issuer.refine((url) => new URL(url).pathname === '/', {
 // A bucket's name as S3 allows it: lower case, digits, dots and hyphens.
 const BUCKET = /^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/;
 const clientId = z.string().regex(/^[a-z0-9-]+$/, 'a client id');
+// The store's bucket and the key that reaches it (0.8.1): the API's and the
+// worker's alike (0.8.4).
+const STORE = {
+  S3_REGION: z
+    .string()
+    .regex(/^[a-z0-9-]{2,32}$/, 'a region name')
+    .default('us-east-1'),
+  S3_BUCKET: z.string().regex(BUCKET, 'an S3 bucket name'),
+  S3_ACCESS_KEY_ID: z.string().min(3),
+  S3_SECRET_ACCESS_KEY: z.string().min(16),
+  S3_FORCE_PATH_STYLE: flag.default(false),
+};
+// The worker reaches the store by its service's name inside the stack
+// (http://objectstore:7070): HTTP is refused outside development and test.
+const workerStoreEndpoint = z.url({ protocol: /^https?$/ }).refine(
+  (url) => {
+    const { pathname, search, hash } = new URL(url);
+    return pathname === '/' && search === '' && hash === '';
+  },
+  { message: 'must have no path or query: the bucket is S3_BUCKET' },
+);
 
 /** Where the API's routes live; the committed contract names this one. */
 export const DEFAULT_API_PREFIX = 'api';
@@ -169,14 +190,7 @@ export const Env = z
     // https://storage.localhost — while the API's own calls go to S3_ENDPOINT.
     // Unset: links name S3_ENDPOINT.
     S3_PUBLIC_ENDPOINT: optional(storeEndpoint),
-    S3_REGION: z
-      .string()
-      .regex(/^[a-z0-9-]{2,32}$/, 'a region name')
-      .default('us-east-1'),
-    S3_BUCKET: z.string().regex(BUCKET, 'an S3 bucket name'),
-    S3_ACCESS_KEY_ID: z.string().min(3),
-    S3_SECRET_ACCESS_KEY: z.string().min(16),
-    S3_FORCE_PATH_STYLE: flag.default(false),
+    ...STORE,
     // Unfinished modules (0.1.8): off unless set, and their routes answer 404.
     FEATURE_MEDICAL: flag.default(false),
     FEATURE_SCOUTING: flag.default(false),
@@ -316,8 +330,9 @@ export const configOptions: ConfigModuleOptions = {
 /**
  * What the worker reads (0.7.6), and nothing else: the runtime role's database
  * for the tenant transactions it works in, the registry role's for finding the
- * active tenants, and Valkey for its queue. It holds none of the API's
- * identity-provider, session or mail secrets.
+ * active tenants, Valkey for its queue, the SMTP server (0.7.8), and the
+ * object store and the malware scanner its scans use (0.8.4). It holds none
+ * of the API's identity-provider or session secrets.
  */
 export const WorkerEnv = z
   .object({
@@ -346,6 +361,13 @@ export const WorkerEnv = z
     SMTP_PASSWORD: optional(z.string().min(16)),
     // The sender address of outgoing email.
     MAIL_FROM: z.email(),
+    // The object store (0.8.4): the scan reads a file's pinned version from
+    // it and promotes a clean one inside it. The API's bucket and key.
+    S3_ENDPOINT: workerStoreEndpoint,
+    ...STORE,
+    // The malware scanner (0.8.4): ClamAV's daemon, the stack's `clamav`.
+    CLAMAV_HOST: z.string().min(1),
+    CLAMAV_PORT: port.default(3310),
     // Where an email's links point: a tenant's own domain, else
     // {slug}.APEX_DOMAIN, as the API resolves a host to its tenant (0.5.2).
     APEX_DOMAIN: z.string().regex(HOST_NAME, 'a lower-case host name'),
@@ -359,6 +381,16 @@ export const WorkerEnv = z
         code: 'custom',
         path: ['SMTP_TLS'],
         message: 'must encrypt outside development and test',
+      });
+    }
+    if (
+      new URL(env.S3_ENDPOINT).protocol === 'http:' &&
+      ['staging', 'production'].includes(env.NODE_ENV)
+    ) {
+      issues.addIssue({
+        code: 'custom',
+        path: ['S3_ENDPOINT'],
+        message: 'must be HTTPS outside development and test',
       });
     }
     if (

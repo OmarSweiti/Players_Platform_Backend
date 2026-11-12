@@ -292,6 +292,11 @@ describe('the environment schema', () => {
       SMTP_TLS: 'implicit',
       MAIL_FROM: 'no-reply@agency.test',
       APEX_DOMAIN: 'agency.test',
+      S3_ENDPOINT: 'https://objects.agency.test',
+      S3_BUCKET: 'agency-files',
+      S3_ACCESS_KEY_ID: 'scanner',
+      S3_SECRET_ACCESS_KEY: 'not-a-real-store-secret',
+      CLAMAV_HOST: 'clamav.agency.test',
     };
     // No identity provider, CSRF or security-event setting is needed.
     expect(parseWorkerEnv(worker)).toEqual({
@@ -299,6 +304,9 @@ describe('the environment schema', () => {
       SMTP_PORT: 465,
       REDIS_HOST: 'localhost',
       REDIS_PORT: 6379,
+      S3_REGION: 'us-east-1',
+      S3_FORCE_PATH_STYLE: false,
+      CLAMAV_PORT: 3310,
     });
     // Discovery connects as the registry role and no other.
     for (const role of ['sadara_app', 'sadara_owner', 'postgres']) {
@@ -327,6 +335,41 @@ describe('the environment schema', () => {
     ).toThrow('DATABASE_URL must connect as the runtime role');
   });
 
+  it('the_worker_reaches_the_store_over_http_only_in_development', () => {
+    const worker = {
+      NODE_ENV: 'development',
+      DATABASE_URL: valid.DATABASE_URL,
+      REGISTRY_DATABASE_URL:
+        'postgresql://sadara_registry:not-a-real-password@db.agency.test:5432/sadara',
+      SMTP_HOST: 'smtp.agency.test',
+      SMTP_PORT: '465',
+      SMTP_TLS: 'implicit',
+      MAIL_FROM: 'no-reply@agency.test',
+      APEX_DOMAIN: 'agency.test',
+      // The stack's store, by its service's name.
+      S3_ENDPOINT: 'http://objectstore:7070',
+      S3_BUCKET: 'sadara',
+      S3_ACCESS_KEY_ID: 'sadara-local',
+      S3_SECRET_ACCESS_KEY: 'not-a-real-store-secret',
+      CLAMAV_HOST: 'clamav',
+    };
+    expect(parseWorkerEnv(worker).S3_ENDPOINT).toBe('http://objectstore:7070');
+    for (const NODE_ENV of ['staging', 'production']) {
+      expect(() => parseWorkerEnv({ ...worker, NODE_ENV })).toThrow(
+        'S3_ENDPOINT must be HTTPS outside development and test',
+      );
+    }
+    // The bucket is its own setting; and a scanner must be named.
+    expect(() =>
+      parseWorkerEnv({
+        ...worker,
+        S3_ENDPOINT: 'http://objectstore:7070/sadara',
+      }),
+    ).toThrow('S3_ENDPOINT must have no path or query');
+    const { CLAMAV_HOST: _, ...unnamed } = worker;
+    expect(() => parseWorkerEnv(unnamed)).toThrow('CLAMAV_HOST');
+  });
+
   it('the_worker_sends_mail_encrypted_outside_development_with_its_whole_account', () => {
     const worker = {
       NODE_ENV: 'development',
@@ -338,6 +381,11 @@ describe('the environment schema', () => {
       SMTP_TLS: 'none',
       MAIL_FROM: 'no-reply@sadara.localhost',
       APEX_DOMAIN: 'localhost',
+      S3_ENDPOINT: 'https://objects.agency.test',
+      S3_BUCKET: 'agency-files',
+      S3_ACCESS_KEY_ID: 'scanner',
+      S3_SECRET_ACCESS_KEY: 'not-a-real-store-secret',
+      CLAMAV_HOST: 'clamav',
     };
     // Mailpit, unencrypted, on this machine.
     expect(parseWorkerEnv(worker).SMTP_TLS).toBe('none');
