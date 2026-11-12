@@ -90,6 +90,29 @@ export const AUDITED_ACTIONS = {
       quarantineVersionId: 'OPERATIONAL',
     },
   },
+  // The scan's outcome (0.8.4), by the worker: promoted to an immutable
+  // version, rejected for what the scanner found, or failed with no verdict.
+  'file.promoted': {
+    entity: 'FileObject',
+    fields: {
+      status: 'OPERATIONAL',
+      scanVerdict: 'OPERATIONAL',
+      objectVersionId: 'OPERATIONAL',
+      sha256: 'OPERATIONAL',
+    },
+  },
+  'file.rejected': {
+    entity: 'FileObject',
+    fields: {
+      status: 'OPERATIONAL',
+      scanVerdict: 'OPERATIONAL',
+      scanFinding: 'OPERATIONAL',
+    },
+  },
+  'file.scan_failed': {
+    entity: 'FileObject',
+    fields: { status: 'OPERATIONAL', scanVerdict: 'OPERATIONAL' },
+  },
   'tenant.provisioned': {
     entity: 'Tenant',
     fields: {
