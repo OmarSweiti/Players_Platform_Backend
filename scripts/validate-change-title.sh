@@ -14,11 +14,12 @@ set -euo pipefail
 # Both lists are CLOSED on purpose: a typo'd scope is refused, never invented.
 TYPES='feat|fix|test|docs|chore|refactor|perf'
 # The product domains (the same words as the frontend, so one change reads
-# the same in both repositories), then: common = cross-cutting decorators,
+# the same in both repositories), then: files = file objects, uploads,
+# scanning, downloads · common = cross-cutting decorators,
 # guards, filters, interceptors, pipes · infra = Prisma service, mail,
 # storage, events, config, health, bootstrap · db = Prisma schema, migrations,
 # seed · repo = workspace, CI, gates, tooling · docs.
-SCOPES='auth|users|players|contracts|medical|scouting|training|legal|chat|notifications|common|infra|db|repo|docs'
+SCOPES='auth|users|players|contracts|medical|scouting|training|legal|chat|notifications|files|common|infra|db|repo|docs'
 # The tag after the summary — delete the alternatives you do not use:
 #   —            (em dash) work with no tracked item
 #   #123         an issue
