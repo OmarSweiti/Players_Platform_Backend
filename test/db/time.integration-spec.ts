@@ -158,7 +158,7 @@ describe('dates, instants and time zones', () => {
         GROUP BY 1`,
     );
     expect(types).toEqual([
-      { type: 'timestamp(3) with time zone', columns: 125 },
+      { type: 'timestamp(3) with time zone', columns: 126 },
     ]);
 
     const instant = '2026-11-04T23:30:00.123Z';

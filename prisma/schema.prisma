@@ -2045,7 +2045,9 @@ enum FileClassification {
 /// cascade. CHECKs (hand-written SQL) hold the keys to their builder's form
 /// and their tenant, the versions' and the hash's form, the size, the type,
 /// the name, the retention class, and the state's invariants; a trigger keeps
-/// a file's identity once pinned.
+/// a file's identity once pinned. The scan's record (0.8.4) — its attempts, its
+/// time, what it found — is held by CHECKs too: a time once the verdict is in, a
+/// finding only when INFECTED, a bounded count.
 model FileObject {
   id                  String             @id @default(uuid()) @db.Uuid
   tenantId            String             @map("tenant_id") @db.Uuid
@@ -2067,6 +2069,13 @@ model FileObject {
   originalName        String             @map("original_name") @db.VarChar(255)
   status              FileStatus         @default(CREATED)
   scanVerdict         ScanVerdict        @default(PENDING) @map("scan_verdict")
+  /// How many times its scan has been tried (0.8.4): bounded, as the outbox's
+  /// deliveries are; after the last, a scanner that never answered leaves it FAILED.
+  scanAttempts        Int                @default(0) @map("scan_attempts") @db.SmallInt
+  /// When the scan's verdict was reached: null while PENDING.
+  scannedAt           DateTime?          @map("scanned_at") @db.Timestamptz(3)
+  /// What the scanner found, by the scanner's own name for it — only when INFECTED.
+  scanFinding         String?            @map("scan_finding") @db.VarChar(200)
   classification      FileClassification
   /// Its retention class: 1.3.4 keys it to a policy; UNCLASSIFIED meanwhile,
   /// which is OPEN-06's default — archive, never purge.
