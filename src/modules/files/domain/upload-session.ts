@@ -32,3 +32,13 @@ export interface DeclaredOwner {
 
 /** A kind of owner, as the database holds one: lower-case words joined by hyphens. */
 export const OWNER_KIND = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
+
+/**
+ * How long a link to upload lasts (0.8.3): ten minutes, for the PUT to
+ * begin; a slow upload finishes after it, as a presigned request is checked
+ * when it starts.
+ */
+export const UPLOAD_LINK_SECONDS = 10 * 60;
+
+/** How long an upload stays open to complete: an hour from its start. */
+export const UPLOAD_WINDOW_MS = 60 * 60 * 1000;
