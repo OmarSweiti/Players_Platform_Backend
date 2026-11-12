@@ -15,6 +15,7 @@ import {
 } from '../../src/infrastructure/storage/object-keys';
 import {
   MAX_LINK_SECONDS,
+  MAX_PUT_BYTES,
   MAX_RANGE_BYTES,
   S3Storage,
   StorageRequestRefused,
@@ -26,6 +27,7 @@ import {
 import { testContext } from '../harness/fixtures';
 import {
   type ObjectStoreSettings,
+  s3SettingsOf,
   testStoreClient,
 } from '../harness/object-store';
 
@@ -56,14 +58,7 @@ describe('the storage port', () => {
       );
     }
     settings = store;
-    storage = new S3Storage({
-      endpoint: settings.endpoint,
-      region: 'us-east-1',
-      bucket: settings.bucket,
-      accessKeyId: settings.accessKeyId,
-      secretAccessKey: settings.secretAccessKey,
-      forcePathStyle: true,
-    });
+    storage = new S3Storage(s3SettingsOf(settings));
     admin = testStoreClient(settings);
   });
 
@@ -101,6 +96,7 @@ describe('the storage port', () => {
   ): Promise<ObjectVersion> {
     const put = await storage.presignPut(key, {
       contentType,
+      contentLength: body.length,
       expiresInSeconds: 60,
     });
     const answer = await fetch(put.url, {
@@ -171,6 +167,7 @@ describe('the storage port', () => {
       await expect(
         storage.presignPut(forged as ObjectKey, {
           contentType: 'application/pdf',
+          contentLength: 16,
           expiresInSeconds: 60,
         }),
       ).rejects.toThrow(ObjectKeyRefused);
@@ -287,6 +284,7 @@ describe('the storage port', () => {
     // An upload of another type than the one declared: refused.
     const put = await storage.presignPut(key, {
       contentType: 'application/pdf',
+      contentLength: 25,
       expiresInSeconds: 60,
     });
     const swapped = await fetch(put.url, {
@@ -295,6 +293,16 @@ describe('the storage port', () => {
       body: '<script>alert(1)</script>',
     });
     expect(swapped.status).toBe(403);
+    // Of another size than the one declared (0.8.3): refused, one byte over
+    // and one byte short.
+    for (const length of [26, 24]) {
+      const resized = await fetch(put.url, {
+        method: 'PUT',
+        headers: put.headers,
+        body: new Uint8Array(randomBytes(length)),
+      });
+      expect(resized.status).toBe(403);
+    }
     expect(await storage.head(key)).toBeNull();
 
     // A download, named in Arabic for the browser to save.
@@ -323,8 +331,42 @@ describe('the storage port', () => {
     await expect(
       storage.presignPut(key, {
         contentType: 'text/html\r\nX-Injected: 1',
+        contentLength: 16,
         expiresInSeconds: 60,
       }),
     ).rejects.toThrow(StorageRequestRefused);
+    // A PUT carries one byte to 5 GiB, a whole number of them.
+    for (const contentLength of [0, 1.5, MAX_PUT_BYTES + 1]) {
+      await expect(
+        storage.presignPut(key, {
+          contentType: 'application/pdf',
+          contentLength,
+          expiresInSeconds: 60,
+        }),
+      ).rejects.toThrow(StorageRequestRefused);
+    }
+  });
+
+  it('a_link_names_where_a_browser_reaches_the_store', async () => {
+    // Signed for the public endpoint (0.8.3): the browser's way in, while the
+    // API's own calls keep to the endpoint it reaches the store at.
+    const proxied = new S3Storage({
+      ...s3SettingsOf(settings),
+      publicEndpoint: 'https://storage.agency.test',
+    });
+    try {
+      const key = newObjectKey(tenants[0], 'quarantine');
+      const put = await proxied.presignPut(key, {
+        contentType: 'application/pdf',
+        contentLength: 16,
+        expiresInSeconds: 60,
+      });
+      expect(new URL(put.url).origin).toBe('https://storage.agency.test');
+      expect(new URL(put.url).pathname).toBe(`/${settings.bucket}/${key}`);
+      // What the store holds is still read at its own endpoint.
+      expect(await proxied.head(key)).toBeNull();
+    } finally {
+      proxied.onModuleDestroy();
+    }
   });
 });

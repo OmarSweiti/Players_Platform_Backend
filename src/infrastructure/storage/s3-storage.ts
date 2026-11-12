@@ -22,6 +22,11 @@ import {
 /** The store, from the API's settings (Env, S3_*). */
 export interface S3Settings {
   readonly endpoint: string;
+  /**
+   * Where a browser reaches the store, if not at `endpoint` (0.8.3): links
+   * are signed for it, and the API's own calls still go to `endpoint`.
+   */
+  readonly publicEndpoint?: string;
   readonly region: string;
   readonly bucket: string;
   readonly accessKeyId: string;
@@ -33,6 +38,8 @@ export interface S3Settings {
 export const MAX_LINK_SECONDS = 15 * 60;
 /** The most a ranged read returns: enough for a file's magic bytes, bounded. */
 export const MAX_RANGE_BYTES = 1024 * 1024;
+/** The largest object one PUT may carry, as S3 bounds it: 5 GiB. */
+export const MAX_PUT_BYTES = 5 * 1024 ** 3;
 
 /** A type as a client declares it, `type/subtype`, with nothing that could end a header. */
 const MEDIA_TYPE = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
@@ -85,27 +92,36 @@ const NOT_FOUND = new Set(['NoSuchKey', 'NoSuchVersion', 'NotFound']);
  */
 export class S3Storage extends StoragePort implements OnModuleDestroy {
   private readonly client: S3Client;
+  /** Signs links for where a browser reaches the store; it sends nothing. */
+  private readonly signer: S3Client;
 
   constructor(private readonly settings: S3Settings) {
     super();
-    this.client = new S3Client({
-      endpoint: settings.endpoint,
-      region: settings.region,
-      forcePathStyle: settings.forcePathStyle,
-      credentials: {
-        accessKeyId: settings.accessKeyId,
-        secretAccessKey: settings.secretAccessKey,
-      },
-      requestChecksumCalculation: 'WHEN_REQUIRED',
-      responseChecksumValidation: 'WHEN_REQUIRED',
-      maxAttempts: 3,
-    });
+    const clientFor = (endpoint: string) =>
+      new S3Client({
+        endpoint,
+        region: settings.region,
+        forcePathStyle: settings.forcePathStyle,
+        credentials: {
+          accessKeyId: settings.accessKeyId,
+          secretAccessKey: settings.secretAccessKey,
+        },
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
+        maxAttempts: 3,
+      });
+    this.client = clientFor(settings.endpoint);
+    this.signer =
+      settings.publicEndpoint === undefined
+        ? this.client
+        : clientFor(settings.publicEndpoint);
   }
 
   async presignPut(
     key: ObjectKey,
     options: {
       readonly contentType: string;
+      readonly contentLength: number;
       readonly expiresInSeconds: number;
     },
   ): Promise<PresignedRequest> {
@@ -114,16 +130,28 @@ export class S3Storage extends StoragePort implements OnModuleDestroy {
     if (!MEDIA_TYPE.test(options.contentType)) {
       throw new StorageRequestRefused('not a media type');
     }
+    if (
+      !Number.isSafeInteger(options.contentLength) ||
+      options.contentLength < 1 ||
+      options.contentLength > MAX_PUT_BYTES
+    ) {
+      throw new StorageRequestRefused(
+        `one PUT carries 1 to ${MAX_PUT_BYTES} bytes`,
+      );
+    }
+    // The type and the length are signed: the store refuses a body that
+    // differs in either (0.8.3), so the link carries only what was declared.
     const url = await getSignedUrl(
-      this.client,
+      this.signer,
       new PutObjectCommand({
         Bucket: this.settings.bucket,
         Key: key,
         ContentType: options.contentType,
+        ContentLength: options.contentLength,
       }),
       {
         expiresIn: options.expiresInSeconds,
-        signableHeaders: new Set(['content-type']),
+        signableHeaders: new Set(['content-type', 'content-length']),
       },
     );
     return {
@@ -144,7 +172,7 @@ export class S3Storage extends StoragePort implements OnModuleDestroy {
     assertVersion(version);
     assertLifetime(options.expiresInSeconds);
     const url = await getSignedUrl(
-      this.client,
+      this.signer,
       new GetObjectCommand({
         Bucket: this.settings.bucket,
         Key: version.key,
@@ -246,6 +274,7 @@ export class S3Storage extends StoragePort implements OnModuleDestroy {
 
   onModuleDestroy(): void {
     this.client.destroy();
+    if (this.signer !== this.client) this.signer.destroy();
   }
 
   /** A version id, which a versioned bucket always answers with. */

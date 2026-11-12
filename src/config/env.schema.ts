@@ -164,6 +164,11 @@ export const Env = z
     // (/bucket/key), which a gateway on one host needs; a provider that
     // wants virtual hosts sets it false.
     S3_ENDPOINT: storeEndpoint,
+    // Where a browser reaches the store, when not at S3_ENDPOINT (0.8.3): the
+    // links the API hands out are signed for it — locally the proxy's
+    // https://storage.localhost — while the API's own calls go to S3_ENDPOINT.
+    // Unset: links name S3_ENDPOINT.
+    S3_PUBLIC_ENDPOINT: optional(storeEndpoint),
     S3_REGION: z
       .string()
       .regex(/^[a-z0-9-]{2,32}$/, 'a region name')
