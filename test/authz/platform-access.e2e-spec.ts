@@ -155,14 +155,20 @@ describe('no implicit platform access', () => {
         ? [{ ...route, permission: route.access.permission }]
         : [],
     );
-    // Invitations, medical and scouting: the routes that read tenant data.
+    // Invitations, uploads, medical and scouting: the routes that read
+    // tenant data.
     expect(
       [
         ...new Set(
           guarded.map(({ path }) => path.split('/').slice(0, 4).join('/')),
         ),
       ].sort(),
-    ).toEqual(['/api/v1/medical', '/api/v1/scouting', '/api/v1/users']);
+    ).toEqual([
+      '/api/v1/medical',
+      '/api/v1/scouting',
+      '/api/v1/uploads',
+      '/api/v1/users',
+    ]);
     const guard = new PermissionGuard(booted.app.get(Reflector), permissions);
     for (const tenant of tenants) {
       // What the session guard would mint for such a member: none exists.

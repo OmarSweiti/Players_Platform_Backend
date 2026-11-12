@@ -1,4 +1,5 @@
-import { randomBytes } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import { Reflector } from '@nestjs/core';
 import type { Tenant, User, UserRole } from '@prisma/client';
 import { Client, type DatabaseError } from 'pg';
@@ -22,6 +23,10 @@ import {
   createPlayer,
   createTenant,
 } from '../harness/fixtures';
+import {
+  type ObjectStoreSettings,
+  testStoreClient,
+} from '../harness/object-store';
 import {
   controllersOf,
   type Method,
@@ -64,6 +69,11 @@ const holds = (role: Role, permission: PermissionKey) =>
   (DEFAULT_ROLE_MATRIX[role] as readonly PermissionKey[]).includes(permission);
 
 const suffix = () => randomBytes(4).toString('hex');
+/** The PDF a seeded upload carries: its signature, then filler. */
+const UPLOADED_PDF = Buffer.concat([
+  Buffer.from('%PDF-1.7\n', 'latin1'),
+  randomBytes(1015),
+]);
 const DAY_MS = 24 * 3_600_000;
 const UNDEFINED_TABLE = '42P01';
 
@@ -90,6 +100,9 @@ describe('two-tenant isolation over every route', () => {
   let readable: Seeded | undefined;
   const members = new Map<Role, User>();
   const sessions = new Map<Role, Record<string, string>>();
+  /** The object store uploads send to (0.8.3), and a client that writes to it. */
+  let store: ObjectStoreSettings;
+  let storeClient: S3Client;
 
   /** A tenant's objects, every one a route can name, and their makers. */
   async function seed(tenant: Tenant): Promise<Seeded> {
@@ -163,8 +176,51 @@ describe('two-tenant isolation over every route', () => {
           expiresAt: new Date(Date.now() + 7 * DAY_MS),
         },
       });
-      return { record, session, draft, submitted, assignment, invitation };
+      // An open upload by the scout, for the player (0.8.3), its PDF arrived.
+      const quarantineKey = `tenants/${tenantId}/quarantine/${randomUUID()}`;
+      const file = await tx.fileObject.create({
+        data: {
+          tenantId,
+          quarantineKey,
+          sizeBytes: BigInt(UPLOADED_PDF.length),
+          mimeType: 'application/pdf',
+          originalName: 'contract.pdf',
+          status: 'UPLOADING',
+          classification: 'OPERATIONAL',
+          createdById: actors.scout.id,
+        },
+      });
+      const upload = await tx.uploadSession.create({
+        data: {
+          tenantId,
+          fileObjectId: file.id,
+          createdById: actors.scout.id,
+          declaredSize: BigInt(UPLOADED_PDF.length),
+          declaredType: 'application/pdf',
+          ownerKind: 'player-document',
+          ownerId: player.id,
+          expiresAt: new Date(Date.now() + DAY_MS / 24),
+        },
+      });
+      return {
+        record,
+        session,
+        draft,
+        submitted,
+        assignment,
+        invitation,
+        upload,
+        quarantineKey,
+      };
     });
+    await storeClient.send(
+      new PutObjectCommand({
+        Bucket: store.bucket,
+        Key: rows.quarantineKey,
+        Body: UPLOADED_PDF,
+        ContentType: 'application/pdf',
+      }),
+    );
     // One of the scout's sign-in sessions: what DELETE /auth/sessions/:id names.
     await signedInAs(actors.scout);
     const signIn = await asTenant(tenant.id, (tx) =>
@@ -185,6 +241,7 @@ describe('two-tenant isolation over every route', () => {
         assignment: rows.assignment.id,
         scout: actors.scout.id,
         invitation: rows.invitation.id,
+        upload: rows.upload.id,
         signIn: signIn.id,
       },
     };
@@ -252,6 +309,8 @@ describe('two-tenant isolation over every route', () => {
     headers: Record<string, string>,
   ): Promise<Response> {
     const request = booted.http[method](call.path).set(headers);
+    // A command a client retries takes a key (0.7.7); one that does not, ignores it.
+    if (method !== 'get') request.set('Idempotency-Key', randomUUID());
     return call.body ? request.send(call.body) : request;
   }
 
@@ -382,7 +441,16 @@ describe('two-tenant isolation over every route', () => {
   }
 
   beforeAll(async () => {
-    booted = await bootApp();
+    const configured = inject('objectStore');
+    // No store, no suite: uploads name objects in it (0.8.3).
+    if (configured === null) {
+      throw new TypeError(
+        'the isolation suite needs the object store: run `just up`, or set S3_*_TEST',
+      );
+    }
+    store = configured;
+    storeClient = testStoreClient(store);
+    booted = await bootApp({ objectStore: store });
     const { connectionString, options } = databaseConnectionOf(
       inject('migrationDatabaseUrl'),
     );
@@ -416,6 +484,7 @@ describe('two-tenant isolation over every route', () => {
 
   afterAll(async () => {
     await owner?.end();
+    storeClient?.destroy();
     await booted?.app.close();
   });
 
@@ -424,7 +493,7 @@ describe('two-tenant isolation over every route', () => {
     expect(routes.map(({ key }) => key).sort()).toEqual(
       Object.keys(ROUTE_INVENTORY).sort(),
     );
-    expect(routes.length).toBe(49);
+    expect(routes.length).toBe(51);
 
     // Sentinel objects, to see what each probe names.
     const names = (tag: string) =>
@@ -441,6 +510,7 @@ describe('two-tenant isolation over every route', () => {
             'scout',
             'invitation',
             'signIn',
+            'upload',
           ] as const
         ).map((key) => [key, `${tag}-${key}`]),
       ) as unknown as Objects;

@@ -156,6 +156,11 @@ jobs:
         env:
           DATABASE_URL_TEST: postgresql://sadara_app:ci-app@localhost:5432/ci
           MIGRATION_DATABASE_URL_TEST: postgresql://sadara_migrator:ci-migrator@localhost:5432/ci
+          # Uploads send their files to the object store above (0.8.3).
+          S3_ENDPOINT_TEST: http://localhost:7070
+          S3_BUCKET_TEST: sadara-test
+          S3_ACCESS_KEY_ID_TEST: ci-objects
+          S3_SECRET_ACCESS_KEY_TEST: ci-objects-not-a-secret
         run: npx --no-install vitest run --project e2e
       # Forward-only history is only worth something if it replays: every
       # migration applies to an empty database, and the database it produces is

@@ -16,7 +16,10 @@ import {
   RATE_LIMIT_KEY_PREFIX,
   RATE_LIMIT_KEYS,
 } from '../../src/common/rate-limit/rate-limiter';
+import { S3Storage } from '../../src/infrastructure/storage/s3-storage';
+import { StoragePort } from '../../src/infrastructure/storage/storage.port';
 import type { LogCapture } from './log-capture';
+import { type ObjectStoreSettings, s3SettingsOf } from './object-store';
 
 export interface BootedApp {
   app: INestApplication;
@@ -52,6 +55,11 @@ export async function bootApp(
      * test issuer (test/support/test-issuer.ts).
      */
     identityProvider?: IdentityProviderPort;
+    /**
+     * The object store, for this app only: the test bucket (S3_*_TEST), where
+     * the environment names none that answers. Upload tests pass it.
+     */
+    objectStore?: ObjectStoreSettings;
   } = {},
 ): Promise<BootedApp> {
   const builder = Test.createTestingModule({
@@ -65,6 +73,11 @@ export async function bootApp(
     builder
       .overrideProvider(IdentityProviderPort)
       .useValue(opts.identityProvider);
+  }
+  if (opts.objectStore) {
+    builder
+      .overrideProvider(StoragePort)
+      .useValue(new S3Storage(s3SettingsOf(opts.objectStore)));
   }
   // Test files run at once against one Valkey: none may spend another's limits.
   const namespace = opts.rateLimitNamespace ?? randomUUID();

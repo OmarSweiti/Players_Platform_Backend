@@ -3,7 +3,7 @@ import { Controller, Get, Param } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { type Tenant, type User, UserRole } from '@prisma/client';
 import type { Response } from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { z } from 'zod';
 import { RequirePermission } from '../../src/common/decorators/permissions.decorator';
 import { CurrentTenantContext } from '../../src/common/decorators/tenant-context.decorator';
@@ -36,7 +36,12 @@ import {
   RESPONSES,
 } from '../fixtures/field-classification';
 import { type BootedApp, bootApp } from '../harness/app';
-import { asTenant, createMember, createTenant } from '../harness/fixtures';
+import {
+  asTenant,
+  createMember,
+  createPlayer,
+  createTenant,
+} from '../harness/fixtures';
 import {
   controllersOf,
   type Route,
@@ -360,9 +365,17 @@ describe('confidential fields, against the independent classification', () => {
     );
 
   beforeAll(async () => {
+    const store = inject('objectStore');
+    // Uploads answer only with the object store (0.8.3).
+    if (store === null) {
+      throw new TypeError(
+        'this suite needs the object store: run `just up`, or set S3_*_TEST',
+      );
+    }
     booted = await bootApp({
       controllers: [ClinicalNoteProbe],
       identityProvider: new AccountsDouble(),
+      objectStore: store,
     });
     routes = controllersOf(booted.app)
       .flatMap(routesOf)
@@ -445,6 +458,48 @@ describe('confidential fields, against the independent classification', () => {
           );
         }
       }
+    }
+
+    // Uploads, so that their answers are seen: a scout's, in each tenant,
+    // started, its PDF sent through its link, and completed (0.8.3).
+    for (const tenant of [0, 1] as const) {
+      const caller = { role: 'SCOUT' as const, tenant };
+      const headers = await signedInAs(memberOf('SCOUT', tenant));
+      const player = await createPlayer(tenants[tenant]);
+      const bytes = Buffer.concat([
+        Buffer.from('%PDF-1.7\n', 'latin1'),
+        randomBytes(503),
+      ]);
+      const started = await ask('POST /api/v1/uploads', caller, () =>
+        booted.http
+          .post('/api/v1/uploads')
+          .set(headers)
+          .set('Idempotency-Key', randomUUID())
+          .send({
+            ownerKind: 'player-document',
+            ownerId: player.id,
+            fileName: 'contract.pdf',
+            type: 'application/pdf',
+            sizeBytes: bytes.length,
+          }),
+      );
+      const { id: uploadId, put } = (
+        started.body as {
+          data: { id: string; put: { url: string; headers: HeadersInit } };
+        }
+      ).data;
+      const sent = await fetch(put.url, {
+        method: 'PUT',
+        headers: put.headers,
+        body: new Uint8Array(bytes),
+      });
+      expect(sent.status).toBe(200);
+      await ask('POST /api/v1/uploads/:id/complete', caller, () =>
+        booted.http
+          .post(`/api/v1/uploads/${uploadId}/complete`)
+          .set(headers)
+          .set('Idempotency-Key', randomUUID()),
+      );
     }
 
     // Every member reads their tenant's notes, and the other tenant's
