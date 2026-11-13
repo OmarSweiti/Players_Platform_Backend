@@ -1,5 +1,6 @@
 import type { StandardSchemaConverter } from '@nestjs/swagger';
 import { z } from 'zod';
+import { describeGrowingEnums } from './growing-enum';
 
 /**
  * Zod 4 schemas as OpenAPI 3.1 schema objects, which are JSON Schema 2020-12
@@ -8,7 +9,8 @@ import { z } from 'zod';
  * than becoming an empty schema a client would send anything through
  * (docs/reference/api.md, "OpenAPI and compatibility"). A schema named with
  * `.meta({ id })` becomes a shared component; two different schemas may not
- * claim one name.
+ * claim one name. An enum marked `growingEnum` is described as
+ * `x-extensible-enum`.
  */
 export function zodSchemaConverter(): StandardSchemaConverter {
   const named = new Map<string, string>();
@@ -18,6 +20,7 @@ export function zodSchemaConverter(): StandardSchemaConverter {
       target: 'draft-2020-12',
       io: schemaType,
       unrepresentable: 'throw',
+      override: describeGrowingEnums,
     });
     const { $schema: _dialect, $defs: components = {}, ...root } = converted;
     for (const [name, definition] of Object.entries(components)) {

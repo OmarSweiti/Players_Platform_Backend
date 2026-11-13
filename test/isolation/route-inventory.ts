@@ -35,6 +35,8 @@ export interface Objects {
   readonly signIn: string;
   /** An open upload by the scout, for the player, its PDF arrived (0.8.3). */
   readonly upload: string;
+  /** A file the scout uploaded for the player, scanned clean and promoted (0.8.4). */
+  readonly file: string;
 }
 
 /** Who makes a control request: a member of the seeded tenant. */
@@ -151,6 +153,12 @@ export const ROUTE_INVENTORY: Readonly<Record<string, Entry>> = {
   'POST /api/v1/uploads/:id/complete': {
     kind: 'object',
     probes: [(of) => at(`/uploads/${of.upload}/complete`)],
+    control: 'scout',
+  },
+  // ---- Downloads (0.8.5). ----
+  'GET /api/v1/files/:id/download': {
+    kind: 'object',
+    probes: [(of) => at(`/files/${of.file}/download`)],
     control: 'scout',
   },
 

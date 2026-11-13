@@ -7,8 +7,9 @@ import {
 } from './permission-catalog';
 
 // The catalog (0.6.1), held to what it must keep: every permission the legacy
-// constants named — written out here, apart from the catalog, so that a
-// dropped entry fails — each storable in the database's enums.
+// constants named, and each added since by its step — written out here, apart
+// from the catalog, so that a dropped entry fails and an unexamined one does
+// too — each storable in the database's enums.
 
 const LEGACY_PERMISSIONS = [
   'player.create', 'player.read', 'player.update', 'player.delete', 'player.export',
@@ -31,10 +32,17 @@ const LEGACY_PERMISSIONS = [
   'performance.create', 'performance.read', 'performance.update',
 ]; // prettier-ignore
 
+/** The permissions added since, each by its step. */
+const ADDED_PERMISSIONS = [
+  'document.read', // 0.8.5: downloading a document
+];
+
 describe('the permission catalog', () => {
   it('holds_every_legacy_permission_once_and_nothing_else', () => {
     expect(new Set(LEGACY_PERMISSIONS).size).toBe(64);
-    expect([...PERMISSION_KEYS].sort()).toEqual([...LEGACY_PERMISSIONS].sort());
+    expect([...PERMISSION_KEYS].sort()).toEqual(
+      [...LEGACY_PERMISSIONS, ...ADDED_PERMISSIONS].sort(),
+    );
   });
 
   it('declares_each_category_and_action_from_the_database_enums', () => {

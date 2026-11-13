@@ -225,6 +225,11 @@ export const PERMISSION_CATALOG = {
   'report.export': operational('REPORT', 'EXPORT', 'Export reports'),
 
   'document.upload': operational('DOCUMENT', 'CREATE', 'Upload a document'),
+  'document.read': operational(
+    'DOCUMENT',
+    'READ',
+    'Read and download documents',
+  ),
   'document.delete': operational('DOCUMENT', 'DELETE', 'Delete a document'),
 
   'chat.send': operational('CHAT', 'CREATE', 'Send chat messages'),

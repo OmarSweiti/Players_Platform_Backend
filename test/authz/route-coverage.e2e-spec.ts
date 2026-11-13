@@ -139,7 +139,7 @@ describe('deny by default', () => {
       public: count('public'),
       signedIn: count('signed-in'),
       permission: count('permission'),
-    }).toEqual({ public: 5, signedIn: 6, permission: 40 });
+    }).toEqual({ public: 5, signedIn: 6, permission: 41 });
   });
 
   it('a_route_without_a_permission_or_public_fails_startup', async () => {
@@ -175,7 +175,7 @@ describe('deny by default', () => {
         ? [{ route, permission: access.permission }]
         : [];
     });
-    expect(guarded.length).toBe(40);
+    expect(guarded.length).toBe(41);
     for (const { route, permission } of guarded) {
       const lacking = ROLES.find((role) => !holds(role, permission));
       const holder = ROLES.find((role) => holds(role, permission));

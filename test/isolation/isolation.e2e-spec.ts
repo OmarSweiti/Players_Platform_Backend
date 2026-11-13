@@ -17,6 +17,7 @@ import {
 import type { PermissionKey } from '../../src/modules/users/domain/permission-catalog';
 import { normalizeEmail } from '../../src/modules/users/domain/email';
 import { bootApp, type BootedApp } from '../harness/app';
+import { seedFile } from '../harness/files';
 import {
   asTenant,
   createMember,
@@ -221,6 +222,17 @@ describe('two-tenant isolation over every route', () => {
         ContentType: 'application/pdf',
       }),
     );
+    // A file the scout uploaded for the player, scanned clean and promoted
+    // (0.8.4): what GET /files/:id/download names (0.8.5).
+    const file = await seedFile(
+      { client: storeClient, bucket: store.bucket },
+      tenant,
+      actors.scout,
+      {
+        bytes: UPLOADED_PDF,
+        owner: { kind: 'player-document', id: player.id },
+      },
+    );
     // One of the scout's sign-in sessions: what DELETE /auth/sessions/:id names.
     await signedInAs(actors.scout);
     const signIn = await asTenant(tenant.id, (tx) =>
@@ -242,6 +254,7 @@ describe('two-tenant isolation over every route', () => {
         scout: actors.scout.id,
         invitation: rows.invitation.id,
         upload: rows.upload.id,
+        file: file.fileId,
         signIn: signIn.id,
       },
     };
@@ -493,7 +506,7 @@ describe('two-tenant isolation over every route', () => {
     expect(routes.map(({ key }) => key).sort()).toEqual(
       Object.keys(ROUTE_INVENTORY).sort(),
     );
-    expect(routes.length).toBe(51);
+    expect(routes.length).toBe(52);
 
     // Sentinel objects, to see what each probe names.
     const names = (tag: string) =>
@@ -511,6 +524,7 @@ describe('two-tenant isolation over every route', () => {
             'invitation',
             'signIn',
             'upload',
+            'file',
           ] as const
         ).map((key) => [key, `${tag}-${key}`]),
       ) as unknown as Objects;
