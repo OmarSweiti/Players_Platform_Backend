@@ -36,12 +36,14 @@ import {
   RESPONSES,
 } from '../fixtures/field-classification';
 import { type BootedApp, bootApp } from '../harness/app';
+import { seedFile } from '../harness/files';
 import {
   asTenant,
   createMember,
   createPlayer,
   createTenant,
 } from '../harness/fixtures';
+import { testStoreClient } from '../harness/object-store';
 import {
   controllersOf,
   type Route,
@@ -501,6 +503,34 @@ describe('confidential fields, against the independent classification', () => {
           .set('Idempotency-Key', randomUUID()),
       );
     }
+
+    // Downloads, so that their answers are seen: a file scanned clean in each
+    // tenant, asked for by every member (0.8.5).
+    const storeClient = testStoreClient(store);
+    for (const tenant of [0, 1] as const) {
+      const file = await seedFile(
+        { client: storeClient, bucket: store.bucket },
+        tenants[tenant],
+        memberOf('SCOUT', tenant),
+        {
+          bytes: Buffer.concat([
+            Buffer.from('%PDF-1.7\n', 'latin1'),
+            randomBytes(503),
+          ]),
+          owner: {
+            kind: 'player-document',
+            id: (await createPlayer(tenants[tenant])).id,
+          },
+        },
+      );
+      for (const role of ROLES) {
+        const headers = await signedInAs(memberOf(role, tenant));
+        await ask('GET /api/v1/files/:id/download', { role, tenant }, () =>
+          booted.http.get(`/api/v1/files/${file.fileId}/download`).set(headers),
+        );
+      }
+    }
+    storeClient.destroy();
 
     // Every member reads their tenant's notes, and the other tenant's
     // doctor's note; each tenant's second medical member reads the doctor's.

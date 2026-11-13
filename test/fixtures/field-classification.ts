@@ -178,6 +178,23 @@ export const RESPONSES: Readonly<Record<string, Fields>> = {
   }),
   'POST /api/v1/uploads/:id/complete': upload({ put: 'OPERATIONAL' }),
 
+  // A file released to a member who may read it (0.8.5): what it is, its
+  // hash, and the link to its scanned bytes — a capability for a minute. An
+  // operational file's; a confidential file's whole answer is its class, and
+  // leaves only through the access audit, to whom its owner's policy
+  // discloses it.
+  'GET /api/v1/files/:id/download': {
+    fileId: 'OPERATIONAL',
+    // The name its uploader gave it: display metadata, their own words.
+    fileName: 'OPERATIONAL',
+    type: 'OPERATIONAL',
+    sizeBytes: 'OPERATIONAL',
+    sha256: 'OPERATIONAL',
+    'get.method': 'OPERATIONAL',
+    'get.url': 'OPERATIONAL',
+    'get.expiresAt': 'OPERATIONAL',
+  },
+
   'POST /api/v1/users/invitations': invitation(''),
   'GET /api/v1/users/invitations': invitation('[].'),
 };

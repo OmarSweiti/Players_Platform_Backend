@@ -155,8 +155,8 @@ describe('no implicit platform access', () => {
         ? [{ ...route, permission: route.access.permission }]
         : [],
     );
-    // Invitations, uploads, medical and scouting: the routes that read
-    // tenant data.
+    // Invitations, uploads, downloads, medical and scouting: the routes that
+    // read tenant data.
     expect(
       [
         ...new Set(
@@ -164,6 +164,7 @@ describe('no implicit platform access', () => {
         ),
       ].sort(),
     ).toEqual([
+      '/api/v1/files',
       '/api/v1/medical',
       '/api/v1/scouting',
       '/api/v1/uploads',
