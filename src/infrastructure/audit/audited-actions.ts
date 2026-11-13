@@ -69,6 +69,12 @@ export const AUDITED_ACTIONS = {
     entity: 'MedicalRecord',
     fields: { classes: 'OPERATIONAL' },
   },
+  // A file of an access-audited class downloaded (0.8.5): its class, as a
+  // record's are; the link that serves it is released only after.
+  'file.read': {
+    entity: 'FileObject',
+    fields: { classes: 'OPERATIONAL' },
+  },
   // An upload (0.8.3): started — its file made, its link handed out — and
   // completed, its exact version pinned. The file's name is the uploader's
   // words, so a reference, never the value.

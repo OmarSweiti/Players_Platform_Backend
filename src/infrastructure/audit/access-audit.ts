@@ -1,6 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import type { z } from 'zod';
-import type { ConfidentialClass } from '../../common/policy/confidential-class';
+import {
+  ACCESS_AUDITED_CLASSES,
+  type ConfidentialClass,
+} from '../../common/policy/confidential-class';
 import { projectAndRecord } from '../../common/policy/projection';
 import type { AuthorizedTenantContext } from '../../common/tenancy/tenant-context';
 import type { TenantTx } from '../../common/tenancy/tenant-transaction';
@@ -56,5 +59,33 @@ export class AccessAudit {
           after: { classes },
         }),
     );
+  }
+
+  /**
+   * A value wholly of one class, rather than of fields — a file's bytes,
+   * through the link that serves them (0.8.5) — released after its access
+   * event when that class is access-audited, on the caller's transaction, as
+   * `release` does; an operational one, or `MINOR_POLICY`, as it is. The
+   * policy has already disclosed the class to this member: this records the
+   * release, it does not decide it.
+   */
+  async releaseWhole<V>(
+    tx: TenantTx,
+    ctx: AuthorizedTenantContext,
+    record: AccessedRecord,
+    dataClass: ConfidentialClass | 'OPERATIONAL',
+    value: V,
+  ): Promise<V> {
+    if (
+      dataClass !== 'OPERATIONAL' &&
+      ACCESS_AUDITED_CLASSES.includes(dataClass)
+    ) {
+      await this.audit.record(tx, ctx, {
+        action: record.action,
+        entityId: record.id,
+        after: { classes: [dataClass] },
+      });
+    }
+    return value;
   }
 }
