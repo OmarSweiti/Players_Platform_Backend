@@ -144,6 +144,15 @@ export const PROBLEMS = {
       ar: 'لم يصل الملف بعد. أكمل إرساله ثم حاول مرة أخرى.',
     },
   },
+  // A file not yet scanned clean, or never to be: nothing serves its bytes (0.8.5).
+  FILE_UNAVAILABLE: {
+    status: 409,
+    title: 'File unavailable',
+    message: {
+      en: "This file can't be downloaded: it hasn't passed its safety check, or it failed it.",
+      ar: 'لا يمكن تنزيل هذا الملف: لم يجتز فحص الأمان بعد، أو لم ينجح فيه.',
+    },
+  },
   // The file that arrived is not the one declared: its size or its bytes (0.8.3).
   UPLOAD_CONTENT_MISMATCH: {
     status: 422,
