@@ -3,8 +3,12 @@
 // GET for the exact key and version the scan promoted (0.8.4) — never the
 // newest at a key, never the quarantine — lasting a minute, saved as an
 // attachment under its name. Through HTTP, as two tenants' members, against
-// the stack's object store (the test bucket) and its ClamAV.
+// the stack's object store (the test bucket). A scan here is the worker's
+// consumer with a scanner that reads every byte and finds nothing: ClamAV's
+// own verdicts are test/files/scanning.integration-spec.ts's (0.8.4); these
+// tests are about what is served once a file is promoted.
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import type { Readable } from 'node:stream';
 import { PutObjectCommand, type S3Client } from '@aws-sdk/client-s3';
 import type { Tenant, User } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
@@ -12,7 +16,10 @@ import { TenantTransactions } from '../../src/common/tenancy/tenant-transaction'
 import { systemClock } from '../../src/common/time/clock';
 import { AuditService } from '../../src/infrastructure/audit/audit.service';
 import type { DeliveredEvent } from '../../src/infrastructure/outbox/outbox-consumers';
-import { ClamAvScanner } from '../../src/infrastructure/scanning/clamav.adapter';
+import {
+  type ScanResult,
+  ScannerPort,
+} from '../../src/infrastructure/scanning/scanner.port';
 import { S3Storage } from '../../src/infrastructure/storage/s3-storage';
 import { ScanFileConsumer } from '../../src/modules/files/application/scan-file.handler';
 import { FileScanRepository } from '../../src/modules/files/infrastructure/repositories/file-scan.repository';
@@ -53,6 +60,14 @@ interface Download {
   get: { method: 'GET'; url: string; expiresAt: string };
 }
 
+/** A scanner that reads every byte, as ClamAV does, and finds nothing. */
+class FindsNothing extends ScannerPort {
+  async scan(bytes: Readable): Promise<ScanResult> {
+    for await (const chunk of bytes) void chunk;
+    return { verdict: 'CLEAN' };
+  }
+}
+
 const dataOf = (body: unknown) => (body as { data: Download }).data;
 const codeOf = (body: unknown) => (body as { code: string }).code;
 
@@ -61,7 +76,6 @@ describe('downloads', () => {
   let store: ObjectStoreSettings;
   let admin: S3Client;
   let storage: S3Storage;
-  let scanner: ClamAvScanner;
   let tenants: [Tenant, Tenant];
   let scouts: [User, User];
   let colleague: User;
@@ -70,18 +84,15 @@ describe('downloads', () => {
 
   beforeAll(async () => {
     const configured = inject('objectStore');
-    const daemon = inject('scanner');
-    // No store or scanner, no test: S3_*_TEST and CLAMAV_*_TEST, from the
-    // local stack or CI.
-    if (configured === null || daemon === null) {
+    // No store, no test: S3_*_TEST, from the local stack or CI.
+    if (configured === null) {
       throw new TypeError(
-        'the download tests need the object store and ClamAV: run `just up`, or set S3_*_TEST and CLAMAV_*_TEST',
+        'the download tests need the object store: run `just up`, or set S3_*_TEST',
       );
     }
     store = configured;
     admin = testStoreClient(store);
     storage = new S3Storage(s3SettingsOf(store));
-    scanner = new ClamAvScanner(daemon);
     booted = await bootApp({ objectStore: store });
     tenants = [await createTenant(), await createTenant()];
     scouts = [
@@ -162,7 +173,7 @@ describe('downloads', () => {
     return { fileId: upload.fileId, put: upload.put };
   }
 
-  /** The file's scan, delivered as the worker delivers it (0.8.4): through ClamAV, then promoted. */
+  /** The file's scan, delivered as the worker delivers it (0.8.4): read whole, then promoted. */
   async function scanned(tenant: Tenant, fileId: string) {
     const ctx = testContext(tenant.id, 'outbox:deliver');
     const row = await asTenant(tenant.id, (tx) =>
@@ -187,7 +198,7 @@ describe('downloads', () => {
       new TenantTransactions(runPrisma()),
       new FileScanRepository(),
       storage,
-      scanner,
+      new FindsNothing(),
       new AuditService(),
       systemClock,
     );
