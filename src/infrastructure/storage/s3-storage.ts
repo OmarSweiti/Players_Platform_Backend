@@ -68,13 +68,44 @@ function assertVersion(version: ObjectVersion): void {
   }
 }
 
+/** The longest name a download carries, in characters: its link stays short in any alphabet. */
+export const DOWNLOAD_NAME_MAX = 150;
+
+/**
+ * The characters of a name a download carries (0.8.5): code points, so that
+ * none is cut in two — a lone surrogate, which no encoding can carry, becomes
+ * U+FFFD — and at most `DOWNLOAD_NAME_MAX` of them, a longer name shortened
+ * in its stem so that its extension stays: a browser opens what it saved by
+ * its extension.
+ */
+function downloadNameOf(name: string): string[] {
+  const characters = [...name].map((c) =>
+    c.length === 1 && c.charCodeAt(0) >= 0xd800 && c.charCodeAt(0) <= 0xdfff
+      ? '\ufffd'
+      : c,
+  );
+  if (characters.length <= DOWNLOAD_NAME_MAX) return characters;
+  const dot = characters.lastIndexOf('.');
+  const extension = dot > 0 ? characters.slice(dot) : [];
+  if (extension.length >= DOWNLOAD_NAME_MAX) {
+    return characters.slice(0, DOWNLOAD_NAME_MAX);
+  }
+  return [
+    ...characters.slice(0, DOWNLOAD_NAME_MAX - extension.length),
+    ...extension,
+  ];
+}
+
 /**
  * `attachment`, with the name as a browser saves it (RFC 6266): an ASCII
  * fallback, and the name itself in UTF-8 (RFC 8187) — an Arabic name too.
  */
 export function attachmentNamed(name: string): string {
-  const fallback = name.replace(/[^\x20-\x7e]|["\\]/g, '_').slice(0, 150);
-  const utf8 = encodeURIComponent(name.slice(0, 150)).replace(
+  const characters = downloadNameOf(name);
+  const fallback = characters
+    .map((c) => (/^[\x20-\x7e]$/.test(c) && c !== '"' && c !== '\\' ? c : '_'))
+    .join('');
+  const utf8 = encodeURIComponent(characters.join('')).replace(
     /['()*]/g,
     (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`,
   );

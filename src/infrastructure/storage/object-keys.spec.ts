@@ -51,4 +51,26 @@ describe('a download’s name', () => {
       `filename*=UTF-8''${encodeURIComponent('تقرير "الفحص" ')}%281%29.pdf`,
     );
   });
+
+  it('keeps its extension and every character whole when a long name is shortened', () => {
+    // As long as a name may be (255 characters), a character outside the
+    // Basic Multilingual Plane — two UTF-16 units — astride where it is cut.
+    const name = `${'a'.repeat(145)}${'🏆'.repeat(106)}.pdf`;
+    expect([...name]).toHaveLength(255);
+    const header = attachmentNamed(name);
+    const fallback = /filename="([^"]*)"/.exec(header)![1];
+    const utf8 = decodeURIComponent(/filename\*=UTF-8''(.*)$/.exec(header)![1]);
+    for (const kept of [fallback, utf8]) {
+      expect([...kept]).toHaveLength(150);
+      expect(kept.endsWith('.pdf')).toBe(true);
+    }
+    expect(utf8).toBe(`${'a'.repeat(145)}🏆.pdf`);
+    // One placeholder for each character outside ASCII, not one per unit.
+    expect(fallback).toBe(`${'a'.repeat(145)}_.pdf`);
+
+    // A lone surrogate, which no encoding carries, is a replacement character.
+    expect(attachmentNamed('report\ud800.pdf')).toContain(
+      `filename*=UTF-8''report${encodeURIComponent('\ufffd')}.pdf`,
+    );
+  });
 });
