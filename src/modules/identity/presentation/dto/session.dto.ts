@@ -1,5 +1,6 @@
 import { UserRole } from '@prisma/client';
 import { z } from 'zod';
+import { growingEnum } from '../../../../common/openapi/growing-enum';
 import { PERMISSION_KEYS } from '../../../users/domain/permission-catalog';
 
 /** The signed-in member's own session (0.5.6, 0.6.6): `GET /api/v1/auth/session`. */
@@ -23,9 +24,9 @@ export const CurrentSessionResponse = z
       locale: z.enum(['ar', 'en']).describe('The language members start in'),
     }),
     permissions: z
-      .array(z.enum(PERMISSION_KEYS))
+      .array(growingEnum(z.enum(PERMISSION_KEYS)))
       .describe(
-        "The permissions the member's role holds, in the catalog's order (0.6.6): for shaping navigation only — the API decides every call",
+        "The permissions the member's role holds, in the catalog's order (0.6.6): for shaping navigation only — the API decides every call. The catalog grows: ignore a permission you do not know",
       ),
     csrfToken: z
       .string()
