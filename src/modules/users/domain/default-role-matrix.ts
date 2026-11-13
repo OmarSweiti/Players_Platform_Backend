@@ -5,7 +5,10 @@
 // permission, since the platform holds no tenant data (0.6.7), and the owner's
 // confidential medical read, since an owner sees medical availability only.
 // The medical cells are brought into line with that matrix by 0.6.8, and a
-// tenant adjusts its own once per-tenant roles exist (4.1.4).
+// tenant adjusts its own once per-tenant roles exist (4.1.4). Downloading a
+// document, `document.read` (0.8.5), is the owner's and the four roles' that
+// upload documents, as the maintainer chose: no player, guardian or coach
+// downloads one until it is granted to them.
 //
 // A permission is an eligibility, never the decision: object policies (0.6.3)
 // and confidential projections (0.6.4) still apply. Migrations write the
@@ -58,6 +61,7 @@ export const DEFAULT_ROLE_MATRIX = {
     'tenant.manage',
     'report.view',
     'report.export',
+    'document.read',
     'chat.read',
   ],
 
@@ -81,6 +85,7 @@ export const DEFAULT_ROLE_MATRIX = {
     'user.invite',
     'report.view',
     'document.upload',
+    'document.read',
     'chat.send',
     'chat.read',
   ],
@@ -126,6 +131,7 @@ export const DEFAULT_ROLE_MATRIX = {
     'scouting.assignment.view',
     'scouting.assignment.update',
     'document.upload',
+    'document.read',
   ],
 
   COACH: [
@@ -180,6 +186,7 @@ export const DEFAULT_ROLE_MATRIX = {
     'legal.update',
     'legal.approve',
     'document.upload',
+    'document.read',
   ],
 
   FINANCE_MANAGER: [
@@ -203,6 +210,7 @@ export const DEFAULT_ROLE_MATRIX = {
     'player.read',
     'match.read',
     'document.upload',
+    'document.read',
     'report.view',
   ],
 

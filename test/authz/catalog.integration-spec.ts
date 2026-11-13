@@ -125,7 +125,7 @@ describe('the permission catalog', () => {
     expect(await runtime.prisma.permission.count()).toBe(0);
     await asMigrator(own.migrationUrl, sync);
     const fresh = await stored(runtime.prisma);
-    expect(fresh.permissions.length).toBe(64);
+    expect(fresh.permissions.length).toBe(65);
     expect(catalogDifferences(fresh.permissions, fresh.grants)).toEqual([]);
   });
 
